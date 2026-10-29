@@ -22,11 +22,15 @@ export const currentSessionName = (sessions) => {
   return sessions.find((session) => session.sessionId == id)?.name ?? null
 }
 
+// run · recover 가 띄우는 세션은 모두 권한 확인 없이 돈다(2026-10-29 사용자 지시). 카드 세션은 백그라운드라 확인 창에 답할 사람이 없다.
+// 2026-10-29 실측(2.1.312): `claude --bg --dangerously-skip-permissions` 로 띄운 세션의 대화 기록에 permissionMode bypassPermissions 가 적혔다.
+export const BACKGROUND_ARGS = ['--bg', '--dangerously-skip-permissions']
+
 // `claude --bg` 를 실행하고 세션의 짧은 id 를 돌려준다. 2026-10-29 실측: stdout 에 `claude stop <짧은 id>` 줄이 있다.
 // 띄우지 못하면(예: `Workspace not trusted`) stdout · stderr 를 오류 메시지에 그대로 넣는다.
 // 프롬프트는 `--` 뒤에 둔다. 카드 본문이 `-` 로 시작하면(마크다운 목록) claude 가 그 줄을 옵션으로 읽는다.
 export const launchBackground = (args, prompt, cwd) => {
-  const result = spawnSync('claude', ['--bg', ...args, '--', prompt], { cwd, encoding: 'utf8' })
+  const result = spawnSync('claude', [...BACKGROUND_ARGS, ...args, '--', prompt], { cwd, encoding: 'utf8' })
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
   const match = /claude stop (\S+)/.exec(output)
   if (result.status != 0 || !match) throw new ProjectError(`claude --bg 가 세션을 띄우지 못했다(종료 코드 ${result.status}):\n${output}`)

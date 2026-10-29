@@ -9,7 +9,7 @@ import { USER, appendComment } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
 import { runSpec } from '../profiles.mjs'
 import { resumePrompt, sessionName } from '../prompt.mjs'
-import { cardSession, currentSessionName, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
+import { BACKGROUND_ARGS, cardSession, currentSessionName, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
 
 const LABELS = {
   live: '돈다',
@@ -49,7 +49,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       const why = verdict == 'restart' ? `데몬이 다시 띄웠지만(startedAt ${startedAt(session)}) 마지막 user 줄에 답하지 않고 idle 이다` : session ? `state ${session.state}` : 'claude agents --json --all 에 없다'
       counts.resumed += 1
       if (dryRun) {
-        console.log(`(dry-run) k${card.id} ${why} → ${verdict == 'restart' ? `claude stop ${session.id} 뒤 ` : ''}claude --bg ${args.join(' ')} <프롬프트>`)
+        console.log(`(dry-run) k${card.id} ${why} → ${verdict == 'restart' ? `claude stop ${session.id} 뒤 ` : ''}claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <프롬프트>`)
         continue
       }
       if (verdict == 'restart') stopSession(session.id)

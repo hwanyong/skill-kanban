@@ -118,7 +118,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 1. 카드의 `model:<프로필>` 태그를 `profiles.json` 으로 `--model` 값으로 바꾼다. `effort:<값>` 태그가 있으면 `--effort` 로 넘긴다. 태그가 없으면 그 옵션을 넘기지 않아 claude 의 기본 모델 · 기본 effort 로 띄운다.
 2. 카드를 `run.status` 열(`in-progress`)로 옮긴다. 의존성 검사는 `move` 와 같다.
-3. `claude --bg -n k457 --model … <프롬프트>` 를 프로젝트 루트에서 실행한다. 프롬프트는 카드 본문 뒤에 `진행` · `질문` · `결과` 코멘트를 남기는 명령을 붙인 것이다.
+3. `claude --bg --dangerously-skip-permissions -n k457 --model … <프롬프트>` 를 프로젝트 루트에서 실행한다. `run` · `recover` 가 띄우는 세션은 모두 권한 확인 없이 돈다(`lib/sessions.mjs` 의 `BACKGROUND_ARGS`). 백그라운드 세션에는 확인 창에 답할 사람이 없다. 프롬프트는 카드 본문 뒤에 `진행` · `질문` · `결과` 코멘트를 남기는 명령을 붙인 것이다.
 4. 카드에 `session` · `session_started_at` 과 `[배정]` 코멘트를 적는다.
 
 | 프로필 | `--model` | ultracode 확인 |

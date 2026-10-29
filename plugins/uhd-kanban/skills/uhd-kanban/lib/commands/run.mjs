@@ -9,7 +9,7 @@ import { editBoard } from '../edit.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError } from '../project.mjs'
 import { sessionName, startPrompt } from '../prompt.mjs'
-import { cardSession, currentSessionName, findSession, launchBackground, listSessions, startedAt } from '../sessions.mjs'
+import { BACKGROUND_ARGS, cardSession, currentSessionName, findSession, launchBackground, listSessions, startedAt } from '../sessions.mjs'
 
 export const run = async ({ positional, flags }, { skillRoot }) => {
   if (positional[0] == null) throw new UsageError('run <k id> [--dry-run] [--force] 형식이다')
@@ -28,7 +28,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
     const prompt = startPrompt(project, card, { skillRoot, reportTo: from })
     const args = ['-n', name, ...spec.cliArgs]
     if (flags['dry-run'] == true) {
-      console.log(`(dry-run) claude --bg ${args.join(' ')} <프롬프트>${spec.ultracode ? ' (ultracode)' : ''}\n${prompt}`)
+      console.log(`(dry-run) claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <프롬프트>${spec.ultracode ? ' (ultracode)' : ''}\n${prompt}`)
       return 0
     }
     const shortId = launchBackground(args, prompt, project.root)
