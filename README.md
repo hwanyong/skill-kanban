@@ -205,7 +205,7 @@ Example output of `uk board` for the demo board below (`locale` `en`):
 
 ## Board monitor pane
 
-![The board monitor pane for a demo board with 24 cards in 9 columns. A legend line reads "in-progress: live pending stalled done". The column counts read 7, 3, 2, 8, 1, 0, 1, 1, 1. In the second bar, the in-progress column, two cells are green because two card sessions are running, and one cell keeps the column color because that card has no session.](docs/images/board-monitor-demo.en.png)
+![The board monitor pane for a demo board with 24 cards in 9 columns. A legend line reads "in-progress: live pending stalled done". The column counts read 7, 3, 2, 8, 1, 0, 1, 1, 1. Each bar is 4 characters wide with one character per card, so the bars of 7 and 8 cards continue on a second row. In the second bar, the in-progress column, two cells are green because two card sessions are running, and one cell keeps the column color because that card has no session.](docs/images/board-monitor-demo.en.png)
 
 *A demo board with 24 fictional cards and two running card sessions.*
 
@@ -221,13 +221,13 @@ The pane opens when the session directory has `.uhd-kanban/config.json` above it
 
 The refresh interval is `monitor.interval_seconds` in `config.json` (an integer of 10 or more, default 60).
 
-`monitor.cell` in `config.json` sets how much of a bar one card takes. The bar width never goes below the number of digits in the largest count.
+`monitor.cell` in `config.json` sets how much of a bar one card takes. In every mode the bar width is the pane width divided by the number of columns, so the bars change when the pane is widened or narrowed. When a count is wider than its bar, the counts that would touch are written on more lines.
 
-| `monitor.cell` | One card is | Bar width | Board with few cards | Board with hundreds of cards |
+| `monitor.cell` | One card is | Cards per row | Board with few cards | Board with hundreds of cards |
 |---|---|---|---|---|
-| `char` (default, also when the key is absent) | One character | The narrowest width at which the longest bar fits the pane height, up to the pane width divided by the number of columns | Bars are 1 character wide | Several cards per row, one character each |
-| `row` | One row of the bar | The pane width divided by the number of columns | Each card fills the bar width | One card per row, so long bars need more scrolling |
-| `fit` | `bar width ÷ cards per row` characters | The pane width divided by the number of columns | Same as `row` | As many cards per row as the longest bar needs to fit the pane height; each cell gets the bar width divided by that number |
+| `char` (default, also when the key is absent) | One character | The bar width | A bar fills its first row only when its column has as many cards as the bar width | One character per card, so long bars take the fewest rows |
+| `row` | One row of the bar | 1 | Each card fills the bar width | One card per row, so long bars need more scrolling |
+| `fit` | The bar width divided among the cards of a row | As many as the longest bar needs to fit the pane height, up to the bar width | Same as `row` | A full row fills the bar width. When the bar width does not divide evenly, some cells are one character wider |
 
 A bar that does not fit the pane height scrolls in every mode.
 

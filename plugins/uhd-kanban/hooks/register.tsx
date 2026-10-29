@@ -19,8 +19,8 @@ const GUARDED_TOOLS = ['Edit', 'Write', 'NotebookEdit'] as const
 const CELL = '█'
 const AXIS = '─'
 const GAP = 1
-// 갱신 시각 · 범례 · 카드 수 · 축. 막대가 쓸 수 있는 행은 본문 행에서 이것을 뺀 것이다.
-const HEADER_ROWS = 4
+// 갱신 시각 · 범례 · 축. 막대가 쓸 수 있는 행은 본문 행에서 이것과 카드 수 줄(countLines)을 뺀 것이다.
+const HEADER_ROWS = 3
 // 열의 차례(config.json 의 columns 순서)로 고른다. 열이 이보다 많으면 처음부터 다시 쓴다.
 const COLUMN_COLORS = ['#58a6ff', '#d29922', '#a371f7', '#39c5cf', '#f778ba', '#7ee787', '#ffa657', '#6e7681', '#ff7b72']
 // run.status 열의 칸만 세션 판정(sessions.mjs 의 cardSession)으로 색을 바꾼다. none(세션 없음)은 열의 색을 쓴다.
@@ -87,45 +87,61 @@ const clockText = (ms: number) => {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-// width: 막대 폭. perRow: 한 행의 카드 수. cell: 카드 한 장의 칸 폭(문자 수).
-// widest 는 열이 모두 columns 칸에 들어가는 가장 넓은 폭, fitting 은 가장 긴 막대가 rows 행에 들어가는 한 행의 카드 수다.
-// 막대 폭은 어느 방식이든 카드 수의 자릿수보다 좁게 하지 않는다.
-//   char: 카드 한 장이 문자 하나다. 막대 폭은 fitting 이고 widest 를 넘지 않는다.
-//   row:  카드 한 장이 막대의 한 행이다. 막대 폭은 widest 다.
-//   fit:  막대 폭은 widest 이고, 한 행의 카드 수는 fitting(widest 를 넘지 않는다), 칸 폭은 막대 폭을 그 수로 나눈 몫이다.
-type Layout = { width: number; perRow: number; cell: number }
-
-const layout = (board: Board, columns: number, rows: number): Layout => {
+// 막대 폭. 어느 방식이든 열이 모두 columns 칸에 들어가는 가장 넓은 폭이다. pane 폭이 바뀌면 엔진이 ui.render 를 다시 실행하므로 그때 다시 정해진다.
+const barWidth = (board: Board, columns: number) => {
   const count = board.columns.length
-  const most = Math.max(1, ...board.columns.map((column) => column.count))
-  const digits = String(most).length
-  const widest = Math.max(1, Math.floor((columns - GAP * (count - 1)) / count))
-  const fitting = Math.ceil(most / Math.max(1, rows))
-  if (board.cell == 'row') {
-    const width = Math.max(digits, widest)
-    return { width, perRow: 1, cell: width }
-  }
-  if (board.cell == 'fit') {
-    const width = Math.max(digits, widest)
-    const perRow = Math.min(width, fitting)
-    return { width, perRow, cell: Math.floor(width / perRow) }
-  }
-  const width = Math.max(digits, Math.min(widest, fitting))
-  return { width, perRow: width, cell: 1 }
+  return Math.max(1, Math.floor((columns - GAP * (count - 1)) / count))
 }
 
+// width: 막대 폭. perRow: 한 행의 카드 수.
+//   char: 카드 한 장이 문자 하나다. 한 행의 카드 수는 막대 폭이다.
+//   row:  카드 한 장이 막대의 한 행이다.
+//   fit:  한 행의 카드 수는 가장 긴 막대가 rows 행에 들어가는 수이고 막대 폭을 넘지 않는다. 카드가 찬 행은 막대 폭을 채운다.
+type Layout = { width: number; perRow: number }
+
+const layout = (board: Board, width: number, rows: number): Layout => {
+  const most = Math.max(1, ...board.columns.map((column) => column.count))
+  if (board.cell == 'row') return { width, perRow: 1 }
+  if (board.cell == 'fit') return { width, perRow: Math.min(width, Math.ceil(most / Math.max(1, rows))) }
+  return { width, perRow: width }
+}
+
+// 카드 수 줄. 숫자는 제 막대의 왼쪽 끝에서 시작하고, 줄 끝을 넘으면 줄 끝에 맞춰 왼쪽으로 민다.
+// 막대보다 넓은 숫자가 다음 숫자와 GAP 칸 이상 떨어지지 않으면 그 숫자를 다음 줄에 적는다. 막대 폭이 숫자보다 넓으면 한 줄이다.
+type Label = { start: number; end: number; text: string; color?: string }
+
+const countLines = (board: Board, width: number): Segment[][] => {
+  const total = board.columns.length * (width + GAP) - GAP
+  const lines: Label[][] = []
+  board.columns.forEach((column, index) => {
+    const text = String(column.count)
+    const start = Math.max(0, Math.min(index * (width + GAP), total - text.length))
+    const label = { start, end: start + text.length, text, color: columnColor(index) }
+    const line = lines.find((placed) => placed.every((other) => other.end + GAP <= label.start || label.end + GAP <= other.start))
+    if (line) return void line.push(label)
+    lines.push([label])
+  })
+  return lines.map((placed) => [...placed].sort((a, b) => a.start - b.start).flatMap((label, position, sorted) => [
+    { text: ' '.repeat(label.start - (sorted[position - 1]?.end ?? 0)) },
+    { text: label.text, color: label.color },
+  ]))
+}
+
+// 한 행의 position 번째 카드의 칸 폭(문자 수). 막대 폭을 perRow 장에 나눈 경계의 차이라, 찬 행의 칸 폭 합은 막대 폭과 같다.
+const cellWidth = ({ width, perRow }: Layout, position: number) => Math.floor(((position + 1) * width) / perRow) - Math.floor((position * width) / perRow)
+
 // 막대의 한 행. 같은 색이 이어지는 칸은 한 조각으로 묶는다.
-const barRow = (board: Board, column: BoardColumn, index: number, row: number, { width, perRow, cell }: Layout) => {
-  const cards = column.cards.slice(row * perRow, row * perRow + perRow)
-  const block = CELL.repeat(cell)
-  const segments = cards.reduce((list: Segment[], card) => {
+const barRow = (board: Board, column: BoardColumn, index: number, row: number, size: Layout) => {
+  const cards = column.cards.slice(row * size.perRow, row * size.perRow + size.perRow)
+  const segments = cards.reduce((list: Segment[], card, position) => {
     const color = cellColor(board, column, index, card)
+    const block = CELL.repeat(cellWidth(size, position))
     const last = list.at(-1)
     if (last && last.color == color) return [...list.slice(0, -1), { text: last.text + block, color }]
     return [...list, { text: block, color }]
   }, [])
-  const used = cards.length * cell
-  return width > used ? [...segments, { text: ' '.repeat(width - used) }] : segments
+  const used = cards.reduce((sum, _card, position) => sum + cellWidth(size, position), 0)
+  return size.width > used ? [...segments, { text: ' '.repeat(size.width - used) }] : segments
 }
 
 const joinColumns = (parts: Segment[][]) => parts.flatMap((segments, index) => (index == 0 ? segments : [{ text: ' '.repeat(GAP) }, ...segments]))
@@ -225,11 +241,11 @@ export const register: Register = (on) => {
       )
     }
     const { board } = current
-    const size = layout(board, e.props.bodyColumns, e.props.scroll.bodyRows - HEADER_ROWS)
-    const { width } = size
+    const width = barWidth(board, e.props.bodyColumns)
+    const counts = countLines(board, width)
+    const size = layout(board, width, e.props.scroll.bodyRows - HEADER_ROWS - counts.length)
     const height = Math.max(0, ...board.columns.map((column) => Math.ceil(column.count / size.perRow)))
     const total = board.columns.reduce((sum, column) => sum + column.count, 0)
-    const counts = joinColumns(board.columns.map((column, index) => [{ text: String(column.count).padEnd(width), color: columnColor(index) }]))
     const axis = joinColumns(board.columns.map((column, index) => [{ text: AXIS.repeat(width), color: columnColor(index) }]))
     const rows = Array.from({ length: height }, (_, row) => joinColumns(board.columns.map((column, index) => barRow(board, column, index, row, size))))
     const line = (segments: Segment[]) => (
@@ -242,7 +258,7 @@ export const register: Register = (on) => {
           <Text dimColor>{board.run_status}: </Text>
           {LEGEND.map((item) => <Text color={item.color}>{CELL}{text[item.label]} </Text>)}
         </Text>
-        {line(counts)}
+        {counts.map(line)}
         {line(axis)}
         {rows.map(line)}
       </Box>
