@@ -60,6 +60,19 @@ export const findCard = (board, id) => {
   return card
 }
 
+// collection 은 카드가 속한 milestone 카드의 id 목록이다(Nimbalyst 의 items 를 옮긴 키).
+export const COLLECTION_TYPE = 'milestone'
+
+// depends_on · collection 에 적을 id 를 본다. 카드가 있어야 하고 자기 자신이 아니어야 하며, type 을 주면 그 type 의 카드여야 한다.
+export const assertRefs = (board, ids, { key, self = null, type = null }) => ids.forEach((id) => {
+  if (id == self) throw new ProjectError(`k${id} 를 자기 ${key} 에 넣을 수 없다`)
+  const card = findCard(board, id)
+  if (type != null && card.data.type != type) throw new ProjectError(`${key} 의 k${id} 는 type ${type} 카드가 아니다(type ${card.data.type})`)
+})
+
+// depends_on 에 id 를 둔 열 안의 카드. 아카이브한 카드는 다시 옮기지 않으므로 뺀다.
+export const dependentsOf = (board, id) => board.cards.filter((card) => (card.data.depends_on ?? []).includes(id))
+
 // 아카이브한 카드까지 포함해 가장 큰 id + 1 을 준다.
 export const nextId = (board) => Math.max(0, ...board.cards.map((card) => card.id), ...board.archived.map((card) => card.id)) + 1
 

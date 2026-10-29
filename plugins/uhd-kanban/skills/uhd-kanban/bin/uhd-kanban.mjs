@@ -27,11 +27,11 @@ const COMMANDS = {
 const USAGE = `사용법: uhd-kanban <명령> [인자]
   init [--dir <경로>]   프로젝트 루트에 .uhd-kanban/ 과 kanban/ 을 만든다
   check                 config.json 과 모든 카드를 검증한다
-  new --type <type> --title <제목> [--status] [--priority] [--tags a,b] [--depends k1,k2] [--body-file] [자리]
+  new --type <type> --title <제목> [--status] [--priority] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file] [자리]   --status 기본은 config.json 의 initial
   move <k id> <status> [자리] [--force]
   order <k id> <자리>
   renumber <status>
-  set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b]
+  set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b] [--add-depends k1] [--remove-depends k1] [--add-collection k1] [--remove-collection k1]
   archive [--dry-run]
   comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> | --text-file <경로>)
   inbox [<이름>] [--all] [--kind a,b]

@@ -1,28 +1,32 @@
 // 카드를 새로 만든다. id 는 보드에서 가장 큰 id + 1 이다.
-// uhd-kanban new --type <type> --title <제목> [--status to-do] [--priority medium] [--tags a,b] [--depends k1,k2] [--body-file <경로>] [--top|--bottom|--before k|--after k]
+// 기본 status 는 config.json 의 initial 이 type 마다 정한다(기본 보드에서 milestone 은 planned, 나머지는 to-do).
+// uhd-kanban new --type <type> --title <제목> [--status <status>] [--priority medium] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file <경로>] [--top|--bottom|--before k|--after k]
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PRIORITIES } from '../board.mjs'
 import { UsageError, cardId, listFrom, positionFrom } from '../args.mjs'
-import { assertTags, checkPosition, findCard, nextId, now, place, writeCard } from '../cards.mjs'
+import { COLLECTION_TYPE, assertRefs, assertTags, checkPosition, nextId, now, place, writeCard } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
-import { ProjectError } from '../project.mjs'
+import { ProjectError, initialStatus } from '../project.mjs'
 
 export const run = async ({ flags }) => {
   if (typeof flags.type != 'string') throw new UsageError('--type 이 필요하다')
   if (typeof flags.title != 'string' || flags.title.trim() == '') throw new UsageError('--title 이 필요하다')
-  const status = typeof flags.status == 'string' ? flags.status : 'to-do'
   const priority = typeof flags.priority == 'string' ? flags.priority : 'medium'
   if (!PRIORITIES.includes(priority)) throw new UsageError(`--priority 는 ${PRIORITIES.join(' · ')} 중 하나다`)
   const dependsOn = listFrom(flags.depends).map((ref) => cardId(ref, '--depends'))
+  const collection = listFrom(flags.collection).map((ref) => cardId(ref, '--collection'))
   const body = typeof flags['body-file'] == 'string' ? readFileSync(flags['body-file'], 'utf8') : ''
   const position = positionFrom(flags)
   return editBoard(async ({ project, board }) => {
+    const status = typeof flags.status == 'string' ? flags.status : initialStatus(project.config, flags.type)
+    if (status == null) throw new ProjectError(`type ${flags.type} 의 처음 열이 config.json 의 initial 에 없다. --status 로 준다`)
     const column = project.columnOf(status)
     if (!column) throw new ProjectError(`${status} 는 config.json 의 columns 에 없는 status 다`)
     if (!column.types.includes(flags.type)) throw new ProjectError(`type ${flags.type} 는 ${status} 열에 둘 수 없다(허용: ${column.types.join(', ')})`)
-    dependsOn.forEach((id) => findCard(board, id))
+    assertRefs(board, dependsOn, { key: 'depends_on' })
+    assertRefs(board, collection, { key: 'collection', type: COLLECTION_TYPE })
     checkPosition(board, status, position, null)
     const id = nextId(board)
     const at = now()
@@ -33,6 +37,7 @@ export const run = async ({ flags }) => {
       priority,
       tags: listFrom(flags.tags),
       depends_on: dependsOn,
+      collection: collection.length > 0 ? collection : undefined,
       created_at: at,
       updated_at: at,
       completed_at: project.config.archive.columns.includes(status) ? at : undefined,

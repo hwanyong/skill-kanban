@@ -48,11 +48,34 @@ description: 칸반 보드가 있는 프로젝트(루트에 `.uhd-kanban/`)의 �
    도구가 검사하는 것은 `depends_on` 과 동시 실행 수(`run.max_parallel`)뿐이다. 작업 충돌은 카드가 무엇을 고칠지 도구가 모르므로 여기서 판정한다(`../uhd-kanban/SKILL.md` 「동시 실행」).
 2. **본문을 쓴다.** 본문이 카드 세션의 프롬프트 전부다. 메인 세션의 대화를 카드 세션은 읽지 못하므로 본문에 다음 다섯 가지를 적는다: 목표 · 고칠 파일이나 범위 · 하지 않을 것 · 끝난 판정(실행으로 확인할 것) · 참고할 카드 id. 본문은 scratchpad 의 파일에 쓰고 `--body-file` 로 넘긴다. 낱말 `ultracode` 는 `../uhd-kanban/SKILL.md` 「지킬 것」 5 대로 감싼다.
 3. **태그를 단다.** `model:<프로필>` · `effort:<값>` 을 작업 크기에 맞춰 단다. 없으면 claude 기본값으로 뜬다. 사람이 할 일은 `model:user` 를 단다(`uk run` 이 띄우지 않는다).
-4. **만든다.** `uk new --type task --title <제목> --tags model:deep,effort:high --depends k455 --body-file <경로>` 뒤 `uk check` 가 종료 코드 0 인지 본다.
+4. **만든다.** `uk new --type task --title <제목> --tags model:deep,effort:high --depends k455 --body-file <경로>` 뒤 `uk check` 가 종료 코드 0 인지 본다. type 은 아래 「열 옮기기」의 첫 표로 고른다.
 5. **맡긴다.** 의존 카드가 모두 끝난 카드부터 `uk run k<id>` 로 띄운다. 나머지는 앞 카드가 끝난 뒤 띄운다. 도는 카드 세션이 `run.max_parallel` 개에 차면 `uk run` 이 종료 코드 1 로 거절하므로, 우선순위가 높은 카드부터 띄우고 남은 카드는 하나가 끝난 뒤 띄운다.
 6. **지켜본다.** 카드 세션의 `진행` · `질문` · `결과` 코멘트는 이 세션 앞으로 온다. `uk inbox` 로 읽는다. `질문` 은 아래 「결정 모으기」 대로 처리한다. 멈춘 세션은 `uk board` 로 보고 `uk recover` 로 이어 간다. 세션이 끝났는데(state done) 작업이 남은 카드는 `uk recover --force k<id>` 로 이어 간다.
-7. **검토한다.** `[결과]` 코멘트와 `git diff` 를 읽고 끝난 판정을 만족하는지 본다. 만족하면 `uk move k<id> done`, 고칠 것이 있으면 그 카드에 코멘트를 남기고 `uk recover --force k<id>` 로 이어 가게 하거나(`[결과]` 를 남긴 세션은 대개 state done 이라 `--force` 가 없으면 건너뛴다) 고칠 일을 새 카드로 만든다. 검토하다 고칠 자리를 찾아도 메인 세션이 고치지 않는다.
+7. **검토한다.** 카드 세션은 `[결과]` 를 남긴 뒤 카드를 `run.finish` 의 열(task · bug 는 `in-review`, decision 은 `decided`)로 옮긴다. `[결과]` 코멘트와 `git diff` 를 읽고 끝난 판정을 만족하는지 본다. 판정에 따라 옮기는 열은 아래 「열 옮기기」가 갖는다. 고칠 것이 있으면 그 카드에 `--kind 답` 코멘트로 고칠 것과 끝난 판정을 남기고 `uk recover --force k<id>` 로 이어 가게 하거나(`[결과]` 를 남긴 세션은 대개 state done 이라 `--force` 가 없으면 건너뛴다. `recover` 가 카드를 `in-progress` 로 되돌린다) 고칠 일을 새 카드로 만든다. 검토하다 고칠 자리를 찾아도 메인 세션이 고치지 않는다.
 8. **보고한다.** 사용자에게 카드 id · 판정 · 남은 결정을 알린다.
+
+## 열 옮기기
+
+각 열의 뜻은 `../uhd-kanban/SKILL.md` 의 열 표가 갖는다. 메인 세션은 카드의 상태가 그 뜻과 맞도록 아래대로 만들고 옮긴다.
+
+| 만들 것 | type | 처음 열 |
+|---|---|---|
+| 코드 · 문서를 고치는 일, 조사 | `task` | `to-do` |
+| 잘못된 동작을 고치는 일 | `bug` | `to-do` |
+| 고를 것이 있고 그 답이 다른 카드의 작업을 정하는 일 | `decision` | `to-do`. 카드 세션이 선택지를 조사해 `[질문]` 으로 올리고, 답을 받아 `[결과]` 에 정한 것을 적는다 |
+| 여러 카드를 한 목표로 묶는 것 | `milestone` | `planned`(`uk new` 의 기본). 묶일 카드는 `--collection k<milestone id>` 로 만든다 |
+
+| 그때 | 하는 일 |
+|---|---|
+| milestone 에 묶인 카드를 처음 `uk run` 할 때 | `uk move k<milestone id> active` |
+| task · bug 가 `in-review` 에 왔고 끝난 판정을 만족한다 | `uk move k<id> done` |
+| decision 이 `decided` 에 왔다 | 그 결정을 반영할 task 카드를 만들고 `--depends` 에 decision 카드를 넣는다. `decided` 는 `dependencies.resolved` 에 있어 바로 띄울 수 있다 |
+| decision 을 반영한 카드가 모두 `done` 이다 | `uk move k<decision id> implemented` |
+| decision 에 반영할 코드가 없다 | `uk move k<decision id> done` |
+| 카드 세션이 `run.finish` 의 열로 옮기지 않고 끝났다(`uk recover` 의 「끝남」) | `[결과]` 를 읽고 그 열로 옮긴다 |
+| milestone 에 묶인 카드가 모두 `done` 이나 `cancelled` 다 | `uk move k<milestone id> done`. 묶인 카드는 `grep -l -E 'collection: \[([0-9]+, )*<milestone id>(, [0-9]+)*\]' kanban/*/*.md` 로 찾는다. 아카이브(`kanban/archived/`)에 있는 카드는 `done` 에서 옮겨진 것이다 |
+| task · bug · decision 을 하지 않기로 했다 | `uk board` 로 세션이 도는지 보고, 돌면 `claude stop <session>` 뒤 `uk move k<id> cancelled` |
+| `cancelled` 로 옮긴 `move` 가 기다리는 카드를 냈다 | 카드마다 고른다. 그만둔 카드의 결과가 없어도 할 수 있는 일이면 낸 `uk set … --remove-depends` 를, 아니면 함께 그만두는 `uk move … cancelled` 를 실행한다. 이 둘로 정할 수 없으면 「결정 모으기」로 사용자에게 묻는다 |
 
 ## 결정 모으기
 

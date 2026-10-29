@@ -28,6 +28,7 @@ const checkData = (data, card, column, profiles, problems) => {
   if (data.priority != null && !PRIORITIES.includes(data.priority)) problems.push(`${at}: priority 는 ${PRIORITIES.join(' · ')} 중 하나다: ${data.priority}`)
   if (data.tags != null && (!Array.isArray(data.tags) || data.tags.some((tag) => typeof tag != 'string'))) problems.push(`${at}: tags 는 문자열 목록이다`)
   if (data.depends_on != null && (!Array.isArray(data.depends_on) || data.depends_on.some((id) => !Number.isInteger(id)))) problems.push(`${at}: depends_on 은 카드 id(정수) 목록이다`)
+  if (data.collection != null && (!Array.isArray(data.collection) || data.collection.some((id) => !Number.isInteger(id)))) problems.push(`${at}: collection 은 milestone 카드 id(정수) 목록이다`)
   const comments = parseComments(card.body)
   comments.problems.forEach((problem) => problems.push(`${at}: ${problem}`))
   if (Array.isArray(data.tags)) tagProblems(data, comments.main, profiles).forEach((problem) => problems.push(`${at}: ${problem}`))

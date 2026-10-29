@@ -23,7 +23,7 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 
 | 경로 | 내용 |
 |---|---|
-| `.uhd-kanban/config.json` | 열 · 순서 번호 · 의존성 · 코멘트 kind · 아카이브 · `run`(`status` · `max_parallel`) · `monitor` 설정 |
+| `.uhd-kanban/config.json` | 열 · 처음 열(`initial`) · 순서 번호 · 의존성(`gate` · `resolved` · `abandoned`) · 코멘트 kind · 아카이브 · `run`(`status` · `max_parallel` · `finish`) · `monitor` 설정 |
 | `.uhd-kanban/profiles.json` | `model:` 태그의 프로필 이름을 `claude --model` 값으로 바꾸는 표 |
 | `kanban/<n>-<status>/<순서 번호>-k<id>-<제목>.md` | 열 안의 카드. 예: `kanban/1-to-do/0010-k457-로그인-오류-재현.md` |
 | `kanban/archived/<YYYY-MM>/<YYYY-MM-DD>-k<id>-<제목>.md` | 아카이브한 카드. 날짜는 `completed_at` 의 날짜다 |
@@ -32,17 +32,35 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 
 기본 열 아홉 개(`templates/config.json`):
 
-| 디렉터리 | status | 둘 수 있는 type |
+| 디렉터리 | status | 둘 수 있는 type | 뜻 |
+|---|---|---|---|
+| `1-to-do` | `to-do` | task · bug · decision | 아직 시작하지 않은 일 |
+| `2-in-progress` | `in-progress` | task · bug · decision | 세션이 진행 중인 일 |
+| `3-in-review` | `in-review` | task · bug | 구현을 마치고 검토를 기다리는 일 |
+| `4-done` | `done` | task · bug · decision · milestone | 끝난 일 |
+| `5-decided` | `decided` | decision | 결정했지만 아직 반영하지 않은 결정 |
+| `6-planned` | `planned` | milestone | 계획만 있는 milestone |
+| `7-implemented` | `implemented` | decision | 코드에 반영까지 끝난 결정 |
+| `8-cancelled` | `cancelled` | task · bug · decision | 하지 않기로 한 일 |
+| `9-active` | `active` | milestone | 진행 중인 milestone |
+
+type 마다 카드가 지나는 열과 옮기는 쪽은 다음과 같다. 메인 세션의 판정 기준은 `../delegate/SKILL.md` 「열 옮기기」가 갖는다.
+
+| type | 열의 차례 | 옮기는 쪽 |
 |---|---|---|
-| `1-to-do` | `to-do` | task · bug · decision |
-| `2-in-progress` | `in-progress` | task · bug · decision |
-| `3-in-review` | `in-review` | task · bug |
-| `4-done` | `done` | task · bug · decision |
-| `5-decided` | `decided` | decision |
-| `6-planned` | `planned` | milestone |
-| `7-implemented` | `implemented` | decision |
-| `8-cancelled` | `cancelled` | task · bug |
-| `9-active` | `active` | milestone |
+| task · bug | `to-do` → `in-progress` → `in-review` → `done`. 그만두면 `cancelled` | `in-progress` 는 `uk run`, `in-review` 는 카드 세션이 `[결과]` 뒤에(`run.finish`), `done` · `cancelled` 는 메인 세션 |
+| decision | `to-do` → `in-progress` → `decided` → `implemented`. 반영할 코드가 없는 결정은 `implemented` 대신 `done`, 정하지 않기로 한 결정은 `cancelled` | `in-progress` 는 `uk run`, `decided` 는 카드 세션이 결정을 `[결과]` 에 적은 뒤에(`run.finish`), `implemented` · `done` · `cancelled` 는 메인 세션 |
+| milestone | `planned` → `active` → `done` | 메인 세션. `uk run` 은 milestone 을 띄우지 않는다(`in-progress` 가 받지 않는다) |
+
+카드의 type 은 frontmatter 의 `type` 이고 열을 옮겨도 바뀌지 않는다. `cancelled` 열의 decision 카드는 `type: decision` 으로 남으므로 따로 이력을 적지 않는다.
+
+세 가지 설정이 이 차례를 정한다. 키가 없는 보드(이 키보다 먼저 만든 보드)는 괄호 안의 코드 기본값을 쓴다(`lib/project.mjs`).
+
+| 키 | 하는 일 |
+|---|---|
+| `run.finish` | type → status. 카드 세션이 `[결과]` 를 남긴 뒤 `uk move` 로 카드를 그 열로 옮기라는 줄을 `run` 프롬프트에 붙인다. 없는 type 은 메인 세션이 옮긴다(`{"task":"in-review","bug":"in-review","decision":"decided"}`) |
+| `dependencies.abandoned` | 다시 끝나지 않는 status. `resolved` 와 겹칠 수 없다. 이 열로 옮기면 `move` 가 그 카드를 기다리는 카드와 고칠 명령을 낸다(`["cancelled"]`) |
+| `initial` | type → status. `uk new` 가 `--status` 없이 카드를 둘 열이다. 없는 type 은 `--status` 로 준다(`{"task":"to-do","bug":"to-do","decision":"to-do","milestone":"planned"}`). `columns` 의 차례로 정하지 않는다. `done` 이 milestone 을 받으므로 차례로 정하면 `planned` 보다 `done` 이 먼저다 |
 
 ## 카드
 
@@ -73,7 +91,8 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | `type` | `task` · `bug` · `decision` · `milestone` 중 그 열이 허용하는 것 |
 | `priority` | `critical` · `high` · `medium` · `low` |
 | `tags` | 문자열 목록. `model:` · `effort:` · `ultracode` 는 아래 「실행」의 규칙을 따른다 |
-| `depends_on` | 기다리는 카드 id 목록. `dependencies.gate` 의 열(`in-progress` · `in-review` · `done`)로 옮길 때 그 카드가 모두 `dependencies.resolved` 의 열(`done` · `decided` · `implemented`)이나 아카이브에 있어야 한다. `--force` 로 건너뛴다 |
+| `depends_on` | 기다리는 카드 id 목록. `dependencies.gate` 의 열(`in-progress` · `in-review` · `done`)로 옮길 때 그 카드가 모두 `dependencies.resolved` 의 열(`done` · `decided` · `implemented`)이나 아카이브에 있어야 한다. `--force` 로 건너뛴다. `dependencies.abandoned` 의 열(`cancelled`)에 있는 카드는 끝나지 않으므로, 그 카드를 기다리는 카드는 `uk set --remove-depends` 로 의존을 지우거나 함께 그만둔다 |
+| `collection` | 이 카드가 속한 milestone 카드의 id 목록. `uk new --collection` · `uk set --add-collection` 은 milestone 카드만 받는다. 비면 키를 쓰지 않는다 |
 | `completed_at` | `archive.columns` 의 열(`done`)에 들어갈 때 적히고 그 열에서 나가면 지워진다 |
 | `session` · `session_started_at` | `uk run` · `uk recover` 가 적는 세션 id 와 그 세션의 시작 시각 |
 
@@ -87,16 +106,16 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 |---|---|
 | `uk init [--dir <경로>]` | `.uhd-kanban/`(config.json · profiles.json)과 `kanban/` 을 만든다. 이미 있으면 바꾸지 않고 종료 코드 1 |
 | `uk check` | config.json · profiles.json 과 모든 카드를 검증한다. 파일은 바꾸지 않는다 |
-| `uk new --type <type> --title <제목> [--status to-do] [--priority medium] [--tags a,b] [--depends k1,k2] [--body-file <경로>] [자리]` | 카드를 만든다 |
-| `uk move <k id> <status> [자리] [--force]` | 다른 열로 옮긴다 |
+| `uk new --type <type> --title <제목> [--status <status>] [--priority medium] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file <경로>] [자리]` | 카드를 만든다. `--status` 가 없으면 `initial` 의 열에 둔다 |
+| `uk move <k id> <status> [자리] [--force]` | 다른 열로 옮긴다. `dependencies.abandoned` 의 열로 옮기면 그 카드를 기다리는 카드마다 `set --remove-depends` 명령과(그 열이 그 type 을 받으면) 함께 그만두는 `move` 명령을 낸다 |
 | `uk order <k id> <자리>` | 같은 열 안에서 자리를 바꾼다. 카드 내용은 바뀌지 않는다 |
 | `uk renumber <status>` | 그 열의 순서 번호를 지금 차례대로 `order.step` 간격으로 다시 매긴다 |
-| `uk set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b]` | 제목 · 우선순위 · 태그를 바꾼다. 제목이 바뀌면 파일 이름도 바뀐다 |
+| `uk set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b] [--add-depends k1] [--remove-depends k1] [--add-collection k1] [--remove-collection k1]` | 제목 · 우선순위 · 태그 · `depends_on` · `collection` 을 바꾼다. 준 목록만 고친다. 제목이 바뀌면 파일 이름도 바뀐다 |
 | `uk archive [--dry-run]` | `archive.columns` 열에서 `completed_at` 뒤 `archive.after_days`(기본 7)일이 지난 카드를 `kanban/archived/<YYYY-MM>/` 로 옮긴다 |
 | `uk comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> \| --text-file <경로>)` | 코멘트를 덧붙이고 SendMessage 줄을 낸다 |
 | `uk inbox [<이름>] [--all] [--kind a,b]` | 그 이름 앞으로 온 코멘트 중 답하지 않은 것을 낸다. `--kind` 를 주면 그 kind 의 코멘트만 낸다 |
 | `uk run <k id> [--dry-run] [--force]` | 카드 본문으로 `claude --bg` 세션을 띄운다. 도는 카드 세션이 `run.max_parallel` 개에 찼으면 띄우지 않는다 |
-| `uk recover [<k id>…] [--dry-run] [--force]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다. `run.max_parallel` 을 넘는 카드는 띄우지 않는다. `--force` 는 끝난(state done) 세션도 이어 간다 |
+| `uk recover [<k id>…] [--dry-run] [--force]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다. `run.max_parallel` 을 넘는 카드는 띄우지 않는다. `--force` 는 끝난(state done) 세션도 이어 간다. 다른 열(`in-review` 등)의 카드를 id 로 주면 이어 갈 때 `run.status` 열로 옮긴다 |
 | `uk guard <경로> [--session <session id>]` | 그 세션이 그 파일을 고쳐도 되는지 판정한다. 0: 카드 세션(이름 `k<id>`) · 프로젝트 밖 · `kanban/` · `.uhd-kanban/` 안. 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). `--session` 이 없으면 `CLAUDE_CODE_SESSION_ID` 를 쓴다. 규칙은 `../delegate/SKILL.md` |
 | `uk board [--json]` | 열마다 카드 수와 `run.status` 열 카드의 세션 판정을 낸다. 파일 이름만 읽고 카드 파일은 `run.status` 열의 것만 연다. 규칙 검사는 하지 않는다 |
 
@@ -118,7 +137,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 1. 카드의 `model:<프로필>` 태그를 `profiles.json` 으로 `--model` 값으로 바꾼다. `effort:<값>` 태그가 있으면 `--effort` 로 넘긴다. 태그가 없으면 그 옵션을 넘기지 않아 claude 의 기본 모델 · 기본 effort 로 띄운다.
 2. 카드를 `run.status` 열(`in-progress`)로 옮긴다. 의존성 검사는 `move` 와 같다.
-3. `claude --bg --dangerously-skip-permissions -n k457 --model … <프롬프트>` 를 프로젝트 루트에서 실행한다. `run` · `recover` 가 띄우는 세션은 모두 권한 확인 없이 돈다(`lib/sessions.mjs` 의 `BACKGROUND_ARGS`). 백그라운드 세션에는 확인 창에 답할 사람이 없다. 프롬프트는 카드 본문 뒤에 `진행` · `질문` · `결과` 코멘트를 남기는 명령을 붙인 것이다.
+3. `claude --bg --dangerously-skip-permissions -n k457 --model … <프롬프트>` 를 프로젝트 루트에서 실행한다. `run` · `recover` 가 띄우는 세션은 모두 권한 확인 없이 돈다(`lib/sessions.mjs` 의 `BACKGROUND_ARGS`). 백그라운드 세션에는 확인 창에 답할 사람이 없다. 프롬프트는 카드 본문 뒤에 `진행` · `질문` · `결과` 코멘트를 남기는 명령과, `run.finish` 에 그 type 이 있으면 `[결과]` 뒤에 카드를 그 열로 옮기는 `uk move` 명령을 붙인 것이다. 카드 파일은 경로가 아니라 글로브 `kanban/*/*-k<id>-*.md` 로 알려 준다. 카드를 옮기면 경로가 바뀐다.
 4. 카드에 `session` · `session_started_at` 과 `[배정]` 코멘트를 적는다.
 
 | 프로필 | `--model` | ultracode 확인 |
@@ -156,11 +175,13 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 |---|---|---|
 | 돈다 | 프로세스가 있고 아래 「멈춤」이 아니다 | 없음 |
 | 다시 뜨는 중 | `pid` 없이 `state working` | 없음. 잠시 뒤 다시 실행한다 |
-| 끝남 | `state done` | 없음. 결과 코멘트를 보고 카드를 옮긴다. 작업이 남았으면 `uk recover --force k<id>` 가 이어 감과 같이 `claude --bg --resume <session>` 으로 이어 간다 |
+| 끝남 | `state done` | 없음. 카드 세션이 `run.finish` 의 열로 옮기지 않고 끝났으면 결과 코멘트를 보고 메인 세션이 옮긴다. 작업이 남았으면 `uk recover --force k<id>` 가 이어 감과 같이 `claude --bg --resume <session>` 으로 이어 간다 |
 | 이어 감 | 세션이 목록에 없거나 `state stopped` | `claude --bg --resume <session>` |
 | 멈춤 | 데몬이 다시 띄웠고(`startedAt` 이 `session_started_at` 과 다르다) `status idle` 이고 대화 기록의 마지막 줄이 user | `claude stop` 뒤 `claude --bg --resume <session>` |
 
-이어 간 세션은 새 session id 로 뜬다(2026-10-29 실측). `recover` 는 카드의 `session` · `session_started_at` 을 새 값으로 고치고 `[배정]` 코멘트를 남긴다. 이어 간 세션은 카드의 마지막 `[진행]` 코멘트부터 이어 간다.
+이어 간 세션은 새 session id 로 뜬다(2026-10-29 실측). `recover` 는 카드의 `session` · `session_started_at` 을 새 값으로 고치고 `[배정]` 코멘트를 남긴다. 이어 간 세션은 카드의 마지막 `[진행]` 코멘트와 그 뒤의 코멘트부터 이어 간다.
+
+검토에서 돌아온 카드(`in-review` 에 있고 세션은 state done)는 `uk recover --force k<id>` 로 이어 간다. `recover` 는 그 카드를 `run.status` 열로 옮긴 뒤 `session` 을 고친다. 그래야 `run.max_parallel` 이 그 세션을 센다. 옮길 수 없는 카드(type 이 그 열에 맞지 않거나 의존 카드가 끝나지 않았다)는 띄우지 않고 종료 코드 1 로 알린다.
 
 `session` 이 비었거나 대화 기록이 없는 카드는 이어 갈 수 없으므로 종료 코드 1 로 알린다.
 
