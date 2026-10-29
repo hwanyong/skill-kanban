@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { NoProjectError, ProjectError } from '../lib/project.mjs'
 import { UsageError, parseArgs } from '../lib/args.mjs'
+import { t } from '../lib/i18n.mjs'
 
 const COMMANDS = {
   init: 'init.mjs',
@@ -22,29 +23,16 @@ const COMMANDS = {
   recover: 'recover.mjs',
   board: 'board.mjs',
   guard: 'guard.mjs',
+  migrate: 'migrate.mjs',
+  locale: 'locale.mjs',
 }
 
-const USAGE = `사용법: uhd-kanban <명령> [인자]
-  init [--dir <경로>]   프로젝트 루트에 .uhd-kanban/ 과 kanban/ 을 만든다
-  check                 config.json 과 모든 카드를 검증한다
-  new --type <type> --title <제목> [--status] [--priority] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file] [자리]   --status 기본은 config.json 의 initial
-  move <k id> <status> [자리] [--force]
-  order <k id> <자리>
-  renumber <status>
-  set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b] [--add-depends k1] [--remove-depends k1] [--add-collection k1] [--remove-collection k1]
-  archive [--dry-run]
-  comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> | --text-file <경로>)
-  inbox [<이름>] [--all] [--kind a,b]
-  run <k id> [--dry-run] [--force]   카드 본문으로 claude --bg 세션을 띄운다. run.max_parallel(-1 은 무제한)개까지
-  recover [<k id>…] [--dry-run] [--force]   세션이 멈춘 카드를 claude --bg --resume 으로 이어 간다. --force 는 끝난 세션도
-  board [--json]        열마다 카드 수와 run.status 열 카드의 세션 상태를 낸다
-  guard <경로> [--session <id>]   메인 세션이 그 프로젝트 파일을 고쳐도 되는지 판정한다(1 이면 안 된다)
-  자리: --top · --bottom · --before <k id> · --after <k id> (기본 --bottom)`
+const USAGE = t('usage')
 
 const [name, ...rest] = process.argv.slice(2)
 const file = COMMANDS[name]
 if (!file) {
-  console.error(name ? `알 수 없는 명령이다: ${name}\n${USAGE}` : USAGE)
+  console.error(name ? `${t('bin.unknown', { name })}\n${USAGE}` : USAGE)
   process.exit(2)
 }
 

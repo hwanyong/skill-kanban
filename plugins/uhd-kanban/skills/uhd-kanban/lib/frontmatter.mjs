@@ -3,9 +3,11 @@
 // 그 밖의 YAML(중첩 맵 · 여러 줄 스칼라 · 앵커)은 줄 번호와 함께 FrontmatterError 로 거절한다.
 // 쓰는 쪽(serialize)은 읽는 쪽이 같은 값으로 되읽는 형태만 낸다: parse(serialize(d)).data 는 d 와 같다.
 
+import { t } from './i18n.mjs'
+
 export class FrontmatterError extends Error {
   constructor(message, line) {
-    super(line == null ? message : `${line}번째 줄: ${message}`)
+    super(line == null ? message : t('frontmatter.atLine', { line, message }))
     this.line = line
   }
 }
@@ -24,10 +26,10 @@ const parseScalar = (raw, line) => {
     try {
       return JSON.parse(text)
     } catch {
-      throw new FrontmatterError(`큰따옴표 문자열을 읽을 수 없다: ${text}`, line)
+      throw new FrontmatterError(t('frontmatter.badQuoted', { text }), line)
     }
   }
-  if (/^[\[\]{}'&*!|>%@`]/.test(text)) throw new FrontmatterError(`지원하지 않는 YAML 값이다: ${text}`, line)
+  if (/^[\[\]{}'&*!|>%@`]/.test(text)) throw new FrontmatterError(t('frontmatter.unsupported', { text }), line)
   return text
 }
 
@@ -51,10 +53,10 @@ const splitInline = (inner, line) => {
     }
     current += ch
   }
-  if (quoted) throw new FrontmatterError('닫히지 않은 큰따옴표가 있다', line)
+  if (quoted) throw new FrontmatterError(t('frontmatter.unclosedQuote'), line)
   if (current.trim() != '' || items.length > 0) items.push(current)
   return items.map((item) => {
-    if (item.trim() == '') throw new FrontmatterError('목록에 빈 항목이 있다', line)
+    if (item.trim() == '') throw new FrontmatterError(t('frontmatter.emptyItem'), line)
     return parseScalar(item, line)
   })
 }
@@ -62,16 +64,16 @@ const splitInline = (inner, line) => {
 const parseValue = (raw, line) => {
   const text = raw.trim()
   if (!text.startsWith('[')) return parseScalar(text, line)
-  if (!text.endsWith(']')) throw new FrontmatterError(`목록이 ] 로 끝나지 않는다: ${text}`, line)
+  if (!text.endsWith(']')) throw new FrontmatterError(t('frontmatter.listEnd', { text }), line)
   return splitInline(text.slice(1, -1), line)
 }
 
 // text 는 카드 파일 전체다. 첫 줄이 `---` 이고 다음 `---` 줄까지가 frontmatter 다.
 export const parse = (text) => {
   const lines = text.split('\n')
-  if (lines[0] != '---') throw new FrontmatterError('파일이 --- 줄로 시작하지 않는다', 1)
+  if (lines[0] != '---') throw new FrontmatterError(t('frontmatter.noStart'), 1)
   const end = lines.indexOf('---', 1)
-  if (end == -1) throw new FrontmatterError('frontmatter 를 닫는 --- 줄이 없다', 1)
+  if (end == -1) throw new FrontmatterError(t('frontmatter.noEnd'), 1)
   const data = {}
   let listKey = null
   for (let i = 1; i < end; i += 1) {
@@ -80,14 +82,14 @@ export const parse = (text) => {
     if (row.trim() == '' || row.trimStart().startsWith('#')) continue
     const item = row.match(/^\s+-\s+(.*)$/) ?? row.match(/^-\s+(.*)$/)
     if (item) {
-      if (listKey == null) throw new FrontmatterError('목록 항목 앞에 키가 없다', line)
+      if (listKey == null) throw new FrontmatterError(t('frontmatter.itemWithoutKey'), line)
       data[listKey].push(parseScalar(item[1], line))
       continue
     }
     const pair = row.match(KEY)
-    if (!pair) throw new FrontmatterError(`키: 값 형식이 아니다: ${row}`, line)
+    if (!pair) throw new FrontmatterError(t('frontmatter.notPair', { row }), line)
     const [, key, rest] = pair
-    if (Object.hasOwn(data, key)) throw new FrontmatterError(`키가 두 번 나온다: ${key}`, line)
+    if (Object.hasOwn(data, key)) throw new FrontmatterError(t('frontmatter.duplicateKey', { key }), line)
     if (rest == null || rest.trim() == '') {
       const next = lines[i + 1] ?? ''
       const opensList = i + 1 < end && /^\s*-\s/.test(next)
@@ -106,10 +108,10 @@ const formatScalar = (value) => {
   if (value == null) return ''
   if (typeof value == 'boolean') return String(value)
   if (typeof value == 'number') {
-    if (!Number.isInteger(value)) throw new FrontmatterError(`정수가 아닌 수는 쓰지 않는다: ${value}`)
+    if (!Number.isInteger(value)) throw new FrontmatterError(t('frontmatter.notInteger', { value }))
     return String(value)
   }
-  if (typeof value != 'string') throw new FrontmatterError(`스칼라가 아닌 값이다: ${JSON.stringify(value)}`)
+  if (typeof value != 'string') throw new FrontmatterError(t('frontmatter.notScalar', { value: JSON.stringify(value) }))
   const ambiguous = INTEGER.test(value) || ['true', 'false', 'null', '~'].includes(value)
   return ambiguous || NEEDS_QUOTE.test(value) ? JSON.stringify(value) : value
 }
@@ -124,7 +126,7 @@ const formatListItem = (value) => {
 export const serialize = (data, keyOrder = []) => {
   const keys = [...keyOrder.filter((key) => Object.hasOwn(data, key)), ...Object.keys(data).filter((key) => !keyOrder.includes(key)).sort()]
   const rows = keys.filter((key) => data[key] !== undefined).map((key) => {
-    if (!/^[a-z_][a-z0-9_]*$/.test(key)) throw new FrontmatterError(`쓸 수 없는 키 이름이다: ${key}`)
+    if (!/^[a-z_][a-z0-9_]*$/.test(key)) throw new FrontmatterError(t('frontmatter.badKey', { key }))
     const value = data[key]
     if (!Array.isArray(value)) return `${key}: ${formatScalar(value)}`.trimEnd()
     return `${key}: [${value.map(formatListItem).join(', ')}]`

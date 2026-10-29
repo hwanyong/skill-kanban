@@ -1,11 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Board, BoardCard, BoardColumn, BoardView } from '../types'
+import type { Board, BoardCard, BoardColumn, BoardView, Locale } from '../types'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, 카드 하나를 막대의 한 칸으로 그린다.
 // 축(열마다 카드 수)이 맨 위에 있고 막대는 아래로 자란다. 막대 폭은 가장 긴 막대가 본문 행에 들어가도록 정하고, 그래도 넘치면 pane 을 스크롤한다.
 // 보드를 읽는 규칙은 board 명령(같은 플러그인의 skills/uhd-kanban/lib/)이 갖는다. 이 모듈은 그 stdout 을 그리기만 한다.
+// pane 의 글은 locale 명령이 낸 언어(ko · en)로 고른다. 언어를 정하는 규칙도 그 명령(lib/i18n.mjs)이 갖는다.
 
 const PANE = 'uhd-kanban-board'
 // 같은 플러그인에 든 스킬의 명령. 플러그인 폴더(plugin.json 이 든 폴더)에서 센다.
@@ -22,14 +23,51 @@ const HEADER_ROWS = 4
 // 열의 차례(config.json 의 columns 순서)로 고른다. 열이 이보다 많으면 처음부터 다시 쓴다.
 const COLUMN_COLORS = ['#58a6ff', '#d29922', '#a371f7', '#39c5cf', '#f778ba', '#7ee787', '#ffa657', '#6e7681', '#ff7b72']
 // run.status 열의 칸만 세션 판정(sessions.mjs 의 cardSession)으로 색을 바꾼다. none(세션 없음)은 열의 색을 쓴다.
+// label 은 TEXT 의 키다. restart · resume 은 같은 이름(멈춤)으로 범례에 한 번만 낸다.
 const SESSIONS = [
-  { verdict: 'live', color: 'success', label: '돈다' },
-  { verdict: 'pending', color: 'warning', label: '다시 뜨는 중' },
-  { verdict: 'restart', color: 'error', label: '멈춤' },
-  { verdict: 'resume', color: 'error', label: '멈춤' },
-  { verdict: 'done', color: 'subtle', label: '끝남' },
-]
+  { verdict: 'live', color: 'success', label: 'live' },
+  { verdict: 'pending', color: 'warning', label: 'pending' },
+  { verdict: 'restart', color: 'error', label: 'stalled' },
+  { verdict: 'resume', color: 'error', label: 'stalled' },
+  { verdict: 'done', color: 'subtle', label: 'done' },
+] as const
 const LEGEND = SESSIONS.filter((item, index) => SESSIONS.findIndex((other) => other.label == item.label) == index)
+
+// skills/uhd-kanban/lib/messages/*.mjs 와 같은 언어 목록이다. 이 모듈은 그 표를 읽지 못하므로 pane 의 글만 따로 둔다.
+const TEXT = {
+  ko: {
+    live: '돈다',
+    pending: '다시 뜨는 중',
+    stalled: '멈춤',
+    done: '끝남',
+    description: 'uhd-kanban 보드의 열마다 카드 수를 pane 에 막대로 그린다',
+    noBoard: '이 세션의 디렉터리 위에 .uhd-kanban/config.json 이 없어 pane 을 열지 않았다',
+    opened: (root: string, seconds: number) => `${root} 의 보드를 열었다. ${seconds}초마다 다시 읽는다`,
+    failed: (message: string) => `board 명령이 실패했다: ${message}`,
+    notRun: (command: string, message: string) => `${command} 를 실행하지 못했다: ${message}`,
+    exitCode: (code: number) => `종료 코드 ${code}`,
+    reading: '보드를 읽는 중이다',
+    failedAt: (clock: string) => `board 명령이 실패했다 (${clock})`,
+    reload: (command: string) => `/${command} 로 다시 읽는다`,
+    header: (clock: string, columns: number, cards: number, seconds: number) => `${clock} · 열 ${columns}개 · 카드 ${cards}개 · ${seconds}초마다`,
+  },
+  en: {
+    live: 'running',
+    pending: 'restarting',
+    stalled: 'stalled',
+    done: 'finished',
+    description: 'Draws the card count of each uhd-kanban board column as a bar in a pane',
+    noBoard: 'No .uhd-kanban/config.json above this session directory, so the pane was not opened',
+    opened: (root: string, seconds: number) => `Opened the board of ${root}. Rereads every ${seconds}s`,
+    failed: (message: string) => `The board command failed: ${message}`,
+    notRun: (command: string, message: string) => `Could not run ${command}: ${message}`,
+    exitCode: (code: number) => `exit code ${code}`,
+    reading: 'Reading the board',
+    failedAt: (clock: string) => `The board command failed (${clock})`,
+    reload: (command: string) => `Reread with /${command}`,
+    header: (clock: string, columns: number, cards: number, seconds: number) => `${clock} · ${columns} columns · ${cards} cards · every ${seconds}s`,
+  },
+} satisfies Record<Locale, unknown>
 
 const view = atom({ plugin: 'uhd-kanban', key: 'view' } as const, { kind: 'none' } as BoardView, { shape: 'view-1' })
 
@@ -70,18 +108,20 @@ const barRow = (board: Board, column: BoardColumn, index: number, row: number, w
 
 const joinColumns = (parts: Segment[][]) => parts.flatMap((segments, index) => (index == 0 ? segments : [{ text: ' '.repeat(GAP) }, ...segments]))
 
-type Polling = { timer: Timer | null; periodMs: number }
+// locale 은 session.start 에서 locale 명령으로 정한다. 정하기 전에 쓰는 값은 en 이다.
+type Polling = { timer: Timer | null; periodMs: number; locale: Locale }
 
-const refresh = async ($: EngineInterface): Promise<BoardView> => {
+const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardView> => {
+  const text = TEXT[polling.locale]
   const cwd = await $.session.root()
   const refreshedAt = await $.clock.now()
   const argv = ['node', `${$.plugin.root}/${SKILL_BIN}`, 'board', '--json']
-  const ran = await $.process.run(argv, { cwd, timeoutMs: 60000 }).catch((error) => ({ exitCode: -1, stdout: '', stderr: `${argv.join(' ')} 를 실행하지 못했다: ${error?.message ?? error}` }))
+  const ran = await $.process.run(argv, { cwd, timeoutMs: 60000 }).catch((error) => ({ exitCode: -1, stdout: '', stderr: text.notRun(argv.join(' '), String(error?.message ?? error)) }))
   const result: BoardView = ran.exitCode == 3
     ? { kind: 'none' }
     : ran.exitCode == 0
       ? { kind: 'ok', board: JSON.parse(ran.stdout), refreshedAt }
-      : { kind: 'error', message: ran.stderr.trim() || `종료 코드 ${ran.exitCode}`, refreshedAt }
+      : { kind: 'error', message: ran.stderr.trim() || text.exitCode(ran.exitCode), refreshedAt }
   await update($, view, () => result)
   return result
 }
@@ -100,31 +140,41 @@ const schedule = ($: EngineInterface, polling: Polling, result: BoardView) => {
 const tick = async ($: EngineInterface, polling: Polling) => {
   const isOpen = (await $.ui.panes()).some((pane) => pane.id == PANE)
   if (!isOpen) return
-  schedule($, polling, await refresh($))
+  schedule($, polling, await refresh($, polling))
+}
+
+// locale 명령이 실패하면(node 가 없는 등) en 으로 둔다. 실패한 이유는 다음 board 실행이 pane 에 낸다.
+const resolveLocale = async ($: EngineInterface): Promise<Locale> => {
+  const argv = ['node', `${$.plugin.root}/${SKILL_BIN}`, 'locale']
+  const ran = await $.process.run(argv, { cwd: await $.session.root(), timeoutMs: 30000 }).catch(() => null)
+  const value = ran?.exitCode == 0 ? ran.stdout.trim() : ''
+  return value in TEXT ? (value as Locale) : 'en'
 }
 
 const start = async ($: EngineInterface, polling: Polling) => {
-  const result = await refresh($)
+  const result = await refresh($, polling)
   schedule($, polling, result)
   if (result.kind != 'none') await $.ui.open({ id: PANE, title: TITLE })
 }
 
 // 타이머는 모듈을 다시 읽으면 엔진이 버린다. 그래서 상태도 register 가 돌 때마다 새로 만든다.
 export const register: Register = (on) => {
-  const polling: Polling = { timer: null, periodMs: 0 }
+  const polling: Polling = { timer: null, periodMs: 0, locale: 'en' }
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: COMMAND, description: 'uhd-kanban 보드의 열마다 카드 수를 pane 에 막대로 그린다' })
+    polling.locale = await resolveLocale($)
+    await $.command.register({ name: COMMAND, description: TEXT[polling.locale].description })
     void start($, polling)
     return next(e)
   })
 
   on('command.run', { command: COMMAND }, async ($) => {
-    const result = await refresh($)
+    const text = TEXT[polling.locale]
+    const result = await refresh($, polling)
     schedule($, polling, result)
-    if (result.kind == 'none') return { text: '이 세션의 디렉터리 위에 .uhd-kanban/config.json 이 없어 pane 을 열지 않았다' }
+    if (result.kind == 'none') return { text: text.noBoard }
     await $.ui.open({ id: PANE, title: TITLE })
-    return { text: result.kind == 'ok' ? `${result.board.root} 의 보드를 열었다. ${result.board.interval_seconds}초마다 다시 읽는다` : `board 명령이 실패했다: ${result.message}` }
+    return { text: result.kind == 'ok' ? text.opened(result.board.root, result.board.interval_seconds) : text.failed(result.message) }
   })
 
   // delegate 스킬의 금지 1 을 도구가 지킨다. 판정은 guard 명령이 갖고, 이 훅은 종료 코드만 본다.
@@ -140,14 +190,15 @@ export const register: Register = (on) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
+    const text = TEXT[polling.locale]
     const current = await read($, view)
-    if (current.kind == 'none') return <Text dimColor>보드를 읽는 중이다</Text>
+    if (current.kind == 'none') return <Text dimColor>{text.reading}</Text>
     if (current.kind == 'error') {
       return (
         <Box flexDirection="column">
-          <Text color="error">board 명령이 실패했다 ({clockText(current.refreshedAt)})</Text>
+          <Text color="error">{text.failedAt(clockText(current.refreshedAt))}</Text>
           <Text>{current.message}</Text>
-          <Text dimColor>/{COMMAND} 로 다시 읽는다</Text>
+          <Text dimColor>{text.reload(COMMAND)}</Text>
         </Box>
       )
     }
@@ -163,10 +214,10 @@ export const register: Register = (on) => {
     )
     return (
       <Box flexDirection="column">
-        <Text dimColor wrap="truncate-end">{clockText(current.refreshedAt)} · 열 {board.columns.length}개 · 카드 {total}개 · {board.interval_seconds}초마다</Text>
+        <Text dimColor wrap="truncate-end">{text.header(clockText(current.refreshedAt), board.columns.length, total, board.interval_seconds)}</Text>
         <Text wrap="truncate-end">
           <Text dimColor>{board.run_status}: </Text>
-          {LEGEND.map((item) => <Text color={item.color}>{CELL}{item.label} </Text>)}
+          {LEGEND.map((item) => <Text color={item.color}>{CELL}{text[item.label]} </Text>)}
         </Text>
         {line(counts)}
         {line(axis)}

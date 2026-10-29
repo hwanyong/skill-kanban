@@ -7,6 +7,7 @@ import { UsageError, cardId, listFrom } from '../args.mjs'
 import { COLLECTION_TYPE, assertRefs, assertTags, findCard, moveFile, now, writeCard } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
 import { activeName, archivedName } from '../filename.mjs'
+import { t } from '../i18n.mjs'
 
 // 목록에서 remove 를 빼고 없는 add 를 뒤에 붙인다.
 const edited = (list, add, remove) => [...list.filter((item) => !remove.includes(item)), ...add.filter((item) => !list.includes(item))]
@@ -14,12 +15,12 @@ const edited = (list, add, remove) => [...list.filter((item) => !remove.includes
 const idsFrom = (flags, name) => listFrom(flags[name]).map((ref) => cardId(ref, `--${name}`))
 
 export const run = async ({ positional, flags }) => {
-  if (positional[0] == null) throw new UsageError('set <k id> [--title] [--priority] [--add-tag] [--remove-tag] [--add-depends] [--remove-depends] [--add-collection] [--remove-collection] 형식이다')
+  if (positional[0] == null) throw new UsageError(t('set.usage'))
   const id = cardId(positional[0])
   const title = typeof flags.title == 'string' ? flags.title.trim() : null
-  if (title == '') throw new UsageError('--title 이 비었다')
+  if (title == '') throw new UsageError(t('set.emptyTitle'))
   const priority = typeof flags.priority == 'string' ? flags.priority : null
-  if (priority != null && !PRIORITIES.includes(priority)) throw new UsageError(`--priority 는 ${PRIORITIES.join(' · ')} 중 하나다`)
+  if (priority != null && !PRIORITIES.includes(priority)) throw new UsageError(t('args.priority', { values: PRIORITIES }))
   const add = listFrom(flags['add-tag'])
   const remove = listFrom(flags['remove-tag'])
   const lists = {
@@ -27,7 +28,7 @@ export const run = async ({ positional, flags }) => {
     collection: { add: idsFrom(flags, 'add-collection'), remove: idsFrom(flags, 'remove-collection'), type: COLLECTION_TYPE },
   }
   const listChanged = Object.values(lists).some((list) => list.add.length + list.remove.length > 0)
-  if (title == null && priority == null && add.length == 0 && remove.length == 0 && !listChanged) throw new UsageError('바꿀 것이 없다')
+  if (title == null && priority == null && add.length == 0 && remove.length == 0 && !listChanged) throw new UsageError(t('set.nothing'))
   return editBoard(async ({ project, board }) => {
     const card = findCard(board, id)
     const tags = edited(card.data.tags ?? [], add, remove)

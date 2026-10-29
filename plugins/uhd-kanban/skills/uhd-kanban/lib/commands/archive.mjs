@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { moveFile } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
 import { archivedName, localDate } from '../filename.mjs'
+import { t } from '../i18n.mjs'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -22,9 +23,9 @@ export const run = async ({ flags }) => {
       if (!dryRun) moveFile(project, card.path, target)
       console.log(`${dryRun ? '(dry-run) ' : ''}k${card.id} → ${target.slice(project.root.length + 1)}`)
     }
-    console.log(`${dryRun ? '옮길' : '옮긴'} 카드 ${due.length}개 · 기준 ${afterDays}일 · 대상 열 ${columns.join(', ')}`)
+    console.log(t(dryRun ? 'archive.summaryDry' : 'archive.summary', { count: due.length, days: afterDays, columns }))
     if (missing.length == 0) return 0
-    console.error(`completed_at 이 없거나 날짜가 아니라 옮기지 않은 카드 ${missing.length}개:\n- ${missing.map((card) => card.relPath).join('\n- ')}`)
+    console.error(t('archive.missing', { paths: missing.map((card) => card.relPath) }))
     return 1
   })
 }

@@ -5,13 +5,14 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { t } from './i18n.mjs'
 import { ProjectError, UNLIMITED, maxParallel } from './project.mjs'
 
 // all 이면 끝난 백그라운드 세션까지 낸다(`--all`).
 export const listSessions = ({ all = false } = {}) => {
   const text = execFileSync('claude', ['agents', '--json', ...(all ? ['--all'] : [])], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   const sessions = JSON.parse(text)
-  if (!Array.isArray(sessions)) throw new ProjectError('claude agents --json 의 stdout 이 배열이 아니다')
+  if (!Array.isArray(sessions)) throw new ProjectError(t('sessions.notArray'))
   return sessions
 }
 
@@ -33,13 +34,13 @@ export const launchBackground = (args, prompt, cwd) => {
   const result = spawnSync('claude', [...BACKGROUND_ARGS, ...args, '--', prompt], { cwd, encoding: 'utf8' })
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim()
   const match = /claude stop (\S+)/.exec(output)
-  if (result.status != 0 || !match) throw new ProjectError(`claude --bg 가 세션을 띄우지 못했다(종료 코드 ${result.status}):\n${output}`)
+  if (result.status != 0 || !match) throw new ProjectError(t('sessions.launchFailed', { status: result.status, output }))
   return match[1]
 }
 
 export const stopSession = (shortId) => {
   const result = spawnSync('claude', ['stop', shortId], { encoding: 'utf8' })
-  if (result.status != 0) throw new ProjectError(`claude stop ${shortId} 가 종료 코드 ${result.status} 로 끝났다:\n${`${result.stdout}${result.stderr}`.trim()}`)
+  if (result.status != 0) throw new ProjectError(t('sessions.stopFailed', { shortId, status: result.status, output: `${result.stdout}${result.stderr}`.trim() }))
 }
 
 // 세션 항목의 startedAt(밀리초)을 카드에 적는 ISO 8601 문자열로 바꾼다.

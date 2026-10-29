@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { FrontmatterError, parse } from './frontmatter.mjs'
 import { parseName, titleSlug } from './filename.mjs'
 import { parseComments } from './comments.mjs'
+import { kindText, t } from './i18n.mjs'
 import { tagProblems } from './profiles.mjs'
 
 export const PRIORITIES = ['critical', 'high', 'medium', 'low']
@@ -19,31 +20,34 @@ export const KEY_ORDER = [
 
 const listDir = (path) => (existsSync(path) ? readdirSync(path, { withFileTypes: true }) : [])
 
-const checkData = (data, card, column, profiles, problems) => {
+const checkData = (project, data, card, column, problems) => {
   const at = card.relPath
-  if (data.id != card.id) problems.push(`${at}: frontmatter id ${data.id} 가 파일 이름의 k${card.id} 와 다르다`)
-  if (typeof data.title != 'string' || data.title.trim() == '') problems.push(`${at}: title 이 없다`)
-  if (typeof data.title == 'string' && titleSlug(data.title) != card.slug) problems.push(`${at}: 파일 이름의 제목이 title 과 다르다(기대: ${titleSlug(data.title)})`)
-  if (column && !column.types.includes(data.type)) problems.push(`${at}: type ${data.type} 는 ${column.status} 열에 둘 수 없다(허용: ${column.types.join(', ')})`)
-  if (data.priority != null && !PRIORITIES.includes(data.priority)) problems.push(`${at}: priority 는 ${PRIORITIES.join(' · ')} 중 하나다: ${data.priority}`)
-  if (data.tags != null && (!Array.isArray(data.tags) || data.tags.some((tag) => typeof tag != 'string'))) problems.push(`${at}: tags 는 문자열 목록이다`)
-  if (data.depends_on != null && (!Array.isArray(data.depends_on) || data.depends_on.some((id) => !Number.isInteger(id)))) problems.push(`${at}: depends_on 은 카드 id(정수) 목록이다`)
-  if (data.collection != null && (!Array.isArray(data.collection) || data.collection.some((id) => !Number.isInteger(id)))) problems.push(`${at}: collection 은 milestone 카드 id(정수) 목록이다`)
+  const add = (message) => problems.push(`${at}: ${message}`)
+  if (data.id != card.id) add(t('card.idMismatch', { value: data.id, id: card.id }))
+  if (typeof data.title != 'string' || data.title.trim() == '') add(t('card.noTitle'))
+  if (typeof data.title == 'string' && titleSlug(data.title) != card.slug) add(t('card.slugMismatch', { expected: titleSlug(data.title) }))
+  if (column && !column.types.includes(data.type)) add(t('card.typeNotAllowed', { type: data.type, status: column.status, types: column.types }))
+  if (data.priority != null && !PRIORITIES.includes(data.priority)) add(t('card.priority', { priorities: PRIORITIES, value: data.priority }))
+  if (data.tags != null && (!Array.isArray(data.tags) || data.tags.some((tag) => typeof tag != 'string'))) add(t('card.tags'))
+  if (data.depends_on != null && (!Array.isArray(data.depends_on) || data.depends_on.some((id) => !Number.isInteger(id)))) add(t('card.dependsOn'))
+  if (data.collection != null && (!Array.isArray(data.collection) || data.collection.some((id) => !Number.isInteger(id)))) add(t('card.collection'))
   const comments = parseComments(card.body)
-  comments.problems.forEach((problem) => problems.push(`${at}: ${problem}`))
-  if (Array.isArray(data.tags)) tagProblems(data, comments.main, profiles).forEach((problem) => problems.push(`${at}: ${problem}`))
+  comments.problems.forEach(add)
+  const kinds = project.config.comments.kinds
+  comments.comments.filter((comment) => !kinds.includes(comment.kind)).forEach((comment) => add(t('card.unknownKind', { n: comment.n, kind: comment.kind, kinds: kinds.map((kind) => kindText(kind)) })))
+  if (Array.isArray(data.tags)) tagProblems(data, comments.main, project.profiles).forEach(add)
 }
 
-export const readCard = (path, relPath, name, column, profiles, problems) => {
+export const readCard = (project, path, relPath, name, column, problems) => {
   const parsedName = parseName(name)
   if (!parsedName) {
-    problems.push(`${relPath}: 파일 이름이 <순서 번호>-k<id>-<제목>.md 형식이 아니다`)
+    problems.push(`${relPath}: ${t('card.badName')}`)
     return null
   }
   try {
     const { data, body } = parse(readFileSync(path, 'utf8'))
     const card = { ...parsedName, path, relPath, name, status: column?.status ?? null, column: column?.dir ?? null, data, body }
-    checkData(data, card, column, profiles, problems)
+    checkData(project, data, card, column, problems)
     return card
   } catch (error) {
     if (!(error instanceof FrontmatterError)) throw error
@@ -73,15 +77,15 @@ export const readBoard = (project) => {
   const known = new Set([...config.columns.map((column) => column.dir), config.archive.dir])
   listDir(boardPath)
     .filter((entry) => !known.has(entry.name) && !entry.name.startsWith('.'))
-    .forEach((entry) => problems.push(`kanban/${entry.name}: config.json 의 columns 에 없는 ${entry.isDirectory() ? '디렉터리' : '파일'}다`))
+    .forEach((entry) => problems.push(`kanban/${entry.name}: ${t(entry.isDirectory() ? 'board.unknownDir' : 'board.unknownFile')}`))
   const cards = config.columns.flatMap((column) => {
     const inColumn = cardFiles(boardPath, column)
-      .map((entry) => readCard(join(boardPath, column.dir, entry.name), `kanban/${column.dir}/${entry.name.normalize('NFC')}`, entry.name, column, project.profiles, problems))
+      .map((entry) => readCard(project, join(boardPath, column.dir, entry.name), `kanban/${column.dir}/${entry.name.normalize('NFC')}`, entry.name, column, problems))
       .filter((card) => card != null)
-    inColumn.filter((card) => card.kind != 'active').forEach((card) => problems.push(`${card.relPath}: 열 안의 카드는 순서 번호로 시작한다`))
-    inColumn.filter((card) => card.width != config.order.width).forEach((card) => problems.push(`${card.relPath}: 순서 번호가 ${config.order.width}자리가 아니다`))
+    inColumn.filter((card) => card.kind != 'active').forEach((card) => problems.push(`${card.relPath}: ${t('board.needsOrder')}`))
+    inColumn.filter((card) => card.width != config.order.width).forEach((card) => problems.push(`${card.relPath}: ${t('board.orderWidth', { width: config.order.width })}`))
     const sorted = inColumn.sort((a, b) => a.order - b.order)
-    sorted.filter((card, index) => index > 0 && card.order == sorted[index - 1].order).forEach((card) => problems.push(`${card.relPath}: 순서 번호 ${card.order} 가 같은 열에 두 번 있다`))
+    sorted.filter((card, index) => index > 0 && card.order == sorted[index - 1].order).forEach((card) => problems.push(`${card.relPath}: ${t('board.orderTwice', { order: card.order })}`))
     return sorted
   })
   const archiveRoot = join(boardPath, config.archive.dir)
@@ -89,13 +93,13 @@ export const readBoard = (project) => {
     .filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}$/.test(entry.name))
     .flatMap((month) => listDir(join(archiveRoot, month.name))
       .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-      .map((entry) => readCard(join(archiveRoot, month.name, entry.name), `kanban/${config.archive.dir}/${month.name}/${entry.name.normalize('NFC')}`, entry.name, null, project.profiles, problems)))
+      .map((entry) => readCard(project, join(archiveRoot, month.name, entry.name), `kanban/${config.archive.dir}/${month.name}/${entry.name.normalize('NFC')}`, entry.name, null, problems)))
     .filter((card) => card != null)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id - b.id))
   const seen = new Map()
   const everyCard = [...cards, ...archived]
   everyCard.forEach((card) => {
-    if (seen.has(card.id)) problems.push(`k${card.id} 가 두 곳에 있다: ${seen.get(card.id)} · ${card.relPath}`)
+    if (seen.has(card.id)) problems.push(t('board.duplicateId', { id: card.id, first: seen.get(card.id), second: card.relPath }))
     seen.set(card.id, card.relPath)
   })
   return { cards, archived, problems }

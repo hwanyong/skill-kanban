@@ -7,7 +7,7 @@
 // - status 는 같은 이름의 열로 간다. 보관한 항목은 kanban/archived/ 로 가고 파일 이름의 날짜는 done 이면 완료 시각, 아니면 보관 시각이다.
 // - agentModel 은 MODEL_PROFILES 로 model: 태그, agentEffort 는 effort: 태그, labels 는 태그로 간다.
 // - 코멘트는 머리 줄을 붙인다. 첫 줄에 8자리 16진수가 있으면 from= 에 넣고 없으면 from=unknown, to=unknown 이다.
-//   kind 는 첫 줄에 comments.kinds 의 낱말이 있으면 그것이고 없으면 가져옴 이다.
+//   kind 는 첫 줄에 LEGACY_KINDS(lib/kinds.mjs)의 한국어 낱말이 있으면 그 id 이고 없으면 imported 다. Nimbalyst 코멘트는 한국어로 적혀 있다.
 // - 제목 · 본문 · 코멘트 · agentReason · chosen 안의 이 작업 공간 항목 id(`task_1791873774065_fbzj7k`)는 `k<id>` 로 바꿔 쓴다. 원문은 nimbalyst-items.jsonl 에 있다.
 //   이 작업 공간에 없는 id(잘렸거나 지운 항목)는 그대로 두고 개수를 알린다.
 // - blocks(A 가 B 를 막는다)는 B 의 depends_on 에, items(milestone 이 X 를 갖는다)는 X 의 collection 에 넣는다.
@@ -24,6 +24,7 @@ import { SECTION, appendComment, textProblems } from '../plugins/uhd-kanban/skil
 import { editBoard } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/edit.mjs'
 import { activeName, archivedName, localDate } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/filename.mjs'
 import { tagProblems } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/profiles.mjs'
+import { LEGACY_KINDS } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/kinds.mjs'
 import { ProjectError } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/project.mjs'
 
 const DEFAULT_DB = join(homedir(), 'Library', 'Application Support', '@nimbalyst', 'electron', 'sqlite-db', 'nimbalyst.sqlite')
@@ -39,7 +40,9 @@ const MODEL_PROFILES = {
   'claude-sonnet-5-5': 'standard',
   'user': 'user',
 }
-const IMPORT_KIND = '가져옴'
+const IMPORT_KIND = LEGACY_KINDS['가져옴']
+// 첫 줄에서 찾는 낱말. 가져옴 은 이 도구가 붙이는 값이라 찾지 않는다.
+const WORDS = Object.keys(LEGACY_KINDS).filter((word) => LEGACY_KINDS[word] != IMPORT_KIND)
 const UNKNOWN = 'unknown'
 const ITEM_REF = /(?<![0-9A-Za-z_])(?:task|bug|decision|milestone|plan)_[0-9a-z]+(?:_[0-9a-z]+)?(?![0-9A-Za-z_])/g
 const SESSION_ID = /(?:^|[^0-9a-z])([0-9a-f]{8})(?![0-9a-z])/i
@@ -49,14 +52,14 @@ const unique = (list) => [...new Set(list)]
 const itemIds = (list) => (Array.isArray(list) ? list.map((entry) => entry?.itemId).filter((id) => typeof id == 'string') : [])
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-// 첫 줄에서 가장 앞에 나오는 kind. 같은 자리면 긴 것(`사용자 답` 과 `답`). 앞뒤가 글자 · 숫자면 낱말이 아니다(`답변`).
-const kindOf = (firstLine, kinds) => {
-  const hits = kinds.flatMap((kind) => {
+// 첫 줄에서 가장 앞에 나오는 낱말의 kind id. 같은 자리면 긴 것(`사용자 답` 과 `답`). 앞뒤가 글자 · 숫자면 낱말이 아니다(`답변`).
+const kindOf = (firstLine) => {
+  const hits = WORDS.flatMap((kind) => {
     const match = new RegExp(`(?:^|[^\\p{L}\\p{N}])(${escape(kind)})(?![\\p{L}\\p{N}])`, 'u').exec(firstLine)
     return match ? [{ kind, at: match.index + match[0].length - kind.length }] : []
   })
   hits.sort((a, b) => a.at - b.at || b.kind.length - a.kind.length)
-  return hits[0]?.kind ?? IMPORT_KIND
+  return hits.length > 0 ? LEGACY_KINDS[hits[0].kind] : IMPORT_KIND
 }
 
 const readItems = (dbPath, workspace) => {
@@ -83,13 +86,13 @@ const completedAt = (row) => {
   return changes.length > 0 ? iso(Math.max(...changes.map((entry) => entry.timestamp))) : null
 }
 
-const convertComments = (row, kinds, rewrite, problems, stats) => {
+const convertComments = (row, rewrite, problems, stats) => {
   const comments = [...(row.data.comments ?? [])].filter((comment) => !comment.deleted).sort((a, b) => a.createdAt - b.createdAt)
   return comments.map((comment) => {
     const text = rewrite(String(comment.body ?? '').replace(/\s+$/, ''))
     const firstLine = text.split('\n').find((line) => line.trim() != '') ?? ''
     const from = SESSION_ID.exec(firstLine)?.[1].toLowerCase() ?? UNKNOWN
-    const kind = kindOf(firstLine, kinds)
+    const kind = kindOf(firstLine)
     textProblems(text).forEach((problem) => problems.push(`${row.id} 코멘트 ${comment.id}: ${problem}`))
     stats.kinds[kind] = (stats.kinds[kind] ?? 0) + 1
     stats.from[from == UNKNOWN ? UNKNOWN : '8자리 id'] += 1
@@ -103,7 +106,8 @@ const run = async ({ positional, flags }) => {
   return editBoard(async ({ project, board }) => {
     if (board.cards.length + board.archived.length > 0) throw new ProjectError(`보드에 카드가 ${board.cards.length + board.archived.length}개 있다. 가져오기는 빈 보드에만 한다`)
     const kinds = project.config.comments.kinds
-    if (!kinds.includes(IMPORT_KIND)) throw new ProjectError(`${join(project.settingsPath, 'config.json')} 의 comments.kinds 에 "${IMPORT_KIND}" 을 더한다. 첫 줄로 kind 를 정하지 못한 코멘트에 쓴다`)
+    const absent = unique(Object.values(LEGACY_KINDS)).filter((kind) => !kinds.includes(kind))
+    if (absent.length > 0) throw new ProjectError(`${join(project.settingsPath, 'config.json')} 의 comments.kinds 에 ${absent.join(', ')} 을 더한다. ${IMPORT_KIND} 는 첫 줄로 kind 를 정하지 못한 코멘트에 쓴다`)
     const workspace = positional[0] ?? project.root
     const { rows, sessions, relations } = readItems(dbPath, workspace)
     if (rows.length == 0) throw new ProjectError(`${dbPath} 에 작업 공간 ${workspace} 의 항목이 없다`)
@@ -176,7 +180,7 @@ const run = async ({ positional, flags }) => {
       const description = rewrite(String(row.data.description ?? '').replace(/\s+$/, ''))
       if (description.split('\n').includes(SECTION)) problems.push(`${row.id}: 본문에 ${SECTION} 줄이 있다`)
       tagProblems(data, description, project.profiles).forEach((problem) => problems.push(`${row.id}: ${problem}`))
-      const body = convertComments(row, kinds, rewrite, problems, stats).reduce((text, comment) => appendComment(text, comment).body, description == '' ? '' : `${description}\n`)
+      const body = convertComments(row, rewrite, problems, stats).reduce((text, comment) => appendComment(text, comment).body, description == '' ? '' : `${description}\n`)
       return { row, id, status, archived, data, body }
     })
     const { step, width } = project.config.order

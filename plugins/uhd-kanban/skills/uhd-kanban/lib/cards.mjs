@@ -7,6 +7,7 @@ import { dirname, join, relative } from 'node:path'
 import { KEY_ORDER } from './board.mjs'
 import { serialize } from './frontmatter.mjs'
 import { activeName } from './filename.mjs'
+import { t } from './i18n.mjs'
 import { ProjectError } from './project.mjs'
 import { parseComments } from './comments.mjs'
 import { tagProblems } from './profiles.mjs'
@@ -36,7 +37,7 @@ const removeIfEmpty = (project, dir) => {
 
 export const moveFile = (project, from, to) => {
   if (from == to) return
-  if (existsSync(to)) throw new ProjectError(`옮길 자리에 이미 파일이 있다: ${relative(project.root, to)}`)
+  if (existsSync(to)) throw new ProjectError(t('cards.targetExists', { path: relative(project.root, to) }))
   mkdirSync(dirname(to), { recursive: true })
   if (isTracked(project.root, from)) git(project.root, ['mv', '--', relative(project.root, from), relative(project.root, to)])
   else renameSync(from, to)
@@ -51,12 +52,12 @@ export const writeCard = (path, data, body) => {
 // 쓰기 전에 태그 규칙을 본다. readBoard 가 다음에 위반으로 보고할 카드를 쓰지 않는다.
 export const assertTags = (project, data, body) => {
   const problems = tagProblems(data, parseComments(body).main, project.profiles)
-  if (problems.length > 0) throw new ProjectError(`k${data.id} 의 태그가 규칙에 맞지 않아 쓰지 않았다:\n- ${problems.join('\n- ')}`)
+  if (problems.length > 0) throw new ProjectError(t('cards.badTags', { id: data.id, problems }))
 }
 
 export const findCard = (board, id) => {
   const card = [...board.cards, ...board.archived].find((item) => item.id == id)
-  if (!card) throw new ProjectError(`k${id} 카드가 없다`)
+  if (!card) throw new ProjectError(t('cards.notFound', { id }))
   return card
 }
 
@@ -65,9 +66,9 @@ export const COLLECTION_TYPE = 'milestone'
 
 // depends_on · collection 에 적을 id 를 본다. 카드가 있어야 하고 자기 자신이 아니어야 하며, type 을 주면 그 type 의 카드여야 한다.
 export const assertRefs = (board, ids, { key, self = null, type = null }) => ids.forEach((id) => {
-  if (id == self) throw new ProjectError(`k${id} 를 자기 ${key} 에 넣을 수 없다`)
+  if (id == self) throw new ProjectError(t('cards.selfRef', { id, key }))
   const card = findCard(board, id)
-  if (type != null && card.data.type != type) throw new ProjectError(`${key} 의 k${id} 는 type ${type} 카드가 아니다(type ${card.data.type})`)
+  if (type != null && card.data.type != type) throw new ProjectError(t('cards.refType', { key, id, type, actual: card.data.type }))
 })
 
 // depends_on 에 id 를 둔 열 안의 카드. 아카이브한 카드는 다시 옮기지 않으므로 뺀다.
@@ -93,7 +94,7 @@ export const orderFor = (column, position, step, width) => {
   }
   const anchorId = position.before ?? position.after
   const index = column.findIndex((card) => card.id == anchorId)
-  if (index == -1) throw new ProjectError(`k${anchorId} 는 이 열에 없다`)
+  if (index == -1) throw new ProjectError(t('cards.anchorNotInColumn', { id: anchorId }))
   if (position.before) return between(index == 0 ? -1 : orders[index - 1], orders[index])
   return between(orders[index], index == orders.length - 1 ? max + 1 : orders[index + 1])
 }
@@ -109,7 +110,7 @@ const slotIndex = (column, position) => {
 // 이름이 서로 겹치지 않도록 임시 이름을 거쳐 두 번 옮긴다. 반환: 카드 id → 새 경로.
 export const renumberColumn = (project, status, cards) => {
   const { step, width } = project.config.order
-  if (cards.length * step > 10 ** width - 1) throw new ProjectError(`${status} 열의 카드 ${cards.length}개를 ${step} 간격으로 매기면 ${width}자리를 넘는다. config.json 의 order.width 를 늘린다`)
+  if (cards.length * step > 10 ** width - 1) throw new ProjectError(t('cards.renumberOverflow', { status, count: cards.length, step, width }))
   const dir = join(project.boardPath, project.columnOf(status).dir)
   const staged = cards.map((card) => {
     const temp = join(dir, `.renumber-k${card.id}.md`)
@@ -127,8 +128,8 @@ export const renumberColumn = (project, status, cards) => {
 export const checkPosition = (board, status, position, movingId) => {
   const anchorId = position.before ?? position.after
   if (anchorId == null) return
-  if (anchorId == movingId) throw new ProjectError(`k${anchorId} 를 자기 자신 앞뒤에 둘 수 없다`)
-  if (!board.cards.some((card) => card.id == anchorId && card.status == status)) throw new ProjectError(`k${anchorId} 는 ${status} 열에 없다`)
+  if (anchorId == movingId) throw new ProjectError(t('cards.anchorSelf', { id: anchorId }))
+  if (!board.cards.some((card) => card.id == anchorId && card.status == status)) throw new ProjectError(t('cards.anchorNotIn', { id: anchorId, status }))
 }
 
 // card 를 status 열의 position 자리에 옮기고 새 경로를 돌려준다. card.path 의 파일은 이미 있어야 하고 card.data 는 쓴 뒤다.
@@ -162,12 +163,12 @@ const unresolved = (project, board, card) => {
 // 반환: { path, renumbered, blocking }. blocking 은 force 로 건너뛴 카드 id 다.
 // 파일을 바꾸지 않고 옮길 수 있는지만 본다. 반환: force 로 건너뛸 카드 id.
 export const checkMove = (project, board, card, status, { position = { bottom: true }, force = false } = {}) => {
-  if (card.kind != 'active') throw new ProjectError(`k${card.id} 는 아카이브에 있다: ${card.relPath}`)
+  if (card.kind != 'active') throw new ProjectError(t('cards.archived', { id: card.id, path: card.relPath }))
   const column = project.columnOf(status)
-  if (!column) throw new ProjectError(`${status} 는 config.json 의 columns 에 없는 status 다`)
-  if (!column.types.includes(card.data.type)) throw new ProjectError(`type ${card.data.type} 는 ${status} 열에 둘 수 없다(허용: ${column.types.join(', ')})`)
+  if (!column) throw new ProjectError(t('cards.unknownStatus', { status }))
+  if (!column.types.includes(card.data.type)) throw new ProjectError(t('card.typeNotAllowed', { type: card.data.type, status, types: column.types }))
   const blocking = project.config.dependencies.gate.includes(status) ? unresolved(project, board, card) : []
-  if (blocking.length > 0 && !force) throw new ProjectError(`k${card.id} 가 기다리는 카드가 끝나지 않았다: ${blocking.map((item) => `k${item}`).join(', ')}. 그래도 옮기려면 --force`)
+  if (blocking.length > 0 && !force) throw new ProjectError(t('cards.blocked', { id: card.id, blocking }))
   checkPosition(board, status, position, card.id)
   return blocking
 }

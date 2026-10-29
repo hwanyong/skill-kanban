@@ -6,19 +6,20 @@
 import { readBoard } from '../board.mjs'
 import { UsageError, listFrom } from '../args.mjs'
 import { parseComments } from '../comments.mjs'
-import { loadProject } from '../project.mjs'
+import { kindText, t } from '../i18n.mjs'
+import { assertKind, loadProject } from '../project.mjs'
 import { currentSessionName, listSessions } from '../sessions.mjs'
 
 const isReply = (later, comment, name) => later.from == name || (later.from != comment.from && later.to.includes(comment.from))
 
 export const run = async ({ positional, flags }) => {
   const all = flags.all == true
-  const kinds = listFrom(flags.kind)
   const name = positional[0] ?? currentSessionName(listSessions())
-  if (name == null) throw new UsageError('이 세션의 이름을 claude agents --json 에서 찾지 못했다. inbox <이름> 으로 준다')
+  if (name == null) throw new UsageError(t('inbox.noName'))
   const project = loadProject()
+  const kinds = listFrom(flags.kind).map((kind) => assertKind(project, kind))
   const board = readBoard(project)
-  if (board.problems.length > 0) console.error(`보드에 규칙 위반 ${board.problems.length}건이 있다. uhd-kanban check 로 확인한다`)
+  if (board.problems.length > 0) console.error(t('inbox.boardProblems', { count: board.problems.length }))
   const cards = all ? [...board.cards, ...board.archived] : board.cards
   const items = cards.flatMap((card) => {
     const { comments } = parseComments(card.body)
@@ -28,9 +29,9 @@ export const run = async ({ positional, flags }) => {
       .filter((item) => all || !item.answered)
   })
   items.forEach(({ card, comment, answered }) => {
-    console.log(`k${card.id} c${comment.n} [${comment.kind}] from=${comment.from} at=${comment.at}${answered ? ' (답함)' : ''} ${card.relPath}`)
+    console.log(`k${card.id} c${comment.n} [${kindText(comment.kind)}] from=${comment.from} at=${comment.at}${answered ? ` (${t('inbox.answered')})` : ''} ${card.relPath}`)
     console.log(comment.text.split('\n').map((line) => `  ${line}`).join('\n'))
   })
-  console.log(`${name} 앞으로 ${all ? '온' : '답하지 않은'} 코멘트 ${items.length}개`)
+  console.log(t(all ? 'inbox.summaryAll' : 'inbox.summary', { name, count: items.length }))
   return 0
 }

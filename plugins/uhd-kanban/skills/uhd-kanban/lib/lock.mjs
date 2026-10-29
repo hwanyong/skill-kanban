@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { t } from './i18n.mjs'
 import { ProjectError } from './project.mjs'
 
 const STALE_MS = 10 * 60 * 1000
@@ -56,7 +57,7 @@ export const withLock = async (project, work) => {
       rmSync(dir, { recursive: true, force: true })
       continue
     }
-    if (Date.now() > deadline) throw new ProjectError(`${dir} 를 ${WAIT_MS / 1000}초 동안 잡지 못했다. 잡은 쪽: ${JSON.stringify(owner)}`)
+    if (Date.now() > deadline) throw new ProjectError(t('lock.timeout', { dir, seconds: WAIT_MS / 1000, owner: JSON.stringify(owner) }))
     await sleep(POLL_MS)
   }
   try {

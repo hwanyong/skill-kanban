@@ -3,6 +3,8 @@
 // 아카이브한 카드: `<YYYY-MM-DD>-k<id>-<제목>.md`  예: 2026-10-21-k457-로그인-오류-재현.md
 // 상태는 디렉터리 이름이, 순서는 파일 이름이 갖는다. frontmatter 에는 둘 다 적지 않는다.
 
+import { t } from './i18n.mjs'
+
 export const TITLE_LENGTH = 40
 
 const ACTIVE = /^(\d+)-k([1-9]\d*)-(.+)\.md$/
@@ -21,9 +23,9 @@ export const titleSlug = (title) => {
 }
 
 export const formatOrder = (order, width) => {
-  if (!Number.isInteger(order) || order < 0) throw new RangeError(`순서 번호는 0 이상의 정수다: ${order}`)
+  if (!Number.isInteger(order) || order < 0) throw new RangeError(t('filename.orderInteger', { order }))
   const text = String(order)
-  if (text.length > width) throw new RangeError(`순서 번호 ${order} 가 ${width}자리를 넘는다. config.json 의 order.width 를 늘린다`)
+  if (text.length > width) throw new RangeError(t('filename.orderWidth', { order, width }))
   return text.padStart(width, '0')
 }
 
@@ -33,7 +35,7 @@ export const activeName = ({ order, id, title }, width) => `${formatOrder(order,
 export const localDate = (date) => date.toLocaleDateString('sv-SE')
 
 export const archivedName = ({ date, id, title }) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new RangeError(`날짜는 YYYY-MM-DD 다: ${date}`)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new RangeError(t('filename.date', { date }))
   return `${date}-k${id}-${titleSlug(title)}.md`
 }
 

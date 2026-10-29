@@ -1,14 +1,13 @@
-// 프로젝트 루트를 찾고 `.uhd-kanban/config.json` 을 읽어 검증한다.
-// 루트는 `.uhd-kanban/` 이 있는 디렉터리다. git worktree 안에서 부르면 주 worktree 의 루트를 쓴다.
-// 보드(`kanban/`)는 저장소마다 한 벌이어야 한다. worktree 마다 따로 고치면 카드 id 와 순서 번호가 갈라진다.
+// 프로젝트 루트를 찾고 `.uhd-kanban/config.json` 을 읽어 검증한다. 루트를 찾는 규칙은 root.mjs 가 갖는다.
 
-import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { LOCALES, configLocale, kindText, t } from './i18n.mjs'
+import { KIND_ID, LEGACY_KINDS, RUN_KINDS, kindId } from './kinds.mjs'
 import { validateProfiles } from './profiles.mjs'
+import { BOARD_DIR, SETTINGS_DIR, findRootOrNull } from './root.mjs'
 
-export const SETTINGS_DIR = '.uhd-kanban'
-export const BOARD_DIR = 'kanban'
+export { BOARD_DIR, SETTINGS_DIR }
 
 export class ProjectError extends Error {}
 
@@ -35,7 +34,7 @@ const allows = (config, status, type) => config.columns.some((column) => column.
 
 const validDefaults = (config, defaults) => Object.fromEntries(Object.entries(defaults).filter(([type, status]) => allows(config, status, type)))
 
-// type 마다 카드 세션이 [결과] 를 남긴 뒤 카드를 옮길 status. 없는 type 은 옮기지 않는다.
+// type 마다 카드 세션이 [result] 를 남긴 뒤 카드를 옮길 status. 없는 type 은 옮기지 않는다.
 export const finishStatuses = (config) => config.run.finish ?? validDefaults(config, DEFAULT_FINISH)
 
 export const finishStatus = (config, type) => finishStatuses(config)[type] ?? null
@@ -47,38 +46,44 @@ export const abandonedStatuses = (config) => config.dependencies.abandoned ?? DE
 // columns 의 차례로 정하지 않는다. done 이 milestone 을 받으면 planned 보다 앞에 있다.
 export const initialStatus = (config, type) => (config.initial ?? validDefaults(config, DEFAULT_INITIAL))[type] ?? null
 
-// run · recover 가 카드에 쓰거나 세션에 쓰라고 하는 코멘트 kind. comments.kinds 에 있어야 한다.
-export const RUN_KINDS = ['배정', '진행', '질문', '결과']
-
-const gitMainRoot = (cwd) => {
-  try {
-    const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-    return common.endsWith('/.git') ? dirname(common) : null
-  } catch {
-    return null
-  }
-}
-
-const walkUp = (start) => {
-  for (let dir = resolve(start); ; dir = dirname(dir)) {
-    if (existsSync(join(dir, SETTINGS_DIR, 'config.json'))) return dir
-    if (dirname(dir) == dir) return null
-  }
-}
-
 export const findRoot = (cwd = process.cwd()) => {
-  const main = gitMainRoot(cwd)
-  const root = (main && walkUp(main)) ?? walkUp(cwd)
-  if (root == null) throw new NoProjectError(`${cwd} 위에 ${SETTINGS_DIR}/config.json 이 없다. 프로젝트 루트에서 uhd-kanban init 을 실행한다`)
+  const root = findRootOrNull(cwd)
+  if (root == null) throw new NoProjectError(t('project.noRoot', { cwd, settings: SETTINGS_DIR }))
   return root
 }
 
-const readJson = (path) => {
+export const readJson = (path) => {
   try {
     return JSON.parse(readFileSync(path, 'utf8'))
   } catch (error) {
-    throw new ProjectError(`${path} 를 JSON 으로 읽을 수 없다: ${error.message}`)
+    throw new ProjectError(t('project.badJson', { path, message: error.message }))
   }
+}
+
+// config.json 을 templates/config.json 과 같은 모양으로 쓴다. 최상위 키마다 한 줄이고, 객체 목록(columns)은 항목마다 한 줄이다.
+// JSON.stringify(config, null, 2) 는 열 하나를 여러 줄로 풀어 사람이 열 차례를 한눈에 보지 못한다. init 과 migrate 가 쓴다.
+const inline = (value) => {
+  if (Array.isArray(value)) return `[${value.map(inline).join(', ')}]`
+  if (value == null || typeof value != 'object') return JSON.stringify(value)
+  const entries = Object.entries(value)
+  return entries.length == 0 ? '{}' : `{ ${entries.map(([key, item]) => `${JSON.stringify(key)}: ${inline(item)}`).join(', ')} }`
+}
+
+export const formatConfig = (config) => {
+  const lines = Object.entries(config).map(([key, value]) => {
+    const head = `  ${JSON.stringify(key)}: `
+    const rows = Array.isArray(value) && value.some((item) => item != null && typeof item == 'object')
+    return rows ? `${head}[\n${value.map((item) => `    ${inline(item)}`).join(',\n')}\n  ]` : `${head}${inline(value)}`
+  })
+  return `{\n${lines.join(',\n')}\n}\n`
+}
+
+// 명령이 받은 kind 를 id 로 바꾸고 comments.kinds 에 있는지 본다. 반환: kind id.
+export const assertKind = (project, kind) => {
+  const id = kindId(kind)
+  const kinds = project.config.comments.kinds
+  if (!kinds.includes(id)) throw new ProjectError(t('kind.notAllowed', { kind, kinds: kinds.map((item) => kindText(item)) }))
+  return id
 }
 
 const isPositiveInteger = (value) => Number.isInteger(value) && value > 0
@@ -86,75 +91,89 @@ const isPositiveInteger = (value) => Number.isInteger(value) && value > 0
 // initial · run.finish 처럼 type 이름 → status 이름인 객체를 본다. 없으면(null) 기본값을 쓰므로 문제가 아니다.
 const typeStatusProblems = (columns, key, map) => {
   if (map == null) return []
-  if (typeof map != 'object' || Array.isArray(map)) return [`${key} 는 type 이름 → status 이름 객체다`]
+  if (typeof map != 'object' || Array.isArray(map)) return [t('config.typeStatusObject', { key })]
   return Object.entries(map)
     .filter(([type, status]) => !columns.some((column) => column?.status == status && column?.types?.includes?.(type)))
-    .map(([type, status]) => `${key} 의 ${type} → ${status}: ${status} 는 type ${type} 를 받는 columns 의 status 가 아니다`)
+    .map(([type, status]) => t('config.typeStatusBad', { key, type, status }))
+}
+
+// 0.4.0 까지의 한국어 kind 가 남았으면 migrate 를 알린다. 그 밖의 형식 위반은 형식만 알린다.
+const kindProblems = (kinds) => {
+  if (!Array.isArray(kinds) || kinds.length == 0 || kinds.some((kind) => typeof kind != 'string')) return [t('config.kinds')]
+  const legacy = kinds.filter((kind) => Object.hasOwn(LEGACY_KINDS, kind))
+  const malformed = kinds.filter((kind) => !Object.hasOwn(LEGACY_KINDS, kind) && !KIND_ID.test(kind))
+  return [
+    ...(legacy.length > 0 ? [t('config.kindsLegacy', { kinds: legacy })] : []),
+    ...malformed.map((kind) => t('config.kindMalformed', { kind })),
+    ...(legacy.length > 0 ? [] : RUN_KINDS.filter((kind) => !kinds.includes(kind)).map((kind) => t('config.runKindMissing', { kind }))),
+  ]
 }
 
 // 문제를 하나씩 멈추지 않고 모두 모아 한 번에 알린다.
 export const validateConfig = (config) => {
   const problems = []
   const columns = Array.isArray(config?.columns) ? config.columns : []
-  if (columns.length == 0) problems.push('columns 가 비었거나 배열이 아니다')
+  if (columns.length == 0) problems.push(t('config.columnsEmpty'))
   const dirs = new Set()
   const statuses = new Set()
   columns.forEach((column, index) => {
     const at = `columns[${index}]`
-    if (!/^\d+-[a-z][a-z0-9-]*$/.test(column?.dir ?? '')) problems.push(`${at}.dir 는 <숫자>-<영소문자> 형식이다: ${column?.dir}`)
-    if (!/^[a-z][a-z0-9-]*$/.test(column?.status ?? '')) problems.push(`${at}.status 는 영소문자 · 숫자 · - 로 쓴다: ${column?.status}`)
-    if (dirs.has(column?.dir)) problems.push(`${at}.dir 가 겹친다: ${column.dir}`)
-    if (statuses.has(column?.status)) problems.push(`${at}.status 가 겹친다: ${column.status}`)
+    if (!/^\d+-[a-z][a-z0-9-]*$/.test(column?.dir ?? '')) problems.push(t('config.columnDir', { at, dir: column?.dir }))
+    if (!/^[a-z][a-z0-9-]*$/.test(column?.status ?? '')) problems.push(t('config.columnStatus', { at, status: column?.status }))
+    if (dirs.has(column?.dir)) problems.push(t('config.columnDirDup', { at, dir: column.dir }))
+    if (statuses.has(column?.status)) problems.push(t('config.columnStatusDup', { at, status: column.status }))
     dirs.add(column?.dir)
     statuses.add(column?.status)
     const types = column?.types
-    if (!Array.isArray(types) || types.length == 0 || types.some((type) => !/^[a-z][a-z0-9-]*$/.test(type))) problems.push(`${at}.types 는 비지 않은 type 이름 배열이다`)
+    if (!Array.isArray(types) || types.length == 0 || types.some((type) => !/^[a-z][a-z0-9-]*$/.test(type))) problems.push(t('config.columnTypes', { at }))
   })
+  if (config?.locale != null && !LOCALES.includes(config.locale)) problems.push(t('config.locale', { value: JSON.stringify(config.locale), locales: LOCALES }))
   const order = config?.order ?? {}
-  if (!Number.isInteger(order.width) || order.width < 3 || order.width > 8) problems.push(`order.width 는 3 ~ 8 의 정수다: ${order.width}`)
-  if (!isPositiveInteger(order.step)) problems.push(`order.step 은 1 이상의 정수다: ${order.step}`)
+  if (!Number.isInteger(order.width) || order.width < 3 || order.width > 8) problems.push(t('config.orderWidth', { value: order.width }))
+  if (!isPositiveInteger(order.step)) problems.push(t('config.orderStep', { value: order.step }))
   const dependencies = config?.dependencies ?? {}
   for (const key of ['gate', 'resolved']) {
     const list = dependencies[key]
-    if (!Array.isArray(list)) problems.push(`dependencies.${key} 는 status 이름 배열이다`)
-    if (Array.isArray(list)) list.filter((status) => !statuses.has(status)).forEach((status) => problems.push(`dependencies.${key} 의 ${status} 는 columns 에 없는 status 다`))
+    if (!Array.isArray(list)) problems.push(t('config.statusList', { key: `dependencies.${key}` }))
+    if (Array.isArray(list)) list.filter((status) => !statuses.has(status)).forEach((status) => problems.push(t('config.unknownStatus', { key: `dependencies.${key}`, status })))
   }
   const abandoned = dependencies.abandoned
   const resolved = Array.isArray(dependencies.resolved) ? dependencies.resolved : []
-  if (abandoned != null && !Array.isArray(abandoned)) problems.push('dependencies.abandoned 는 status 이름 배열이다')
-  if (Array.isArray(abandoned)) abandoned.filter((status) => !statuses.has(status)).forEach((status) => problems.push(`dependencies.abandoned 의 ${status} 는 columns 에 없는 status 다`))
-  if (Array.isArray(abandoned)) abandoned.filter((status) => resolved.includes(status)).forEach((status) => problems.push(`dependencies.abandoned 의 ${status} 가 dependencies.resolved 에도 있다`))
-  const kinds = config?.comments?.kinds
-  if (!Array.isArray(kinds) || kinds.length == 0 || kinds.some((kind) => typeof kind != 'string' || !/^[^\[\]\n]+$/.test(kind))) problems.push('comments.kinds 는 [ ] 와 줄바꿈이 없는 문자열의 배열이다')
-  if (Array.isArray(kinds)) RUN_KINDS.filter((kind) => !kinds.includes(kind)).forEach((kind) => problems.push(`comments.kinds 에 run 이 쓰는 ${kind} 가 없다`))
+  if (abandoned != null && !Array.isArray(abandoned)) problems.push(t('config.statusList', { key: 'dependencies.abandoned' }))
+  if (Array.isArray(abandoned)) abandoned.filter((status) => !statuses.has(status)).forEach((status) => problems.push(t('config.unknownStatus', { key: 'dependencies.abandoned', status })))
+  if (Array.isArray(abandoned)) abandoned.filter((status) => resolved.includes(status)).forEach((status) => problems.push(t('config.abandonedResolved', { status })))
+  kindProblems(config?.comments?.kinds).forEach((problem) => problems.push(problem))
   const archive = config?.archive ?? {}
   const archiveColumns = Array.isArray(archive.columns) ? archive.columns : []
-  if (!Array.isArray(archive.columns)) problems.push('archive.columns 는 status 이름 배열이다')
-  archiveColumns.filter((status) => !statuses.has(status)).forEach((status) => problems.push(`archive.columns 의 ${status} 는 columns 에 없는 status 다`))
-  if (!Number.isInteger(archive.after_days) || archive.after_days < 0) problems.push(`archive.after_days 는 0 이상의 정수다: ${archive.after_days}`)
-  if (!/^[a-z][a-z0-9-]*$/.test(archive.dir ?? '') || dirs.has(archive.dir)) problems.push(`archive.dir 는 열 디렉터리와 겹치지 않는 영소문자 이름이다: ${archive.dir}`)
-  if (!statuses.has(config?.run?.status)) problems.push(`run.status 는 columns 에 있는 status 다: ${config?.run?.status}`)
+  if (!Array.isArray(archive.columns)) problems.push(t('config.statusList', { key: 'archive.columns' }))
+  archiveColumns.filter((status) => !statuses.has(status)).forEach((status) => problems.push(t('config.unknownStatus', { key: 'archive.columns', status })))
+  if (!Number.isInteger(archive.after_days) || archive.after_days < 0) problems.push(t('config.afterDays', { value: archive.after_days }))
+  if (!/^[a-z][a-z0-9-]*$/.test(archive.dir ?? '') || dirs.has(archive.dir)) problems.push(t('config.archiveDir', { value: archive.dir }))
+  if (!statuses.has(config?.run?.status)) problems.push(t('config.runStatus', { value: config?.run?.status }))
   const parallel = config?.run?.max_parallel
-  if (parallel != null && (!Number.isInteger(parallel) || (parallel < 1 && parallel != UNLIMITED))) problems.push(`run.max_parallel 은 1 이상의 정수이거나 무제한인 ${UNLIMITED} 이다(없으면 ${DEFAULT_MAX_PARALLEL}): ${JSON.stringify(parallel)}`)
+  if (parallel != null && (!Number.isInteger(parallel) || (parallel < 1 && parallel != UNLIMITED))) problems.push(t('config.maxParallel', { unlimited: UNLIMITED, fallback: DEFAULT_MAX_PARALLEL, value: JSON.stringify(parallel) }))
   typeStatusProblems(columns, 'initial', config?.initial).forEach((problem) => problems.push(problem))
   typeStatusProblems(columns, 'run.finish', config?.run?.finish).forEach((problem) => problems.push(problem))
   const interval = config?.monitor?.interval_seconds
-  if (!Number.isInteger(interval) || interval < MIN_MONITOR_SECONDS) problems.push(`monitor.interval_seconds 는 ${MIN_MONITOR_SECONDS} 이상의 정수다: ${interval}`)
+  if (!Number.isInteger(interval) || interval < MIN_MONITOR_SECONDS) problems.push(t('config.interval', { min: MIN_MONITOR_SECONDS, value: interval }))
   return problems
 }
 
 export const loadProject = (cwd = process.cwd()) => {
   const root = findRoot(cwd)
-  const config = readJson(join(root, SETTINGS_DIR, 'config.json'))
+  const configPath = join(root, SETTINGS_DIR, 'config.json')
+  const config = readJson(configPath)
   const problems = validateConfig(config)
-  if (problems.length > 0) throw new ProjectError(`${join(root, SETTINGS_DIR, 'config.json')} 가 규칙에 맞지 않는다:\n- ${problems.join('\n- ')}`)
-  const profiles = readJson(join(root, SETTINGS_DIR, 'profiles.json'))
+  if (problems.length > 0) throw new ProjectError(t('project.invalid', { path: configPath, problems }))
+  const profilesPath = join(root, SETTINGS_DIR, 'profiles.json')
+  const profiles = readJson(profilesPath)
   const profileProblems = validateProfiles(profiles)
-  if (profileProblems.length > 0) throw new ProjectError(`${join(root, SETTINGS_DIR, 'profiles.json')} 가 규칙에 맞지 않는다:\n- ${profileProblems.join('\n- ')}`)
+  if (profileProblems.length > 0) throw new ProjectError(t('project.invalid', { path: profilesPath, problems: profileProblems }))
   return {
     root,
     config,
     profiles,
+    locale: configLocale(config),
     boardPath: join(root, BOARD_DIR),
     settingsPath: join(root, SETTINGS_DIR),
     columnOf: (status) => config.columns.find((column) => column.status == status) ?? null,

@@ -5,12 +5,13 @@
 
 import { join } from 'node:path'
 import { readCard, readColumnNames } from '../board.mjs'
+import { t } from '../i18n.mjs'
 import { loadProject } from '../project.mjs'
 import { cardSession, listSessions } from '../sessions.mjs'
 
 const sessionOf = (project, column, card, sessions) => {
   const path = join(project.boardPath, column.dir, card.name)
-  const read = readCard(path, `kanban/${column.dir}/${card.name.normalize('NFC')}`, card.name, column, project.profiles, [])
+  const read = readCard(project, path, `kanban/${column.dir}/${card.name.normalize('NFC')}`, card.name, column, [])
   return read ? cardSession(read, sessions).verdict : 'none'
 }
 
@@ -36,7 +37,7 @@ export const run = async ({ flags }) => {
   }
   result.columns.forEach((column) => {
     const verdicts = column.status == runStatus ? Object.entries(Object.groupBy(column.cards, (card) => card.session)).map(([verdict, cards]) => `${verdict} ${cards.length}`) : []
-    console.log(`${column.dir} ${column.count}개${verdicts.length > 0 ? ` (세션: ${verdicts.join(' · ')})` : ''}`)
+    console.log(t('board.column', { dir: column.dir, count: column.count, verdicts }))
   })
   return 0
 }

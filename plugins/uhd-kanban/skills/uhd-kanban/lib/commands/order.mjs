@@ -4,19 +4,20 @@
 import { UsageError, cardId, positionFrom } from '../args.mjs'
 import { checkPosition, findCard, place } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
+import { renumberNote, t } from '../i18n.mjs'
 import { ProjectError } from '../project.mjs'
 
 export const run = async ({ positional, flags }) => {
-  if (positional[0] == null) throw new UsageError('order <k id> (--top|--bottom|--before k|--after k) 형식이다')
+  if (positional[0] == null) throw new UsageError(t('order.usage'))
   const id = cardId(positional[0])
   const position = positionFrom(flags, null)
-  if (position == null) throw new UsageError('--top · --bottom · --before · --after 중 하나가 필요하다')
+  if (position == null) throw new UsageError(t('order.positionRequired'))
   return editBoard(async ({ project, board }) => {
     const card = findCard(board, id)
-    if (card.kind != 'active') throw new ProjectError(`k${id} 는 아카이브에 있다: ${card.relPath}`)
+    if (card.kind != 'active') throw new ProjectError(t('cards.archived', { id, path: card.relPath }))
     checkPosition(board, card.status, position, id)
     const { path, renumbered } = place(project, board, card, card.status, position)
-    console.log(`k${id} ${card.order} → ${path.slice(project.root.length + 1)}${renumbered > 0 ? ` (열을 다시 매김: ${renumbered}개)` : ''}`)
+    console.log(`k${id} ${card.order} → ${path.slice(project.root.length + 1)}${renumberNote(renumbered)}`)
     return 0
   })
 }

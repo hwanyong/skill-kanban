@@ -14,13 +14,14 @@ English | [한국어](README.ko.md)
 *A board with 501 cards in the board monitor pane. The pane shows counts and session states only; card titles are not displayed.*
 
 > [!NOTE]
-> The skills, command output, comment kinds and pane labels are written in Korean.
+> Command output, card session prompts and pane labels are available in English and Korean (see [Language](#language)). The skill documents (`SKILL.md`) are written in Korean and include English trigger phrases.
 
 ## Contents
 
 - [Why uhd-kanban](#why-uhd-kanban)
 - [What is in the plugin](#what-is-in-the-plugin)
 - [Quick start](#quick-start)
+- [Language](#language)
 - [How the board is stored](#how-the-board-is-stored)
 - [Delegating work to card sessions](#delegating-work-to-card-sessions)
 - [Commands](#commands)
@@ -61,7 +62,7 @@ English | [한국어](README.ko.md)
 2. Create a board in the project root. Ask Claude to initialize a uhd-kanban board, or run the command yourself:
 
    ```sh
-   node ~/.claude/plugins/cache/skill-kanban/uhd-kanban/<version>/skills/uhd-kanban/bin/uhd-kanban.mjs init
+   node ~/.claude/plugins/cache/skill-kanban/uhd-kanban/<version>/skills/uhd-kanban/bin/uhd-kanban.mjs init --locale en
    ```
 
    This creates `.uhd-kanban/config.json`, `.uhd-kanban/profiles.json` and `kanban/`. If they already exist, nothing is changed and the command exits with code 1.
@@ -71,6 +72,21 @@ English | [한국어](README.ko.md)
 4. Give the main session a task. With the `delegate` skill, it splits the task into cards, starts them with `uk run`, and reports card ids, results and open decisions back to you.
 
 To install from a local clone instead, run `claude plugin marketplace add <folder>` and then `claude plugin install uhd-kanban@skill-kanban`. Claude Code then reads that folder directly; run `/reload-plugins` after editing it.
+
+## Language
+
+Each board has one language, set by `locale` in `.uhd-kanban/config.json` (`en` or `ko`). It selects the language of command output, of the prompts given to card sessions, and of the board monitor pane. `uk init --locale en|ko` writes it; without `--locale`, `init` takes it from `LC_ALL`, `LC_MESSAGES` or `LANG` at that moment (a value starting with `ko` gives `ko`, anything else `en`). A board without `locale` follows those variables on every run.
+
+Values written into card files do not depend on the language. Statuses, types and comment kinds are English ids such as `progress`, `question` and `result`. A Korean board shows a kind as `progress(진행)`.
+
+Boards created with 0.4.0 or earlier recorded comment kinds as Korean words. `uk check` reports this, and `uk migrate` converts them:
+
+```sh
+uk migrate --dry-run   # prints what would change
+uk migrate             # rewrites comments.kinds, adds "locale": "ko", and rewrites comment header lines in every card
+```
+
+Only the `### c<n> [<kind>]` header lines and two lines of `config.json` change. Running it again changes nothing. `uk comment --kind` and `uk inbox --kind` still accept the 14 old Korean words (`lib/kinds.mjs`) and record the id, so card sessions started before the migration keep working.
 
 ## How the board is stored
 
@@ -99,9 +115,9 @@ Goal, files to change, what not to do, and how to verify the result.
 
 ## Comments
 
-### c1 [배정] from=user to=k457 at=2026-10-29T09:00:00Z
+### c1 [assign] from=user to=k457 at=2026-10-29T09:00:00Z
 
-claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
+Started with claude --bg. session=… model=opus(model:deep) effort=high
 ```
 
 Frontmatter, file names and directories are changed only through commands. The commands take a lock (the `.uhd-kanban/lock/` directory) and update the file name and the frontmatter together. After editing a card body by hand, run `uk check`.
@@ -132,8 +148,8 @@ Frontmatter, file names and directories are changed only through commands. The c
 
 1. Converts the card's `model:<profile>` tag to `--model` through `profiles.json`, and passes an `effort:<value>` tag as `--effort`.
 2. Moves the card to the `run.status` column (`in-progress`) after the same dependency check as `uk move`.
-3. Runs `claude --bg --dangerously-skip-permissions -n k457 --model … <prompt>` in the project root. The prompt is the card body plus instructions for leaving `진행` (progress), `질문` (question) and `결과` (result) comments and for moving the card after the result.
-4. Writes `session` and `session_started_at` to the card and adds a `배정` (assignment) comment.
+3. Runs `claude --bg --dangerously-skip-permissions -n k457 --model … <prompt>` in the project root. The prompt is the card body plus instructions for leaving `progress`, `question` and `result` comments and for moving the card after the result.
+4. Writes `session` and `session_started_at` to the card and adds an `assign` comment.
 
 Card sessions run without permission prompts because nobody is present to answer them. They all share the project's working tree, so cards that change the same files, generated files or devices must be ordered with `depends_on`.
 
@@ -154,7 +170,7 @@ In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`
 
 | Command | What it does |
 |---|---|
-| `uk init` | Creates `.uhd-kanban/` and `kanban/` |
+| `uk init` | Creates `.uhd-kanban/` and `kanban/`. `--locale en\|ko` sets the board language |
 | `uk check` | Validates the configuration and every card without changing files |
 | `uk new` | Creates a card |
 | `uk move` | Moves a card to another column, with dependency checks |
@@ -168,21 +184,23 @@ In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`
 | `uk recover` | Resumes stopped card sessions with `claude --bg --resume` |
 | `uk guard` | Decides whether a session may edit a file (used by the hook) |
 | `uk board` | Prints card counts per column and session states (used by the pane) |
+| `uk migrate` | Converts a board made with 0.4.0 or earlier to English kind ids and adds `locale` |
+| `uk locale` | Prints the language used in the current directory (used by the pane) |
 
 Exit codes: `0` success, `1` rule violation or failure (details on stderr), `2` usage error, `3` no board above the current directory. Full options are in [`SKILL.md`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md#명령).
 
-Example output of `uk board` for the demo board below:
+Example output of `uk board` for the demo board below (`locale` `en`):
 
 ```
-1-to-do 7개
-2-in-progress 3개 (세션: live 2 · none 1)
-3-in-review 2개
-4-done 8개
-5-decided 1개
-6-planned 0개
-7-implemented 1개
-8-cancelled 1개
-9-active 1개
+1-to-do 7
+2-in-progress 3 (sessions: live 2 · none 1)
+3-in-review 2
+4-done 8
+5-decided 1
+6-planned 0
+7-implemented 1
+8-cancelled 1
+9-active 1
 ```
 
 ## Board monitor pane
@@ -233,7 +251,7 @@ You can edit the card body (the part before `## Comments`) and then run `uk chec
 
 ### What happens when a card session stops?
 
-`uk board` and the pane show it as stopped. `uk recover` resumes it with `claude --bg --resume`, writes the new session id to the card, and adds a `배정` comment. A card that came back from review is resumed with `uk recover --force k<id>`.
+`uk board` and the pane show it as stopped. `uk recover` resumes it with `claude --bg --resume`, writes the new session id to the card, and adds an `assign` comment. A card that came back from review is resumed with `uk recover --force k<id>`.
 
 ### Does it work with git worktrees?
 

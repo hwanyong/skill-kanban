@@ -8,23 +8,24 @@ import { PRIORITIES } from '../board.mjs'
 import { UsageError, cardId, listFrom, positionFrom } from '../args.mjs'
 import { COLLECTION_TYPE, assertRefs, assertTags, checkPosition, nextId, now, place, writeCard } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
+import { renumberNote, t } from '../i18n.mjs'
 import { ProjectError, initialStatus } from '../project.mjs'
 
 export const run = async ({ flags }) => {
-  if (typeof flags.type != 'string') throw new UsageError('--type 이 필요하다')
-  if (typeof flags.title != 'string' || flags.title.trim() == '') throw new UsageError('--title 이 필요하다')
+  if (typeof flags.type != 'string') throw new UsageError(t('args.required', { flag: '--type' }))
+  if (typeof flags.title != 'string' || flags.title.trim() == '') throw new UsageError(t('args.required', { flag: '--title' }))
   const priority = typeof flags.priority == 'string' ? flags.priority : 'medium'
-  if (!PRIORITIES.includes(priority)) throw new UsageError(`--priority 는 ${PRIORITIES.join(' · ')} 중 하나다`)
+  if (!PRIORITIES.includes(priority)) throw new UsageError(t('args.priority', { values: PRIORITIES }))
   const dependsOn = listFrom(flags.depends).map((ref) => cardId(ref, '--depends'))
   const collection = listFrom(flags.collection).map((ref) => cardId(ref, '--collection'))
   const body = typeof flags['body-file'] == 'string' ? readFileSync(flags['body-file'], 'utf8') : ''
   const position = positionFrom(flags)
   return editBoard(async ({ project, board }) => {
     const status = typeof flags.status == 'string' ? flags.status : initialStatus(project.config, flags.type)
-    if (status == null) throw new ProjectError(`type ${flags.type} 의 처음 열이 config.json 의 initial 에 없다. --status 로 준다`)
+    if (status == null) throw new ProjectError(t('new.noInitial', { type: flags.type }))
     const column = project.columnOf(status)
-    if (!column) throw new ProjectError(`${status} 는 config.json 의 columns 에 없는 status 다`)
-    if (!column.types.includes(flags.type)) throw new ProjectError(`type ${flags.type} 는 ${status} 열에 둘 수 없다(허용: ${column.types.join(', ')})`)
+    if (!column) throw new ProjectError(t('cards.unknownStatus', { status }))
+    if (!column.types.includes(flags.type)) throw new ProjectError(t('card.typeNotAllowed', { type: flags.type, status, types: column.types }))
     assertRefs(board, dependsOn, { key: 'depends_on' })
     assertRefs(board, collection, { key: 'collection', type: COLLECTION_TYPE })
     checkPosition(board, status, position, null)
@@ -46,7 +47,7 @@ export const run = async ({ flags }) => {
     const temp = join(project.boardPath, column.dir, `.new-k${id}.md`)
     writeCard(temp, data, body)
     const { path, renumbered } = place(project, board, { id, path: temp, data }, status, position)
-    console.log(`k${id} ${path.slice(project.root.length + 1)}${renumbered > 0 ? ` (열을 다시 매김: ${renumbered}개)` : ''}`)
+    console.log(`k${id} ${path.slice(project.root.length + 1)}${renumberNote(renumbered)}`)
     return 0
   })
 }

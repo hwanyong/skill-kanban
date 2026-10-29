@@ -1,0 +1,237 @@
+// English message table. Keys and parameters match ko.mjs. i18n.mjs compares the keys of both tables when it loads them.
+// A value is a string or a function that takes a parameter object and returns a string.
+
+const list = (items) => `\n- ${items.join('\n- ')}`
+// 수에 맞춰 명사의 단수 · 복수를 고른다. 1 이면 단수다.
+const count = (n, noun) => `${n} ${noun}${n == 1 ? '' : 's'}`
+
+export default {
+  // project.mjs
+  'project.noRoot': ({ cwd, settings }) => `No ${settings}/config.json above ${cwd}. Run uhd-kanban init in the project root`,
+  'project.badJson': ({ path, message }) => `Cannot read ${path} as JSON: ${message}`,
+  'project.invalid': ({ path, problems }) => `${path} breaks the rules:${list(problems)}`,
+  'config.columnsEmpty': 'columns is empty or not an array',
+  'config.columnDir': ({ at, dir }) => `${at}.dir must be <number>-<lowercase>: ${dir}`,
+  'config.columnStatus': ({ at, status }) => `${at}.status must use lowercase letters, digits and -: ${status}`,
+  'config.columnDirDup': ({ at, dir }) => `${at}.dir is duplicated: ${dir}`,
+  'config.columnStatusDup': ({ at, status }) => `${at}.status is duplicated: ${status}`,
+  'config.columnTypes': ({ at }) => `${at}.types must be a non-empty array of type names`,
+  'config.locale': ({ value, locales }) => `locale must be one of ${locales.join(', ')}: ${value}`,
+  'config.orderWidth': ({ value }) => `order.width must be an integer from 3 to 8: ${value}`,
+  'config.orderStep': ({ value }) => `order.step must be an integer of 1 or more: ${value}`,
+  'config.statusList': ({ key }) => `${key} must be an array of status names`,
+  'config.unknownStatus': ({ key, status }) => `${status} in ${key} is not a status in columns`,
+  'config.abandonedResolved': ({ status }) => `${status} in dependencies.abandoned is also in dependencies.resolved`,
+  'config.kinds': 'comments.kinds must be a non-empty array of kind id strings',
+  'config.kindsLegacy': ({ kinds }) => `comments.kinds has Korean kinds from 0.4.0 or earlier (${kinds.join(', ')}). Run uhd-kanban migrate to change them to kind ids`,
+  'config.kindMalformed': ({ kind }) => `A kind id in comments.kinds must use lowercase letters, digits and -: ${kind}`,
+  'config.runKindMissing': ({ kind }) => `comments.kinds lacks ${kind}, which run uses`,
+  'config.afterDays': ({ value }) => `archive.after_days must be an integer of 0 or more: ${value}`,
+  'config.archiveDir': ({ value }) => `archive.dir must be a lowercase name that no column directory uses: ${value}`,
+  'config.runStatus': ({ value }) => `run.status must be a status in columns: ${value}`,
+  'config.maxParallel': ({ unlimited, fallback, value }) => `run.max_parallel must be an integer of 1 or more, or ${unlimited} for no limit (${fallback} when absent): ${value}`,
+  'config.typeStatusObject': ({ key }) => `${key} must be an object of type name → status name`,
+  'config.typeStatusBad': ({ key, type, status }) => `${key} ${type} → ${status}: ${status} is not a status in columns that accepts type ${type}`,
+  'config.interval': ({ min, value }) => `monitor.interval_seconds must be an integer of ${min} or more: ${value}`,
+  // args.mjs
+  'args.cardIdName': 'card id',
+  'args.cardId': ({ name, ref }) => `${name} must be k<integer>: ${ref}`,
+  'args.onePosition': ({ flags }) => `Give only one of ${flags.join(', ')}`,
+  // frontmatter.mjs
+  'frontmatter.atLine': ({ line, message }) => `line ${line}: ${message}`,
+  'frontmatter.badQuoted': ({ text }) => `Cannot read the double-quoted string: ${text}`,
+  'frontmatter.unsupported': ({ text }) => `Unsupported YAML value: ${text}`,
+  'frontmatter.unclosedQuote': 'A double quote is not closed',
+  'frontmatter.emptyItem': 'The list has an empty item',
+  'frontmatter.listEnd': ({ text }) => `The list does not end with ]: ${text}`,
+  'frontmatter.noStart': 'The file does not start with a --- line',
+  'frontmatter.noEnd': 'No --- line closes the frontmatter',
+  'frontmatter.itemWithoutKey': 'A list item has no key before it',
+  'frontmatter.notPair': ({ row }) => `Not in key: value form: ${row}`,
+  'frontmatter.duplicateKey': ({ key }) => `The key appears twice: ${key}`,
+  'frontmatter.notInteger': ({ value }) => `Non-integer numbers are not written: ${value}`,
+  'frontmatter.notScalar': ({ value }) => `Not a scalar value: ${value}`,
+  'frontmatter.badKey': ({ key }) => `This key name cannot be written: ${key}`,
+  // filename.mjs · lock.mjs · edit.mjs
+  'filename.orderInteger': ({ order }) => `An order number must be an integer of 0 or more: ${order}`,
+  'filename.orderWidth': ({ order, width }) => `Order number ${order} has more than ${width} digits. Increase order.width in config.json`,
+  'filename.date': ({ date }) => `A date must be YYYY-MM-DD: ${date}`,
+  'lock.timeout': ({ dir, seconds, owner }) => `Could not take ${dir} within ${seconds} seconds. Held by: ${owner}`,
+  'edit.boardInvalid': ({ problems }) => `The board has ${problems.length} rule violations, so nothing was changed. Run uhd-kanban check:${list(problems)}`,
+  // comments.mjs
+  'comments.bodyLine': ({ line }) => `body line ${line}`,
+  'comments.sectionTwice': ({ at, section }) => `${at}: the ${section} section appears twice`,
+  'comments.number': ({ at, expected, actual }) => `${at}: the comment number should be c${expected} but is c${actual}`,
+  'comments.badTime': ({ at, time }) => `${at}: at is not a date: ${time}`,
+  'comments.badTo': ({ at }) => `${at}: a name in to is empty or contains a space, =, [ or ]`,
+  'comments.headerLike': ({ at }) => `${at}: starts with ### c but is not a comment header line`,
+  'comments.textBeforeFirst': ({ at, section }) => `${at}: text appears under ${section} before the first comment header line`,
+  'comments.emptyText': 'The comment text is empty',
+  'comments.textHeaderLike': ({ line }) => `Line ${line} starts with ### c and would be read as a comment header line`,
+  'comments.textSection': ({ line, section }) => `Line ${line} is ${section}`,
+  'comments.bareKeyword': ({ line }) => `The ultracode on line ${line} is not wrapped. Unless it is the trigger, wrap it in backticks, [ ] or quotes`,
+  // profiles.mjs
+  'profiles.models': 'models must be a non-empty object keyed by profile name',
+  'profiles.name': ({ name }) => `A profile name in models must use lowercase letters, digits and -: ${name}`,
+  'profiles.cliAgent': ({ name }) => `cli and agent of models.${name} must be a string or null`,
+  'profiles.ultracode': ({ name }) => `models.${name}.ultracode must be true, false or null`,
+  'profiles.effort': ({ key }) => `effort.${key} must be an array of effort values`,
+  'tags.modelCount': ({ count }) => `There are ${count} model: tags`,
+  'tags.modelUnknown': ({ name, known }) => `model:${name} is not in models of profiles.json (known: ${known.join(', ')})`,
+  'tags.effortCount': ({ count }) => `There are ${count} effort: tags`,
+  'tags.effortUnknown': ({ level }) => `effort:${level} is not in effort.cli of profiles.json`,
+  'tags.ultracodeNoLine': 'The card has the ultracode tag but the first body line is not ultracode',
+  'tags.ultracodeNoTag': 'The first body line is ultracode but the card lacks the ultracode tag',
+  'tags.bareKeyword': ({ line }) => `The ultracode on body line ${line} is not wrapped. Unless it is the trigger, wrap it in backticks, [ ] or quotes`,
+  'run.profileNoCli': ({ profile }) => `model:${profile} is a profile that the claude CLI does not launch (cli is null in profiles.json)`,
+  'run.ultracodeNoModel': ({ id }) => `k${id} is an ultracode card without a model: tag. ultracode was verified per model, so add one with uhd-kanban set k${id} --add-tag model:<profile>`,
+  'run.ultracodeUnverified': ({ profile, cli, value }) => `ultracode is not verified for model:${profile} (${cli}) (ultracode is ${value} in profiles.json). Verify it, then set it to true`,
+  'run.default': 'default',
+  // board.mjs
+  'card.idMismatch': ({ value, id }) => `frontmatter id ${value} differs from k${id} in the file name`,
+  'card.noTitle': 'title is missing',
+  'card.slugMismatch': ({ expected }) => `The title in the file name differs from title (expected: ${expected})`,
+  'card.typeNotAllowed': ({ type, status, types }) => `type ${type} cannot be in the ${status} column (allowed: ${types.join(', ')})`,
+  'card.priority': ({ priorities, value }) => `priority must be one of ${priorities.join(', ')}: ${value}`,
+  'card.tags': 'tags must be a list of strings',
+  'card.dependsOn': 'depends_on must be a list of card ids (integers)',
+  'card.collection': 'collection must be a list of milestone card ids (integers)',
+  'card.unknownKind': ({ n, kind, kinds }) => `kind ${kind} of c${n} is not in comments.kinds of config.json (allowed: ${kinds.join(', ')})`,
+  'card.badName': 'The file name is not in <order number>-k<id>-<title>.md form',
+  'board.unknownDir': 'This directory is not in columns of config.json',
+  'board.unknownFile': 'This file is not in columns of config.json',
+  'board.needsOrder': 'A card in a column starts with an order number',
+  'board.orderWidth': ({ width }) => `The order number does not have ${width} digits`,
+  'board.orderTwice': ({ order }) => `Order number ${order} appears twice in the same column`,
+  'board.duplicateId': ({ id, first, second }) => `k${id} is in two places: ${first} and ${second}`,
+  // cards.mjs
+  'cards.targetExists': ({ path }) => `A file already exists at the target: ${path}`,
+  'cards.badTags': ({ id, problems }) => `The tags of k${id} break the rules, so it was not written:${list(problems)}`,
+  'cards.notFound': ({ id }) => `No card k${id}`,
+  'cards.selfRef': ({ id, key }) => `k${id} cannot be in its own ${key}`,
+  'cards.refType': ({ key, id, type, actual }) => `k${id} in ${key} is not a type ${type} card (type ${actual})`,
+  'cards.anchorNotInColumn': ({ id }) => `k${id} is not in this column`,
+  'cards.renumberOverflow': ({ status, count, step, width }) => `Numbering ${count} cards in the ${status} column at intervals of ${step} exceeds ${width} digits. Increase order.width in config.json`,
+  'cards.anchorSelf': ({ id }) => `k${id} cannot be placed before or after itself`,
+  'cards.anchorNotIn': ({ id, status }) => `k${id} is not in the ${status} column`,
+  'cards.archived': ({ id, path }) => `k${id} is archived: ${path}`,
+  'cards.unknownStatus': ({ status }) => `${status} is not a status in columns of config.json`,
+  'cards.blocked': ({ id, blocking }) => `Cards that k${id} waits for are not finished: ${blocking.map((item) => `k${item}`).join(', ')}. Use --force to move it anyway`,
+  // sessions.mjs
+  'sessions.notArray': 'The stdout of claude agents --json is not an array',
+  'sessions.launchFailed': ({ status, output }) => `claude --bg did not start a session (exit code ${status}):\n${output}`,
+  'sessions.stopFailed': ({ shortId, status, output }) => `claude stop ${shortId} exited with code ${status}:\n${output}`,
+  // prompt.mjs. Card sessions read this text. The first sentence "This task is uhd-kanban card k<id>." is the sentence the delegate skill description uses to tell card sessions apart, so keep it as is.
+  'prompt.emptyBody': ({ id }) => `The body of k${id} is empty, so there is nothing to use as a prompt`,
+  'prompt.finish': ({ cli, id, status }) => `\n- After leaving \`[result]\`, finally move the card to the ${status} column with \`${cli} move k${id} ${status}\`. If the review finds something to fix, the main session hands the card back to this session.`,
+  'prompt.start': ({ main, id, glob, root, cli, reportTo, session, finish }) => `${main}
+
+---
+This task is uhd-kanban card k${id}. The card file is ${glob} and the project root is ${root}.
+- Each time you finish a step, leave \`${cli} comment k${id} --kind progress --to ${reportTo} --text "<what you did · what comes next>"\`. If the session is interrupted, work resumes from this comment.
+- If you have a question, leave \`--kind question\`; when you finish, leave \`--kind result\`. A question with a choice states in its body what must be decided, 2 to 4 options (each with its outcome and cost), the recommended option and why, and the work that stops until the answer arrives. The recipient chooses by reading only this comment. Send any SendMessage line the command prints with the SendMessage tool.${finish}
+- Read comments addressed to this session with \`${cli} inbox ${session}\`.`,
+  'prompt.resume': ({ cli, session, glob, finish }) => `This session was interrupted and reopened by uhd-kanban recover.
+Read the last [progress] comment and the comments after it from \`${cli} inbox ${session} --all\` and the ## Comments section of the card file ${glob}, and continue from there. If the card already has a [result], the comments after it are what to fix. When you finish, leave [result] again as the first prompt says.${finish}`,
+  // Display names of comment kinds. Card files record the id; these names appear only next to it in output (kindText in i18n.mjs).
+  'kind.question': 'question',
+  'kind.answer': 'answer',
+  'kind.decision': 'decision',
+  'kind.result': 'result',
+  'kind.progress': 'progress',
+  'kind.report': 'report',
+  'kind.correction': 'correction',
+  'kind.assign': 'assign',
+  'kind.handoff': 'handoff',
+  'kind.pause': 'pause',
+  'kind.done-evidence': 'done-evidence',
+  'kind.user-answer': 'user-answer',
+  'kind.user-decision': 'user-decision',
+  'kind.imported': 'imported',
+  'kind.notAllowed': ({ kind, kinds }) => `kind ${kind} is not in comments.kinds of config.json (allowed: ${kinds.join(', ')})`,
+  // commands
+  'args.required': ({ flag }) => `${flag} is required`,
+  'comment.textOrFile': 'Give exactly one of --text and --text-file',
+  'comment.agentsFailed': ({ message }) => `Could not read claude agents --json, so recipient names were not checked: ${message}`,
+  'comment.usage': 'Usage: comment <k id> --kind <kind> --to <name> (--text | --text-file)',
+  'comment.noFrom': 'The name of this session was not found in claude agents --json. Give --from',
+  'comment.badNames': ({ names }) => `Names cannot contain spaces, commas, = or [ ]: ${names.join(', ')}`,
+  'comment.badText': ({ problems }) => `The comment text cannot be written:${list(problems)}`,
+  'comment.noteNoSessions': 'could not read the session list',
+  'comment.noteUnknown': 'name not in claude agents --json',
+  'inbox.noName': 'The name of this session was not found in claude agents --json. Give it as inbox <name>',
+  'inbox.boardProblems': ({ count: n }) => `The board has ${count(n, 'rule violation')}. Run uhd-kanban check to see them`,
+  'inbox.answered': 'answered',
+  'inbox.summary': ({ name, count: n }) => `${count(n, 'unanswered comment')} addressed to ${name}`,
+  'inbox.summaryAll': ({ name, count: n }) => `${count(n, 'comment')} addressed to ${name}`,
+  'migrate.unknownKinds': ({ items }) => `Some comments use a kind that is neither in comments.kinds nor in the LEGACY_KINDS table, so nothing was changed. Add that kind to comments.kinds in config.json as an English id (lowercase letters, digits, -) or fix the card header lines:${list(items)}`,
+  'migrate.config': ({ before, after, locale }) => `config.json: locale ${locale} · comments.kinds ${before.join(', ')} → ${after.join(', ')}`,
+  'migrate.summary': ({ cards, total, headers, config }) => `Changed ${count(headers, 'header line')} in ${cards} of ${count(total, 'card')} · config.json ${config ? 'changed' : 'unchanged'}`,
+  'migrate.summaryDry': ({ cards, total, headers, config }) => `(dry-run) Would change ${count(headers, 'header line')} in ${cards} of ${count(total, 'card')} · config.json ${config ? 'would change' : 'unchanged'}`,
+  'args.priority': ({ values }) => `--priority must be one of ${values.join(' · ')}`,
+  'note.renumbered': ({ count: n }) => `(column renumbered: ${count(n, 'card')})`,
+  'note.forced': ({ ids }) => `(--force: ${ids.join(', ')} not finished)`,
+  'init.locale': ({ value, locales }) => `--locale must be one of ${locales.join(' · ')} (got: ${value})`,
+  'init.exists': ({ path }) => `${path} already exists. Nothing was changed`,
+  'init.created': ({ files, locale }) => `Created: ${files.join(' · ')} (locale ${locale})`,
+  'init.columns': ({ count: n, dirs }) => `${count(n, 'column')}: ${dirs.join(' · ')}`,
+  'check.summary': ({ cards, archived, root }) => `${count(cards, 'card')} · ${archived} archived (${root})`,
+  'check.problems': ({ problems }) => `${count(problems.length, 'rule violation')}:${list(problems)}`,
+  'move.usage': 'Usage: move <k id> <status>',
+  'move.waiting': ({ id, count: n, status, gate }) => `${count(n, 'card')} wait for k${id}. A ${status} card never finishes, so they cannot move to the ${gate.join(' · ')} columns without --force. Choose one for each card:`,
+  'move.waitingItem': ({ card, id, status, cancel }) => `- k${card.id}(${card.status}) ${card.data.title}: remove the dependency uhd-kanban set k${card.id} --remove-depends k${id}${cancel ? ` · cancel it too uhd-kanban move k${card.id} ${status}` : ''}`,
+  'new.noInitial': ({ type }) => `initial in config.json has no first column for type ${type}. Give --status`,
+  'order.usage': 'Usage: order <k id> (--top|--bottom|--before k|--after k)',
+  'order.positionRequired': 'One of --top · --bottom · --before · --after is required',
+  'renumber.usage': 'Usage: renumber <status>',
+  'renumber.done': ({ status, count: n }) => `Renumbered ${count(n, 'card')} in the ${status} column`,
+  'set.usage': 'Usage: set <k id> [--title] [--priority] [--add-tag] [--remove-tag] [--add-depends] [--remove-depends] [--add-collection] [--remove-collection]',
+  'set.emptyTitle': '--title is empty',
+  'set.nothing': 'Nothing to change',
+  'archive.summary': ({ count: n, days, columns }) => `Archived ${count(n, 'card')} · after ${days} days · columns ${columns.join(', ')}`,
+  'archive.summaryDry': ({ count: n, days, columns }) => `Would archive ${count(n, 'card')} · after ${days} days · columns ${columns.join(', ')}`,
+  'archive.missing': ({ paths }) => `${count(paths.length, 'card')} not archived because completed_at is missing or not a date:${list(paths)}`,
+  'board.column': ({ dir, count, verdicts }) => `${dir} ${count}${verdicts.length > 0 ? ` (sessions: ${verdicts.join(' · ')})` : ''}`,
+  'guard.usage': 'Usage: guard <path> [--session <session id>]',
+  'guard.denied': ({ name, path }) => `The main session${name ? ` ${name}` : ''} is about to edit the project file ${path}. Split the work into cards and hand them off with uhd-kanban run (delegate skill). Allow it only when the user asked for this work to be done directly`,
+  'run.usage': 'Usage: run <k id> [--dry-run] [--force]',
+  'run.stillRunning': ({ id, session, state }) => `The session ${session} of k${id} still exists (state ${state}). Not starting a new one. If it stalled, run uhd-kanban recover k${id}`,
+  'run.full': ({ max, ids }) => `Card sessions running at once reached run.max_parallel (${max}): ${ids.join(', ')}. Run again after one finishes, or change run.max_parallel in .uhd-kanban/config.json (-1 means unlimited)`,
+  'run.prompt': 'prompt',
+  'run.notFound': ({ shortId }) => `Session ${shortId} was started but not found in claude agents --json, so the card was not changed. Stop it with claude stop ${shortId} or write session on the card yourself`,
+  'run.assigned': ({ session, label }) => `Started with claude --bg. session=${session} ${label}`,
+  'recover.live': 'running',
+  'recover.pending': 'restarting (state working without pid). Run recover again shortly',
+  'recover.done': 'the session finished (state done) but the card is still in the column. Read the result comment and move it to its run.finish column (or the column after review), or continue it with --force if work remains',
+  'recover.noSession': ({ id }) => `k${id} cannot be resumed: session is empty. Start a new one with uhd-kanban run`,
+  'recover.noTranscript': ({ id, sessionId }) => `k${id} cannot be resumed: transcript ${sessionId}.jsonl is not in ~/.claude/projects`,
+  'recover.waiting': ({ id, max }) => `k${id} waits: card sessions running at once reached run.max_parallel (${max})`,
+  'recover.cannotMove': ({ id, status, problem }) => `k${id} cannot be resumed: it cannot move to the ${status} column. ${problem}`,
+  'recover.whyRestart': ({ startedAt }) => `the daemon restarted it (startedAt ${startedAt}) but it is idle without answering the last user line`,
+  'recover.whyMissing': 'not in claude agents --json --all',
+  'recover.notFound': 'not found in claude agents --json',
+  'recover.assigned': ({ why, sessionId, resumed }) => `Resumed by recover (${why}). claude --bg --resume ${sessionId} → session=${resumed}`,
+  'recover.resumed': ({ why }) => `resumed (${why})`,
+  'recover.summary': ({ total, live, pending, done, resumed, waiting, failed }) => `${count(total, 'card')} · running ${live} · restarting ${pending} · finished ${done} · resumed ${resumed} · waiting for a slot ${waiting} · cannot resume ${failed}`,
+  'recover.summaryDry': ({ total, live, pending, done, resumed, waiting, failed }) => `${count(total, 'card')} · running ${live} · restarting ${pending} · finished ${done} · would resume ${resumed} · waiting for a slot ${waiting} · cannot resume ${failed}`,
+  // bin/uhd-kanban.mjs
+  'bin.unknown': ({ name }) => `Unknown command: ${name}`,
+  'usage': `Usage: uhd-kanban <command> [arguments]
+  init [--dir <path>] [--locale ko|en]   creates .uhd-kanban/ and kanban/ at the project root. locale defaults to LANG
+  check                 validates config.json and every card
+  new --type <type> --title <title> [--status] [--priority] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file] [position]   --status defaults to initial in config.json
+  move <k id> <status> [position] [--force]
+  order <k id> <position>
+  renumber <status>
+  set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b] [--add-depends k1] [--remove-depends k1] [--add-collection k1] [--remove-collection k1]
+  archive [--dry-run]
+  comment <k id> --kind <kind> --to <name>[,<name>] [--from <name>] (--text <text> | --text-file <path>)
+  inbox [<name>] [--all] [--kind a,b]
+  run <k id> [--dry-run] [--force]   starts a claude --bg session from the card body. Up to run.max_parallel (-1 means unlimited)
+  recover [<k id>…] [--dry-run] [--force]   resumes stalled card sessions with claude --bg --resume. --force also resumes finished sessions
+  board [--json]        prints card counts per column and the session state of cards in the run.status column
+  guard <path> [--session <id>]   decides whether the main session may edit that project file (1 means it may not)
+  migrate [--dry-run]   converts comment kinds of a board made with 0.4.0 or earlier to English ids and adds locale to config.json
+  locale                prints the output language (ko · en) used in this directory
+  position: --top · --bottom · --before <k id> · --after <k id> (default --bottom)`,
+}

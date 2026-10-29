@@ -18,6 +18,7 @@
 - [uhd-kanban 의 기능](#uhd-kanban-의-기능)
 - [플러그인 구성](#플러그인-구성)
 - [빠른 시작](#빠른-시작)
+- [언어](#언어)
 - [보드 파일 배치](#보드-파일-배치)
 - [카드 세션에 작업 맡기기](#카드-세션에-작업-맡기기)
 - [명령](#명령)
@@ -58,7 +59,7 @@
 2. 프로젝트 루트에 보드를 만든다. Claude 에게 uhd-kanban 보드를 만들어 달라고 하거나 직접 실행한다.
 
    ```sh
-   node ~/.claude/plugins/cache/skill-kanban/uhd-kanban/<버전>/skills/uhd-kanban/bin/uhd-kanban.mjs init
+   node ~/.claude/plugins/cache/skill-kanban/uhd-kanban/<버전>/skills/uhd-kanban/bin/uhd-kanban.mjs init --locale ko
    ```
 
    `.uhd-kanban/config.json` · `.uhd-kanban/profiles.json` · `kanban/` 이 생긴다. 이미 있으면 바꾸지 않고 종료 코드 1 로 끝난다.
@@ -68,6 +69,21 @@
 4. 메인 세션에 작업을 맡긴다. `delegate` 스킬에 따라 메인 세션이 작업을 카드로 나누고 `uk run` 으로 띄운 뒤 카드 id · 결과 · 남은 결정을 보고한다.
 
 내려받은 폴더로 설치하려면 `claude plugin marketplace add <폴더>` 뒤 `claude plugin install uhd-kanban@skill-kanban` 을 실행한다. 이때 Claude Code 는 그 폴더를 직접 읽으므로, 고친 뒤 `/reload-plugins` 로 다시 읽는다.
+
+## 언어
+
+보드마다 언어가 하나이고 `.uhd-kanban/config.json` 의 `locale`(`ko` · `en`)이 정한다. 명령 출력 · 카드 세션에 주는 프롬프트 · 보드 모니터 pane 의 글이 이 언어를 따른다. `uk init --locale ko|en` 이 이 값을 적는다. `--locale` 이 없으면 `init` 은 그때의 `LC_ALL` · `LC_MESSAGES` · `LANG` 으로 정한다(`ko` 로 시작하면 `ko`, 나머지는 `en`). `locale` 이 없는 보드는 실행할 때마다 그 변수를 따른다.
+
+카드 파일에 적는 값은 언어와 무관하다. status · type · 코멘트 kind 는 `progress` · `question` · `result` 같은 영어 id 다. 한국어 보드는 kind 를 `progress(진행)` 처럼 보인다.
+
+0.4.0 까지 만든 보드는 코멘트 kind 를 한국어 낱말로 적었다. `uk check` 가 이것을 알리고 `uk migrate` 가 바꾼다.
+
+```sh
+uk migrate --dry-run   # 바꿀 것을 출력한다
+uk migrate             # comments.kinds 를 바꾸고 "locale": "ko" 를 넣고, 모든 카드의 코멘트 머리 줄을 바꾼다
+```
+
+바뀌는 것은 `### c<n> [<kind>]` 머리 줄과 `config.json` 의 두 줄뿐이다. 다시 실행하면 아무것도 바꾸지 않는다. `uk comment --kind` · `uk inbox --kind` 는 이전 한국어 낱말 14개(`lib/kinds.mjs`)도 받아 id 로 적으므로, migrate 전에 띄운 카드 세션도 그대로 동작한다.
 
 ## 보드 파일 배치
 
@@ -96,7 +112,7 @@ updated_at: 2026-10-29T09:10:00Z
 
 ## Comments
 
-### c1 [배정] from=user to=k457 at=2026-10-29T09:00:00Z
+### c1 [assign] from=user to=k457 at=2026-10-29T09:00:00Z
 
 claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 ```
@@ -129,8 +145,8 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 
 1. 카드의 `model:<프로필>` 태그를 `profiles.json` 으로 `--model` 값으로 바꾸고, `effort:<값>` 태그를 `--effort` 로 넘긴다.
 2. `uk move` 와 같은 의존성 검사를 거쳐 카드를 `run.status` 열(`in-progress`)로 옮긴다.
-3. 프로젝트 루트에서 `claude --bg --dangerously-skip-permissions -n k457 --model … <프롬프트>` 를 실행한다. 프롬프트는 카드 본문 뒤에 `진행` · `질문` · `결과` 코멘트를 남기는 명령과 결과 뒤에 카드를 옮기는 명령을 붙인 것이다.
-4. 카드에 `session` · `session_started_at` 을 적고 `배정` 코멘트를 남긴다.
+3. 프로젝트 루트에서 `claude --bg --dangerously-skip-permissions -n k457 --model … <프롬프트>` 를 실행한다. 프롬프트는 카드 본문 뒤에 `progress` · `question` · `result` 코멘트를 남기는 명령과 결과 뒤에 카드를 옮기는 명령을 붙인 것이다.
+4. 카드에 `session` · `session_started_at` 을 적고 `assign` 코멘트를 남긴다.
 
 카드 세션은 확인 창에 답할 사람이 없으므로 권한 확인 없이 돈다. 카드 세션은 모두 같은 작업 트리에서 돌기 때문에, 같은 파일 · 같은 생성물 · 같은 장치를 다루는 카드는 `depends_on` 으로 차례를 정한다.
 
@@ -151,7 +167,7 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 
 | 명령 | 하는 일 |
 |---|---|
-| `uk init` | `.uhd-kanban/` 과 `kanban/` 을 만든다 |
+| `uk init` | `.uhd-kanban/` 과 `kanban/` 을 만든다. `--locale ko\|en` 이 보드의 언어를 정한다 |
 | `uk check` | 설정과 모든 카드를 검증한다. 파일은 바꾸지 않는다 |
 | `uk new` | 카드를 만든다 |
 | `uk move` | 의존성을 검사하고 카드를 다른 열로 옮긴다 |
@@ -165,6 +181,8 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | `uk recover` | 멈춘 카드 세션을 `claude --bg --resume` 으로 이어 간다 |
 | `uk guard` | 그 세션이 그 파일을 고쳐도 되는지 판정한다(훅이 쓴다) |
 | `uk board` | 열마다 카드 수와 세션 상태를 출력한다(pane 이 쓴다) |
+| `uk migrate` | 0.4.0 까지 만든 보드의 kind 를 영어 id 로 바꾸고 `locale` 을 넣는다 |
+| `uk locale` | 지금 디렉터리에서 쓸 언어를 출력한다(pane 이 쓴다) |
 
 종료 코드는 `0` 성공 · `1` 규칙 위반이나 실행 실패(내용은 stderr) · `2` 사용법 오류 · `3` 부른 디렉터리 위에 보드가 없음이다. 전체 옵션은 [`SKILL.md`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md#명령) 에 있다.
 
@@ -230,7 +248,7 @@ pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열�
 
 ### 카드 세션이 멈추면 어떻게 되는가?
 
-`uk board` 와 pane 이 멈춤으로 표시한다. `uk recover` 가 `claude --bg --resume` 으로 이어 가고, 새 session id 를 카드에 적고, `배정` 코멘트를 남긴다. 검토에서 돌아온 카드는 `uk recover --force k<id>` 로 이어 간다.
+`uk board` 와 pane 이 멈춤으로 표시한다. `uk recover` 가 `claude --bg --resume` 으로 이어 가고, 새 session id 를 카드에 적고, `assign` 코멘트를 남긴다. 검토에서 돌아온 카드는 `uk recover --force k<id>` 로 이어 간다.
 
 ### git worktree 에서도 쓸 수 있는가?
 
