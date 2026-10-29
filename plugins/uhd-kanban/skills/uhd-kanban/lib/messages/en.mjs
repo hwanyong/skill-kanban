@@ -33,6 +33,7 @@ export default {
   'config.typeStatusObject': ({ key }) => `${key} must be an object of type name → status name`,
   'config.typeStatusBad': ({ key, type, status }) => `${key} ${type} → ${status}: ${status} is not a status in columns that accepts type ${type}`,
   'config.interval': ({ min, value }) => `monitor.interval_seconds must be an integer of ${min} or more: ${value}`,
+  'config.cell': ({ cells, fallback, value }) => `monitor.cell must be one of ${cells.join(', ')} (${fallback} when absent): ${value}`,
   // args.mjs
   'args.cardIdName': 'card id',
   'args.cardId': ({ name, ref }) => `${name} must be k<integer>: ${ref}`,

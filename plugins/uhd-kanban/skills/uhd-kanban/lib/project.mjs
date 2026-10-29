@@ -17,6 +17,12 @@ export class NoProjectError extends ProjectError {}
 // monitor.interval_seconds 의 하한. 갱신마다 `claude agents --json` 과 node 프로세스가 하나씩 돈다.
 export const MIN_MONITOR_SECONDS = 10
 
+// monitor.cell: pane 막대에서 카드 한 장이 차지하는 칸. char 는 문자 하나, row 는 막대의 한 행, fit 은 보드에 따라 고른다.
+// 그리는 규칙은 hooks/register.tsx 의 layout 이 갖는다. 이 키보다 먼저 만든 보드에는 키가 없으므로 없으면 char 다.
+export const MONITOR_CELLS = ['char', 'row', 'fit']
+export const DEFAULT_MONITOR_CELL = 'char'
+export const monitorCell = (config) => config.monitor.cell ?? DEFAULT_MONITOR_CELL
+
 // run.max_parallel 이 없을 때의 동시 실행 수와 무제한 값. 이 키보다 먼저 만든 보드의 config.json 에는 키가 없으므로 없으면 기본값을 쓴다.
 export const DEFAULT_MAX_PARALLEL = 3
 export const UNLIMITED = -1
@@ -156,6 +162,8 @@ export const validateConfig = (config) => {
   typeStatusProblems(columns, 'run.finish', config?.run?.finish).forEach((problem) => problems.push(problem))
   const interval = config?.monitor?.interval_seconds
   if (!Number.isInteger(interval) || interval < MIN_MONITOR_SECONDS) problems.push(t('config.interval', { min: MIN_MONITOR_SECONDS, value: interval }))
+  const cell = config?.monitor?.cell
+  if (cell != null && !MONITOR_CELLS.includes(cell)) problems.push(t('config.cell', { cells: MONITOR_CELLS, fallback: DEFAULT_MONITOR_CELL, value: JSON.stringify(cell) }))
   return problems
 }
 

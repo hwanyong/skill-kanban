@@ -6,7 +6,7 @@
 import { join } from 'node:path'
 import { readCard, readColumnNames } from '../board.mjs'
 import { t } from '../i18n.mjs'
-import { loadProject } from '../project.mjs'
+import { loadProject, monitorCell } from '../project.mjs'
 import { cardSession, listSessions } from '../sessions.mjs'
 
 const sessionOf = (project, column, card, sessions) => {
@@ -23,6 +23,7 @@ export const run = async ({ flags }) => {
   const result = {
     root: project.root,
     interval_seconds: project.config.monitor.interval_seconds,
+    cell: monitorCell(project.config),
     run_status: runStatus,
     columns: columns.map(({ column, cards }) => ({
       status: column.status,

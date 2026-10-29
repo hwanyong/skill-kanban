@@ -31,6 +31,7 @@ export default {
   'config.typeStatusObject': ({ key }) => `${key} 는 type 이름 → status 이름 객체다`,
   'config.typeStatusBad': ({ key, type, status }) => `${key} 의 ${type} → ${status}: ${status} 는 type ${type} 를 받는 columns 의 status 가 아니다`,
   'config.interval': ({ min, value }) => `monitor.interval_seconds 는 ${min} 이상의 정수다: ${value}`,
+  'config.cell': ({ cells, fallback, value }) => `monitor.cell 은 ${cells.join(' · ')} 중 하나다(없으면 ${fallback}): ${value}`,
   // args.mjs
   'args.cardIdName': '카드 id',
   'args.cardId': ({ name, ref }) => `${name} 는 k<정수> 다: ${ref}`,

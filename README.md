@@ -221,6 +221,16 @@ The pane opens when the session directory has `.uhd-kanban/config.json` above it
 
 The refresh interval is `monitor.interval_seconds` in `config.json` (an integer of 10 or more, default 60).
 
+`monitor.cell` in `config.json` sets how much of a bar one card takes. The bar width never goes below the number of digits in the largest count.
+
+| `monitor.cell` | One card is | Bar width | Board with few cards | Board with hundreds of cards |
+|---|---|---|---|---|
+| `char` (default, also when the key is absent) | One character | The narrowest width at which the longest bar fits the pane height, up to the pane width divided by the number of columns | Bars are 1 character wide | Several cards per row, one character each |
+| `row` | One row of the bar | The pane width divided by the number of columns | Each card fills the bar width | One card per row, so long bars need more scrolling |
+| `fit` | `bar width ÷ cards per row` characters | The pane width divided by the number of columns | Same as `row` | As many cards per row as the longest bar needs to fit the pane height; each cell gets the bar width divided by that number |
+
+A bar that does not fit the pane height scrolls in every mode.
+
 ## Requirements
 
 - Claude Code 2.1.312 or later (the hooks module API was checked against this version)

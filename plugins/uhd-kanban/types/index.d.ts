@@ -1,7 +1,9 @@
 // `uhd-kanban board --json` 의 stdout 과 같은 모양이다. 그 명령이 이 값의 원본이다.
 export type BoardCard = { id: number; session?: 'live' | 'pending' | 'restart' | 'resume' | 'done' | 'none' }
 export type BoardColumn = { status: string; dir: string; count: number; cards: BoardCard[] }
-export type Board = { root: string; interval_seconds: number; run_status: string; columns: BoardColumn[] }
+// skills/uhd-kanban/lib/project.mjs 의 MONITOR_CELLS 와 같다.
+export type MonitorCell = 'char' | 'row' | 'fit'
+export type Board = { root: string; interval_seconds: number; cell: MonitorCell; run_status: string; columns: BoardColumn[] }
 
 // skills/uhd-kanban/lib/i18n.mjs 의 LOCALES 와 같다. `uhd-kanban locale` 의 stdout 이 이 값 중 하나다.
 export type Locale = 'ko' | 'en'

@@ -4,7 +4,8 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 import type { Board, BoardCard, BoardColumn, BoardView, Locale } from '../types'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, 카드 하나를 막대의 한 칸으로 그린다.
-// 축(열마다 카드 수)이 맨 위에 있고 막대는 아래로 자란다. 막대 폭은 가장 긴 막대가 본문 행에 들어가도록 정하고, 그래도 넘치면 pane 을 스크롤한다.
+// 축(열마다 카드 수)이 맨 위에 있고 막대는 아래로 자란다. 카드 한 장이 차지하는 칸은 board 가 낸 cell(config.json 의 monitor.cell)이 정한다.
+// 가장 긴 막대가 본문 행에 들어가지 않으면 pane 을 스크롤한다.
 // 보드를 읽는 규칙은 board 명령(같은 플러그인의 skills/uhd-kanban/lib/)이 갖는다. 이 모듈은 그 stdout 을 그리기만 한다.
 // pane 의 글은 locale 명령이 낸 언어(ko · en)로 고른다. 언어를 정하는 규칙도 그 명령(lib/i18n.mjs)이 갖는다.
 
@@ -86,25 +87,45 @@ const clockText = (ms: number) => {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-// 가장 긴 막대가 rows 행에 들어가는 가장 좁은 폭. 카드 수의 자릿수보다 좁게 하지 않고, 열이 모두 columns 칸에 들어가는 폭보다 넓게 하지 않는다.
-const barWidth = (board: Board, columns: number, rows: number) => {
+// width: 막대 폭. perRow: 한 행의 카드 수. cell: 카드 한 장의 칸 폭(문자 수).
+// widest 는 열이 모두 columns 칸에 들어가는 가장 넓은 폭, fitting 은 가장 긴 막대가 rows 행에 들어가는 한 행의 카드 수다.
+// 막대 폭은 어느 방식이든 카드 수의 자릿수보다 좁게 하지 않는다.
+//   char: 카드 한 장이 문자 하나다. 막대 폭은 fitting 이고 widest 를 넘지 않는다.
+//   row:  카드 한 장이 막대의 한 행이다. 막대 폭은 widest 다.
+//   fit:  막대 폭은 widest 이고, 한 행의 카드 수는 fitting(widest 를 넘지 않는다), 칸 폭은 막대 폭을 그 수로 나눈 몫이다.
+type Layout = { width: number; perRow: number; cell: number }
+
+const layout = (board: Board, columns: number, rows: number): Layout => {
   const count = board.columns.length
   const most = Math.max(1, ...board.columns.map((column) => column.count))
+  const digits = String(most).length
   const widest = Math.max(1, Math.floor((columns - GAP * (count - 1)) / count))
   const fitting = Math.ceil(most / Math.max(1, rows))
-  return Math.max(String(most).length, Math.min(widest, fitting))
+  if (board.cell == 'row') {
+    const width = Math.max(digits, widest)
+    return { width, perRow: 1, cell: width }
+  }
+  if (board.cell == 'fit') {
+    const width = Math.max(digits, widest)
+    const perRow = Math.min(width, fitting)
+    return { width, perRow, cell: Math.floor(width / perRow) }
+  }
+  const width = Math.max(digits, Math.min(widest, fitting))
+  return { width, perRow: width, cell: 1 }
 }
 
 // 막대의 한 행. 같은 색이 이어지는 칸은 한 조각으로 묶는다.
-const barRow = (board: Board, column: BoardColumn, index: number, row: number, width: number) => {
-  const cards = column.cards.slice(row * width, row * width + width)
+const barRow = (board: Board, column: BoardColumn, index: number, row: number, { width, perRow, cell }: Layout) => {
+  const cards = column.cards.slice(row * perRow, row * perRow + perRow)
+  const block = CELL.repeat(cell)
   const segments = cards.reduce((list: Segment[], card) => {
     const color = cellColor(board, column, index, card)
     const last = list.at(-1)
-    if (last && last.color == color) return [...list.slice(0, -1), { text: last.text + CELL, color }]
-    return [...list, { text: CELL, color }]
+    if (last && last.color == color) return [...list.slice(0, -1), { text: last.text + block, color }]
+    return [...list, { text: block, color }]
   }, [])
-  return width > cards.length ? [...segments, { text: ' '.repeat(width - cards.length) }] : segments
+  const used = cards.length * cell
+  return width > used ? [...segments, { text: ' '.repeat(width - used) }] : segments
 }
 
 const joinColumns = (parts: Segment[][]) => parts.flatMap((segments, index) => (index == 0 ? segments : [{ text: ' '.repeat(GAP) }, ...segments]))
@@ -204,12 +225,13 @@ export const register: Register = (on) => {
       )
     }
     const { board } = current
-    const width = barWidth(board, e.props.bodyColumns, e.props.scroll.bodyRows - HEADER_ROWS)
-    const height = Math.max(0, ...board.columns.map((column) => Math.ceil(column.count / width)))
+    const size = layout(board, e.props.bodyColumns, e.props.scroll.bodyRows - HEADER_ROWS)
+    const { width } = size
+    const height = Math.max(0, ...board.columns.map((column) => Math.ceil(column.count / size.perRow)))
     const total = board.columns.reduce((sum, column) => sum + column.count, 0)
     const counts = joinColumns(board.columns.map((column, index) => [{ text: String(column.count).padEnd(width), color: columnColor(index) }]))
     const axis = joinColumns(board.columns.map((column, index) => [{ text: AXIS.repeat(width), color: columnColor(index) }]))
-    const rows = Array.from({ length: height }, (_, row) => joinColumns(board.columns.map((column, index) => barRow(board, column, index, row, width))))
+    const rows = Array.from({ length: height }, (_, row) => joinColumns(board.columns.map((column, index) => barRow(board, column, index, row, size))))
     const line = (segments: Segment[]) => (
       <Text wrap="truncate-end">{segments.map((segment) => (segment.color ? <Text color={segment.color}>{segment.text}</Text> : segment.text))}</Text>
     )
