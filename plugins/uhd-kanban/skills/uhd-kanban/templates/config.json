@@ -1,0 +1,19 @@
+{
+  "columns": [
+    { "dir": "1-to-do", "status": "to-do", "types": ["task", "bug", "decision"] },
+    { "dir": "2-in-progress", "status": "in-progress", "types": ["task", "bug", "decision"] },
+    { "dir": "3-in-review", "status": "in-review", "types": ["task", "bug"] },
+    { "dir": "4-done", "status": "done", "types": ["task", "bug", "decision"] },
+    { "dir": "5-decided", "status": "decided", "types": ["decision"] },
+    { "dir": "6-planned", "status": "planned", "types": ["milestone"] },
+    { "dir": "7-implemented", "status": "implemented", "types": ["decision"] },
+    { "dir": "8-cancelled", "status": "cancelled", "types": ["task", "bug"] },
+    { "dir": "9-active", "status": "active", "types": ["milestone"] }
+  ],
+  "order": { "width": 4, "step": 10 },
+  "dependencies": { "gate": ["in-progress", "in-review", "done"], "resolved": ["done", "decided", "implemented"] },
+  "comments": { "kinds": ["질문", "답", "결정", "결과", "진행", "보고", "정정", "배정", "넘김", "멈춤", "done 근거", "사용자 답", "사용자 결정"] },
+  "archive": { "columns": ["done"], "after_days": 7, "dir": "archived" },
+  "run": { "status": "in-progress" },
+  "monitor": { "interval_seconds": 60 }
+}

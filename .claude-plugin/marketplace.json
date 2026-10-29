@@ -1,0 +1,5 @@
+{
+  "name": "skill-kanban",
+  "owner": { "name": "uhd" },
+  "plugins": [{ "name": "uhd-kanban", "source": "./plugins/uhd-kanban" }]
+}

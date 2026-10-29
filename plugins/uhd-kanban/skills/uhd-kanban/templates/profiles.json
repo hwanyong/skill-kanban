@@ -1,0 +1,14 @@
+{
+  "models": {
+    "top": { "cli": "fable", "agent": "fable", "ultracode": true },
+    "deep-1m": { "cli": "opus[1m]", "agent": null, "ultracode": true },
+    "deep": { "cli": "opus", "agent": "opus", "ultracode": true },
+    "standard": { "cli": "sonnet", "agent": "sonnet", "ultracode": true },
+    "fast": { "cli": "haiku", "agent": "haiku", "ultracode": true },
+    "user": { "cli": null, "agent": null, "ultracode": null }
+  },
+  "effort": {
+    "cli": ["low", "medium", "high", "xhigh", "max"],
+    "agent": ["low", "medium", "high", "xhigh", "max"]
+  }
+}
