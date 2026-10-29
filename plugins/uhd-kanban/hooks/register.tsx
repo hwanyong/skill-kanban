@@ -5,7 +5,6 @@ import type { Board, BoardCard, BoardColumn, BoardView } from '../types'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, 카드 하나를 막대의 한 칸으로 그린다.
 // 축(열마다 카드 수)이 맨 위에 있고 막대는 아래로 자란다. 막대 폭은 가장 긴 막대가 본문 행에 들어가도록 정하고, 그래도 넘치면 pane 을 스크롤한다.
-// 막대 한 줄의 세로 길이는 monitor.cell_height(1/8줄 단위)다. 8 의 배수가 아니면 남는 1/8 들을 그 줄의 맨 위 행에 아래쪽 블록 문자로 그린다.
 // 보드를 읽는 규칙은 board 명령(같은 플러그인의 skills/uhd-kanban/lib/)이 갖는다. 이 모듈은 그 stdout 을 그리기만 한다.
 
 const PANE = 'uhd-kanban-board'
@@ -14,9 +13,6 @@ const SKILL_BIN = 'skills/uhd-kanban/bin/uhd-kanban.mjs'
 const TITLE = 'uhd-kanban'
 const COMMAND = 'kanban-board'
 const CELL = '█'
-// 아래쪽부터 n/8 을 채우는 블록 문자(U+2581~U+2587). n 번째 글자가 n/8 이다(0 번째는 쓰지 않는 자리).
-const LOWER_BLOCKS = ' ▁▂▃▄▅▆▇'
-const EIGHTHS = 8
 const AXIS = '─'
 const GAP = 1
 // 갱신 시각 · 범례 · 카드 수 · 축. 막대가 쓸 수 있는 행은 본문 행에서 이것을 뺀 것이다.
@@ -49,7 +45,7 @@ const clockText = (ms: number) => {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-// 가장 긴 막대가 막대 줄 rows 개에 들어가는 가장 좁은 폭. 카드 수의 자릿수보다 좁게 하지 않고, 열이 모두 columns 칸에 들어가는 폭보다 넓게 하지 않는다.
+// 가장 긴 막대가 rows 행에 들어가는 가장 좁은 폭. 카드 수의 자릿수보다 좁게 하지 않고, 열이 모두 columns 칸에 들어가는 폭보다 넓게 하지 않는다.
 const barWidth = (board: Board, columns: number, rows: number) => {
   const count = board.columns.length
   const most = Math.max(1, ...board.columns.map((column) => column.count))
@@ -58,21 +54,14 @@ const barWidth = (board: Board, columns: number, rows: number) => {
   return Math.max(String(most).length, Math.min(widest, fitting))
 }
 
-// 막대 한 줄을 그리는 터미널 행마다의 문자. 위 행부터 차례다. 1/8 이 남으면 맨 위 행이 그 높이의 아래쪽 블록이다.
-const cellLines = (height: number) => {
-  const partial = height % EIGHTHS
-  const full = Array.from({ length: Math.floor(height / EIGHTHS) }, () => CELL)
-  return partial == 0 ? full : [LOWER_BLOCKS.charAt(partial), ...full]
-}
-
-// 막대 한 줄의 터미널 행 하나. 같은 색이 이어지는 칸은 한 조각으로 묶는다.
-const barRow = (board: Board, column: BoardColumn, index: number, row: number, width: number, cell: string) => {
+// 막대의 한 행. 같은 색이 이어지는 칸은 한 조각으로 묶는다.
+const barRow = (board: Board, column: BoardColumn, index: number, row: number, width: number) => {
   const cards = column.cards.slice(row * width, row * width + width)
   const segments = cards.reduce((list: Segment[], card) => {
     const color = cellColor(board, column, index, card)
     const last = list.at(-1)
-    if (last && last.color == color) return [...list.slice(0, -1), { text: last.text + cell, color }]
-    return [...list, { text: cell, color }]
+    if (last && last.color == color) return [...list.slice(0, -1), { text: last.text + CELL, color }]
+    return [...list, { text: CELL, color }]
   }, [])
   return width > cards.length ? [...segments, { text: ' '.repeat(width - cards.length) }] : segments
 }
@@ -150,13 +139,12 @@ export const register: Register = (on) => {
       )
     }
     const { board } = current
-    const lines = cellLines(board.cell_height)
-    const width = barWidth(board, e.props.bodyColumns, Math.floor((e.props.scroll.bodyRows - HEADER_ROWS) / lines.length))
+    const width = barWidth(board, e.props.bodyColumns, e.props.scroll.bodyRows - HEADER_ROWS)
     const height = Math.max(0, ...board.columns.map((column) => Math.ceil(column.count / width)))
     const total = board.columns.reduce((sum, column) => sum + column.count, 0)
     const counts = joinColumns(board.columns.map((column, index) => [{ text: String(column.count).padEnd(width), color: columnColor(index) }]))
     const axis = joinColumns(board.columns.map((column, index) => [{ text: AXIS.repeat(width), color: columnColor(index) }]))
-    const rows = Array.from({ length: height }, (_, row) => lines.map((cell) => joinColumns(board.columns.map((column, index) => barRow(board, column, index, row, width, cell))))).flat()
+    const rows = Array.from({ length: height }, (_, row) => joinColumns(board.columns.map((column, index) => barRow(board, column, index, row, width))))
     const line = (segments: Segment[]) => (
       <Text wrap="truncate-end">{segments.map((segment) => (segment.color ? <Text color={segment.color}>{segment.text}</Text> : segment.text))}</Text>
     )

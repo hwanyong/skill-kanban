@@ -156,5 +156,4 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 이 스킬이 든 플러그인 `uhd-kanban` 의 hooks 모듈(`hooks/register.tsx`)이 세션 디렉터리 위에 보드가 있으면 pane 을 열고, 열마다 카드 하나를 한 칸으로 그린다. 축(열마다 카드 수)이 위에 있고 막대는 아래로 자란다. `run.status` 열의 칸은 세션 판정(`recover` 와 같은 판정)으로 색이 바뀐다.
 
 - 갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60). 값을 바꾸면 다음 갱신부터 그 주기로 다시 읽는다.
-- 막대 한 줄의 세로 길이는 `monitor.cell_height` 다. 단위는 터미널 한 줄의 1/8 이고(1 이상 64 이하의 정수, 기본 8 = 한 줄), 8 보다 작으면 `▁`~`▇` 로 얇게, 8 보다 크면 여러 줄로 그린다. 가로 폭은 pane 크기로 정한다.
 - pane 은 `uk board --json` 의 stdout 을 그리기만 한다. 보드가 없는 디렉터리(종료 코드 3)에서는 열지 않는다. 닫힌 pane 은 `/kanban-board` 로 다시 연다.

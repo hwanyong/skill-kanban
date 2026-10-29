@@ -18,9 +18,6 @@ export class NoProjectError extends ProjectError {}
 // monitor.interval_seconds 의 하한. 갱신마다 `claude agents --json` 과 node 프로세스가 하나씩 돈다.
 export const MIN_MONITOR_SECONDS = 10
 
-// monitor.cell_height 의 범위. 단위는 터미널 한 줄의 1/8(블록 문자 ▁ 한 개)이고 8 이 한 줄(█)이다.
-export const MAX_CELL_HEIGHT = 64
-
 // run · recover 가 카드에 쓰거나 세션에 쓰라고 하는 코멘트 kind. comments.kinds 에 있어야 한다.
 export const RUN_KINDS = ['배정', '진행', '질문', '결과']
 
@@ -96,8 +93,6 @@ export const validateConfig = (config) => {
   if (!statuses.has(config?.run?.status)) problems.push(`run.status 는 columns 에 있는 status 다: ${config?.run?.status}`)
   const interval = config?.monitor?.interval_seconds
   if (!Number.isInteger(interval) || interval < MIN_MONITOR_SECONDS) problems.push(`monitor.interval_seconds 는 ${MIN_MONITOR_SECONDS} 이상의 정수다: ${interval}`)
-  const cellHeight = config?.monitor?.cell_height
-  if (!Number.isInteger(cellHeight) || cellHeight < 1 || cellHeight > MAX_CELL_HEIGHT) problems.push(`monitor.cell_height 는 1 이상 ${MAX_CELL_HEIGHT} 이하의 정수다(1/8줄 단위): ${cellHeight}`)
   return problems
 }
 

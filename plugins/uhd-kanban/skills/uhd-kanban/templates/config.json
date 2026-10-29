@@ -15,5 +15,5 @@
   "comments": { "kinds": ["질문", "답", "결정", "결과", "진행", "보고", "정정", "배정", "넘김", "멈춤", "done 근거", "사용자 답", "사용자 결정"] },
   "archive": { "columns": ["done"], "after_days": 7, "dir": "archived" },
   "run": { "status": "in-progress" },
-  "monitor": { "interval_seconds": 60, "cell_height": 8 }
+  "monitor": { "interval_seconds": 60 }
 }

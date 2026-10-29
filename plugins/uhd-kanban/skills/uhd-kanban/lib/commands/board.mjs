@@ -22,7 +22,6 @@ export const run = async ({ flags }) => {
   const result = {
     root: project.root,
     interval_seconds: project.config.monitor.interval_seconds,
-    cell_height: project.config.monitor.cell_height,
     run_status: runStatus,
     columns: columns.map(({ column, cards }) => ({
       status: column.status,
