@@ -10,7 +10,7 @@
 ## 설치
 
 ```
-/plugin marketplace add <owner>/<repo>
+/plugin marketplace add hwanyong/skill-kanban
 /plugin install uhd-kanban@skill-kanban
 ```
 
