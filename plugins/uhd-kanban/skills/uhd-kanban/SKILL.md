@@ -94,7 +94,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | `uk set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b]` | 제목 · 우선순위 · 태그를 바꾼다. 제목이 바뀌면 파일 이름도 바뀐다 |
 | `uk archive [--dry-run]` | `archive.columns` 열에서 `completed_at` 뒤 `archive.after_days`(기본 7)일이 지난 카드를 `kanban/archived/<YYYY-MM>/` 로 옮긴다 |
 | `uk comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> \| --text-file <경로>)` | 코멘트를 덧붙이고 SendMessage 줄을 낸다 |
-| `uk inbox [<이름>] [--all]` | 그 이름 앞으로 온 코멘트 중 답하지 않은 것을 낸다 |
+| `uk inbox [<이름>] [--all] [--kind a,b]` | 그 이름 앞으로 온 코멘트 중 답하지 않은 것을 낸다. `--kind` 를 주면 그 kind 의 코멘트만 낸다 |
 | `uk run <k id> [--dry-run] [--force]` | 카드 본문으로 `claude --bg` 세션을 띄운다 |
 | `uk recover [<k id>…] [--dry-run]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다 |
 | `uk guard <경로> [--session <session id>]` | 그 세션이 그 파일을 고쳐도 되는지 판정한다. 0: 카드 세션(이름 `k<id>`) · 프로젝트 밖 · `kanban/` · `.uhd-kanban/` 안. 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). `--session` 이 없으면 `CLAUDE_CODE_SESSION_ID` 를 쓴다. 규칙은 `../delegate/SKILL.md` |

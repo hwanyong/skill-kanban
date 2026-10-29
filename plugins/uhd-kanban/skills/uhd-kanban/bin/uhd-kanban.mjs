@@ -34,7 +34,7 @@ const USAGE = `사용법: uhd-kanban <명령> [인자]
   set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b]
   archive [--dry-run]
   comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> | --text-file <경로>)
-  inbox [<이름>] [--all]
+  inbox [<이름>] [--all] [--kind a,b]
   run <k id> [--dry-run] [--force]   카드 본문으로 claude --bg 세션을 띄운다
   recover [<k id>…] [--dry-run]      세션이 멈춘 카드를 claude --bg --resume 으로 이어 간다
   board [--json]        열마다 카드 수와 run.status 열 카드의 세션 상태를 낸다

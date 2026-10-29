@@ -21,7 +21,7 @@ export const startPrompt = (project, card, { skillRoot, reportTo }) => {
 ---
 이 작업은 uhd-kanban 카드 k${card.id} 다. 카드 파일은 ${card.relPath} 이고 프로젝트 루트는 ${project.root} 다.
 - 단계를 하나 마칠 때마다 \`${cli} comment k${card.id} --kind 진행 --to ${reportTo} --text "<한 일 · 다음 할 일>"\` 로 남긴다. 세션이 중단되면 이 코멘트에서 이어 간다.
-- 물을 것이 있으면 \`--kind 질문\`, 끝나면 \`--kind 결과\` 로 남긴다. 명령이 낸 SendMessage 줄은 SendMessage 도구로 보낸다.
+- 물을 것이 있으면 \`--kind 질문\`, 끝나면 \`--kind 결과\` 로 남긴다. 고를 것이 있는 질문은 본문에 무엇을 정해야 하는지 · 선택지 2~4개(각각 결과와 대가) · 권장안과 이유 · 답이 올 때까지 멈추는 일을 적는다. 받는 쪽은 이 코멘트만 읽고 고른다. 명령이 낸 SendMessage 줄은 SendMessage 도구로 보낸다.
 - \`${cli} inbox ${sessionName(card.id)}\` 로 이 세션 앞으로 온 코멘트를 읽는다.`
 }
 
