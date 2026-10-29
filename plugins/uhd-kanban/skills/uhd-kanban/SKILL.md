@@ -110,7 +110,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 - `--from` 을 주지 않으면 이 세션의 이름을 쓴다(`CLAUDE_CODE_SESSION_ID` 로 `claude agents --json` 에서 찾는다).
 - kind 는 `config.json` 의 `comments.kinds` 중 하나다. `배정` · `진행` · `질문` · `결과` 는 `run` · `recover` 가 쓰므로 빼면 `check` 가 위반으로 알린다.
 - 본문에 `### c` 로 시작하는 줄과 `## Comments` 줄을 쓸 수 없다.
-- 답했다는 것은 같은 카드에 그 이름이 `from` 인 코멘트가 뒤에 있다는 뜻이다. 읽은 표시는 따로 저장하지 않는다.
+- 답했다는 것은 같은 카드의 뒤 코멘트 중 하나가 그 이름이 `from` 이거나, 보낸 쪽이 아닌 쪽이 보낸 쪽 앞으로(`to`) 쓴 것이라는 뜻이다. 뒤 조건 덕분에 메인 세션이 다시 시작해 이름이 바뀐 뒤 새 이름으로 답한 질문도 답한 것으로 본다. 읽은 표시는 따로 저장하지 않는다.
 
 ## 실행
 
