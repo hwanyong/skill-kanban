@@ -52,10 +52,11 @@ const TEXT = {
     header: (clock: string, columns: number, cards: number, seconds: number) => `${clock} · 열 ${columns}개 · 카드 ${cards}개 · ${seconds}초마다`,
   },
   en: {
-    live: 'running',
-    pending: 'restarting',
+    // uk board 가 출력하는 판정 id 와 같은 낱말이다. 범례 한 줄이 기본 pane 폭(45칸)에 들어가야 한다.
+    live: 'live',
+    pending: 'pending',
     stalled: 'stalled',
-    done: 'finished',
+    done: 'done',
     description: 'Draws the card count of each uhd-kanban board column as a bar in a pane',
     noBoard: 'No .uhd-kanban/config.json above this session directory, so the pane was not opened',
     opened: (root: string, seconds: number) => `Opened the board of ${root}. Rereads every ${seconds}s`,

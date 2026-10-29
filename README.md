@@ -9,9 +9,9 @@ English | [한국어](README.ko.md)
 
 **uhd-kanban** is a Claude Code plugin that keeps a per-project Kanban board as plain Markdown files in `kanban/`. The main Claude Code session splits a request into cards, starts one background session (`claude --bg`) per card, and reviews each result. A side pane in Claude Code shows how many cards each column holds and whether each card session is running.
 
-![The uhd-kanban board monitor pane in Claude Code. A header line reads "12:24 · 9 columns · 501 cards · every 60 seconds". Below it, nine vertical bars, one per column, grow downward; each card is one colored cell. The in-progress bar contains green cells for card sessions that are running.](docs/images/board-monitor-501-cards.png)
+![The uhd-kanban board monitor pane in Claude Code. A header line reads "13:20 · 9 columns · 502 cards · every 60s", and a legend line reads "in-progress: live pending stalled done". Below the column counts 261, 28, 6, 160, 22, 4, 11, 6, 4, nine vertical bars, one per column, grow downward; each card is one colored cell. The in-progress bar contains green cells for card sessions that are running.](docs/images/board-monitor-502-cards.en.png)
 
-*A board with 501 cards in the board monitor pane. The pane shows counts and session states only; card titles are not displayed.*
+*A board with 502 cards in the board monitor pane. The pane shows counts and session states only; card titles are not displayed.*
 
 > [!NOTE]
 > Command output, card session prompts and pane labels are available in English and Korean (see [Language](#language)). The skill documents (`SKILL.md`) are written in Korean and include English trigger phrases.
@@ -205,19 +205,19 @@ Example output of `uk board` for the demo board below (`locale` `en`):
 
 ## Board monitor pane
 
-![The board monitor pane for a demo board with 24 cards in 9 columns. The column counts read 7, 3, 2, 8, 1, 0, 1, 1, 1. In the second bar, the in-progress column, two cells are green because two card sessions are running, and one cell keeps the column color because that card has no session.](docs/images/board-monitor-demo.png)
+![The board monitor pane for a demo board with 24 cards in 9 columns. A legend line reads "in-progress: live pending stalled done". The column counts read 7, 3, 2, 8, 1, 0, 1, 1, 1. In the second bar, the in-progress column, two cells are green because two card sessions are running, and one cell keeps the column color because that card has no session.](docs/images/board-monitor-demo.en.png)
 
 *A demo board with 24 fictional cards and two running card sessions.*
 
 The pane opens when the session directory has `.uhd-kanban/config.json` above it. The counts row at the top lists the number of cards per column in the order of `config.json` `columns`, and each bar grows downward with one cell per card. If a pane was closed, `/kanban-board` opens it again.
 
-| Cell color in the in-progress column | Session state |
-|---|---|
-| Green | Running |
-| Yellow | Being respawned |
-| Red | Stopped (resume with `uk recover`) |
-| Gray | Finished |
-| Column color | The card has no session |
+| Cell color in the in-progress column | Legend label | Session state |
+|---|---|---|
+| Green | `live` | Running |
+| Yellow | `pending` | Being respawned |
+| Red | `stalled` | Stopped (resume with `uk recover`) |
+| Gray | `done` | Finished |
+| Column color | - | The card has no session |
 
 The refresh interval is `monitor.interval_seconds` in `config.json` (an integer of 10 or more, default 60).
 
