@@ -1,5 +1,6 @@
 {
   "name": "skill-kanban",
   "owner": { "name": "uhd" },
+  "description": "uhd-kanban: a Markdown Kanban board for Claude Code that runs each card as a background claude session",
   "plugins": [{ "name": "uhd-kanban", "source": "./plugins/uhd-kanban" }]
 }
