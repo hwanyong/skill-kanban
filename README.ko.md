@@ -9,6 +9,8 @@
 
 **uhd-kanban** 은 프로젝트마다 칸반 보드를 `kanban/` 디렉터리의 마크다운 파일로 운영하는 Claude Code 플러그인이다. 메인 세션이 요청을 카드로 나누고, 카드마다 백그라운드 세션(`claude --bg`)을 하나씩 띄워 맡기고, 결과를 검토한다. Claude Code 의 pane 이 열마다 카드 수와 카드 세션이 도는지를 보인다.
 
+플러그인 말고는 설치하는 것이 없다. Docker · 서버 · 데이터베이스 · npm 패키지를 쓰지 않는다. 보드는 `uk check` 가 검사하는 정해진 형식의 마크다운 · JSON 파일이고, 명령은 Node.js 내장 모듈만 쓴다.
+
 ![Claude Code 안의 uhd-kanban 보드 모니터 pane. 머리 줄에 「12:24 · 열 9개 · 카드 501개 · 60초마다」가 있다. 그 아래 열마다 세로 막대 하나가 아래로 자라고, 카드 하나가 색 칸 하나다. in-progress 막대에 실행 중인 카드 세션의 초록 칸이 있다.](docs/images/board-monitor-501-cards.png)
 
 *카드 501장인 보드의 보드 모니터 pane. pane 은 카드 수와 세션 상태만 보이고 카드 제목은 보이지 않는다.*
@@ -32,7 +34,7 @@
 
 | 기능 | 하는 일 |
 |---|---|
-| 일반 파일 | 카드 하나가 `.md` 파일 하나다. 열은 디렉터리 이름이, 열 안의 순서는 파일 이름 앞의 순서 번호가 갖는다. 그래서 `ls` · `git diff` · 아무 편집기로나 보드를 읽는다. 서버 · 데이터베이스 · 계정이 없다. |
+| 일반 파일 | 카드 하나가 `.md` 파일 하나다. 열은 디렉터리 이름이, 열 안의 순서는 파일 이름 앞의 순서 번호가 갖는다. 그래서 `ls` · `git diff` · 아무 편집기로나 보드를 읽는다. Docker · 서버 · 데이터베이스 · 계정 · npm 패키지가 없다. 명령은 Node.js 내장 모듈(`node:fs` · `node:child_process` 등)만 import 한다. |
 | 위임 | 메인 세션은 코드를 고치지 않는다. 카드마다 `claude --bg` 세션이 따로 돌고 그 세션은 카드 본문만 프롬프트로 받으므로, 메인 세션의 문맥에 구현 과정이 쌓이지 않는다. |
 | 편집 확인 | 메인 세션이 Edit · Write · NotebookEdit 로 프로젝트 파일을 고치려 하면 훅이 사용자에게 확인 창을 띄운다. `bypassPermissions` 를 포함한 모든 권한 모드에서 뜬다. |
 | 의존성 · 동시 실행 상한 | `depends_on` 에 적은 카드가 끝나기 전에는 카드를 시작하지 않는다. `run.max_parallel`(기본 3)이 동시에 도는 카드 세션 수를 제한한다. |
@@ -87,6 +89,10 @@ uk migrate             # comments.kinds 를 바꾸고 "locale": "ko" 를 넣고,
 
 ## 보드 파일 배치
 
+![uhd-kanban 이 보드를 저장하는 방식을 카드 24장인 데모 보드의 파일로 그린 그림. 왼쪽: sample-app 의 파일 트리. .uhd-kanban/config.json 은 locale · 열 9개 · run · archive · monitor 설정을, .uhd-kanban/profiles.json 은 model: 태그를 claude --model 값으로 바꾸는 표를 갖는다. kanban/ 아래 열 디렉터리는 1-to-do(카드 7장) · 2-in-progress(3장) · 3-in-review(2장) · 4-done(8장) · 5-decided(1장) · 7-implemented(1장) · 8-cancelled(1장) · 9-active(1장)다. 6-planned/ 는 없다. 열 디렉터리는 카드가 있는 동안만 있다. 오른쪽 위: 경로 kanban/2-in-progress/0040-k2-Add-login-form-validation.md 를 열 디렉터리 2-in-progress(status in-progress) · 열 안의 순서 0040 · 카드 id k2 · 제목 Add-login-form-validation 으로 나눴다. 오른쪽 아래: 그 파일 28줄. 1~12줄은 YAML frontmatter(id · type · title · priority · tags · depends_on · created_at · updated_at · session · session_started_at)이고 uk 명령만 .uhd-kanban/lock/ 디렉터리를 잡은 채 파일 이름 · 디렉터리와 함께 바꾼다. 14줄은 본문이고 uk run 이 카드 세션의 프롬프트에 넣는다. 16~28줄은 ## Comments 이고 블록 세 개가 있다. c1 [assign] 은 uk run, c2 [question] 은 카드 세션, c3 [assign] 은 uk recover 가 남겼다.](docs/images/board-storage.png)
+
+*데모 보드의 파일로 만든 그림. 트리와 파일 내용은 디스크의 파일 그대로이고, 보기 폭보다 긴 줄은 … 로 끝냈다.*
+
 | 경로 | 내용 |
 |---|---|
 | `.uhd-kanban/config.json` | 열 · type 마다 처음 둘 열 · 순서 번호 · 의존성 규칙 · 코멘트 kind · 아카이브 규칙 · `run` 설정 · `monitor` 설정 |
@@ -118,6 +124,20 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 ```
 
 frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명령은 잠금(`.uhd-kanban/lock/` 디렉터리) 안에서 파일 이름과 frontmatter 를 함께 바꾼다. 카드 본문을 직접 고쳤으면 `uk check` 를 실행한다.
+
+### `uk check` 가 검사하는 것
+
+형식이 정해져 있으므로 카드 파일은 `uk check` 하나로 검사한다. 보드를 바꾸는 명령도 먼저 같은 검사를 하고, 규칙 위반이 있으면 아무것도 바꾸지 않는다.
+
+| 대상 | 규칙 |
+|---|---|
+| 파일 이름 | `<순서 번호>-k<id>-<제목>.md`. 순서 번호는 `order.width` 자리(기본 4)이고 한 열 안에 한 번만 나온다 |
+| 파일 이름과 frontmatter | `id` 가 파일 이름의 `k<id>` 와 같고, 파일 이름의 제목 부분이 `title` 과 같다 |
+| 디렉터리 | `kanban/` 아래 디렉터리 · 파일은 모두 `config.json` 의 `columns` 에 있는 열이거나 `archive.dir`(기본 `archived/`)이다 |
+| 열과 `type` | 카드의 `type` 이 그 열의 `types` 에 있다 |
+| 카드 id | 카드 id 하나가 보드의 한 곳에만 있다 |
+| frontmatter 값 | `priority` 는 정해진 값, `tags` 는 문자열 목록, `depends_on` 은 카드 id 목록이다 |
+| 코멘트 | `### c<n> [kind]` 의 kind 가 `config.json` 의 `comments.kinds` 에 있다 |
 
 ### 기본 열
 
@@ -232,6 +252,7 @@ pane 높이에 들어가지 않는 막대는 어느 방식이든 스크롤한다
 
 - Claude Code 2.1.312 이상(hooks 모듈 API 를 이 판에서 확인했다)
 - `PATH` 에 있는 Node.js 21 이상(`Object.groupBy`)
+- 그 밖에 설치할 것은 없다. Docker · 데이터베이스 · npm 패키지를 쓰지 않는다. `git` 은 프로젝트가 git 저장소일 때만 쓴다(git 이 추적하는 카드는 `git mv` 로 옮긴다).
 - macOS 에서 개발했다. 다른 플랫폼에서는 확인하지 않았다.
 
 ## 자주 묻는 질문
@@ -240,9 +261,9 @@ pane 높이에 들어가지 않는 막대는 어느 방식이든 스크롤한다
 
 칸반 보드를 프로젝트 안의 마크다운 파일로 저장하고, Claude Code 메인 세션이 카드마다 백그라운드 세션을 하나씩 띄워 맡기게 하는 Claude Code 플러그인이다. 스킬 두 개(`uhd-kanban` · `delegate`)와 보드 모니터 pane 을 그리는 hooks 모듈이 들어 있다.
 
-### 서버 · 데이터베이스 · 계정이 필요한가?
+### Docker · 서버 · 데이터베이스 · 계정이 필요한가?
 
-필요하지 않다. 보드는 `kanban/` 디렉터리와 `.uhd-kanban/` 설정이고, 명령은 그 파일을 읽고 쓰는 Node.js 스크립트다.
+필요하지 않다. 보드는 `kanban/` 디렉터리와 `.uhd-kanban/` 설정이고, 명령은 그 파일을 읽고 쓰는 Node.js 스크립트다. Node.js 내장 모듈만 import 하므로 `npm install` 도 컨테이너도 없다.
 
 ### 호스팅 이슈 트래커와 무엇이 다른가?
 

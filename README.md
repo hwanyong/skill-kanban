@@ -9,6 +9,8 @@ English | [한국어](README.ko.md)
 
 **uhd-kanban** is a Claude Code plugin that keeps a per-project Kanban board as plain Markdown files in `kanban/`. The main Claude Code session splits a request into cards, starts one background session (`claude --bg`) per card, and reviews each result. A side pane in Claude Code shows how many cards each column holds and whether each card session is running.
 
+Nothing is installed besides the plugin: no Docker, no server, no database, no npm packages. The board is Markdown and JSON files in a fixed format that `uk check` verifies, and the commands use only Node.js built-in modules.
+
 ![The uhd-kanban board monitor pane in Claude Code. A header line reads "13:20 · 9 columns · 502 cards · every 60s", and a legend line reads "in-progress: live pending stalled done". Below the column counts 261, 28, 6, 160, 22, 4, 11, 6, 4, nine vertical bars, one per column, grow downward; each card is one colored cell. The in-progress bar contains green cells for card sessions that are running.](docs/images/board-monitor-502-cards.en.png)
 
 *A board with 502 cards in the board monitor pane. The pane shows counts and session states only; card titles are not displayed.*
@@ -35,7 +37,7 @@ English | [한국어](README.ko.md)
 
 | Feature | What it does |
 |---|---|
-| Plain files | One card is one `.md` file. The column is the directory name and the order is the number prefix of the file name, so `ls`, `git diff` and any editor show the board. No server, no database, no account. |
+| Plain files | One card is one `.md` file. The column is the directory name and the order is the number prefix of the file name, so `ls`, `git diff` and any editor show the board. No Docker, no server, no database, no account, no npm packages: the commands import only Node.js built-in modules (`node:fs`, `node:child_process` and others). |
 | Delegation | The main session does not write code. Each card runs in its own `claude --bg` session that receives only the card body as its prompt, so the main session's context does not fill with implementation details. |
 | Edit guard | A hook asks the user before the main session edits a project file with Edit, Write or NotebookEdit. The question appears in every permission mode, including `bypassPermissions`. |
 | Dependencies and a parallel limit | `depends_on` keeps a card from starting before the cards it waits for are finished. `run.max_parallel` (default 3) caps the number of card sessions that run at once. |
@@ -90,6 +92,10 @@ Only the `### c<n> [<kind>]` header lines and two lines of `config.json` change.
 
 ## How the board is stored
 
+![Diagram of how uhd-kanban stores a board, drawn from the files of a demo board with 24 cards. Left: the file tree of sample-app. .uhd-kanban/config.json holds the locale, 9 columns and the run, archive and monitor settings; .uhd-kanban/profiles.json maps model: tags to claude --model values. kanban/ holds the column directories 1-to-do (7 cards), 2-in-progress (3), 3-in-review (2), 4-done (8), 5-decided (1), 7-implemented (1), 8-cancelled (1) and 9-active (1). 6-planned/ is absent because a column directory exists only while it holds cards. Top right: the path kanban/2-in-progress/0040-k2-Add-login-form-validation.md split into the column directory 2-in-progress (status in-progress), the order in the column 0040, the card id k2 and the title Add-login-form-validation. Bottom right: the 28 lines of that file. Lines 1 to 12 are YAML frontmatter (id, type, title, priority, tags, depends_on, created_at, updated_at, session, session_started_at), which only uk commands change, together with the file name and directory, while holding the .uhd-kanban/lock/ directory. Line 14 is the body, which uk run puts in the prompt of the card session. Lines 16 to 28 are ## Comments with three blocks: c1 [assign] written by uk run, c2 [question] written by the card session, and c3 [assign] written by uk recover.](docs/images/board-storage.en.png)
+
+*Generated from the files of a demo board. The tree and the file content are the files on disk; lines longer than the view end in …*
+
 | Path | Content |
 |---|---|
 | `.uhd-kanban/config.json` | Columns, the initial column per card type, order numbering, dependency rules, comment kinds, archive rules, `run` settings and `monitor` settings |
@@ -121,6 +127,20 @@ Started with claude --bg. session=… model=opus(model:deep) effort=high
 ```
 
 Frontmatter, file names and directories are changed only through commands. The commands take a lock (the `.uhd-kanban/lock/` directory) and update the file name and the frontmatter together. After editing a card body by hand, run `uk check`.
+
+### What `uk check` verifies
+
+The format is fixed, so `uk check` alone verifies every card file. Commands that change the board run the same check first and change nothing while a rule is broken.
+
+| Target | Rule |
+|---|---|
+| File name | `<order>-k<id>-<title>.md`. The order number has `order.width` digits (default 4) and appears once per column |
+| File name and frontmatter | `id` equals the `k<id>` of the file name, and the title part equals `title` |
+| Directory | Every directory and file under `kanban/` is a column in `columns` of `config.json` or `archive.dir` (default `archived/`) |
+| Column and `type` | The card `type` is in `types` of its column |
+| Card id | One card id appears in one place on the board |
+| Frontmatter values | `priority` is a known value, `tags` is a list of strings, `depends_on` is a list of card ids |
+| Comments | Each `### c<n> [kind]` kind is in `comments.kinds` of `config.json` |
 
 ### Default columns
 
@@ -235,6 +255,7 @@ A bar that does not fit the pane height scrolls in every mode.
 
 - Claude Code 2.1.312 or later (the hooks module API was checked against this version)
 - Node.js 21 or later on `PATH` (`Object.groupBy`)
+- Nothing else to install: no Docker, no database, no npm packages. `git` is used only when the project is a git repository (cards tracked by git move with `git mv`).
 - Developed on macOS. Other platforms have not been verified.
 
 ## FAQ
@@ -243,9 +264,9 @@ A bar that does not fit the pane height scrolls in every mode.
 
 A Claude Code plugin that stores a Kanban board as Markdown files inside the project and lets the main Claude Code session hand each card to its own background session. It contains two skills (`uhd-kanban` and `delegate`) and a hooks module that draws the board monitor pane.
 
-### Does it need a server, a database or an account?
+### Does it need Docker, a server, a database or an account?
 
-No. The board is the `kanban/` directory and `.uhd-kanban/` configuration. Commands are a Node.js script that reads and writes these files.
+No. The board is the `kanban/` directory and `.uhd-kanban/` configuration. Commands are a Node.js script that reads and writes these files and imports only Node.js built-in modules, so there is no `npm install` and no container.
 
 ### How is it different from a hosted issue tracker?
 
