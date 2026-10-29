@@ -5,7 +5,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { ProjectError } from './project.mjs'
+import { ProjectError, UNLIMITED, maxParallel } from './project.mjs'
 
 // all 이면 끝난 백그라운드 세션까지 낸다(`--all`).
 export const listSessions = ({ all = false } = {}) => {
@@ -76,6 +76,17 @@ export const cardSession = (card, sessions) => {
   const transcript = transcriptPath(sessionId)
   return { verdict: classify(session, card.data.session_started_at, lastTurnRole(transcript)), session, transcript }
 }
+
+// 프로세스가 있거나 다시 뜨는 중인 판정. run.max_parallel 이 세는 것과 run 이 새로 띄우지 않는 것이 이 판정이다.
+// restart(멈춤)도 프로세스가 남아 있고 recover 가 같은 카드의 세션으로 바꿔 띄우므로 센다.
+export const RUNNING_VERDICTS = ['live', 'pending', 'restart']
+
+// run.status 열에서 세션이 도는 카드. sessions 는 listSessions({ all: true }) 의 값이다.
+export const runningCards = (project, board, sessions) =>
+  board.cards.filter((card) => card.status == project.config.run.status && RUNNING_VERDICTS.includes(cardSession(card, sessions).verdict))
+
+// 도는 카드가 running 개일 때 하나를 더 띄울 수 있는가.
+export const hasRoom = (project, running) => maxParallel(project.config) == UNLIMITED || running < maxParallel(project.config)
 
 // 짧은 id 로 세션 항목을 찾는다. 항목의 id 와 같거나 sessionId 가 그것으로 시작하면 같은 세션으로 본다.
 export const findSession = (sessions, shortId) => sessions.find((session) => session.id == shortId || session.sessionId?.startsWith(shortId)) ?? null

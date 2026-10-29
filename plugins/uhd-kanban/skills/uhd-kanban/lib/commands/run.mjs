@@ -7,9 +7,9 @@ import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
 import { USER, appendComment } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
 import { runSpec } from '../profiles.mjs'
-import { ProjectError } from '../project.mjs'
+import { ProjectError, maxParallel } from '../project.mjs'
 import { sessionName, startPrompt } from '../prompt.mjs'
-import { BACKGROUND_ARGS, cardSession, currentSessionName, findSession, launchBackground, listSessions, startedAt } from '../sessions.mjs'
+import { BACKGROUND_ARGS, RUNNING_VERDICTS, cardSession, hasRoom, runningCards, currentSessionName, findSession, launchBackground, listSessions, startedAt } from '../sessions.mjs'
 
 export const run = async ({ positional, flags }, { skillRoot }) => {
   if (positional[0] == null) throw new UsageError('run <k id> [--dry-run] [--force] 형식이다')
@@ -22,7 +22,9 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
     const blocking = card.status == status ? [] : checkMove(project, board, card, status, { force })
     const sessions = listSessions({ all: true })
     const previous = cardSession(card, sessions)
-    if (['live', 'pending', 'restart'].includes(previous.verdict)) throw new ProjectError(`k${id} 의 세션 ${card.data.session} 이 아직 있다(state ${previous.session.state}). 새로 띄우지 않는다. 멈췄으면 uhd-kanban recover k${id}`)
+    if (RUNNING_VERDICTS.includes(previous.verdict)) throw new ProjectError(`k${id} 의 세션 ${card.data.session} 이 아직 있다(state ${previous.session.state}). 새로 띄우지 않는다. 멈췄으면 uhd-kanban recover k${id}`)
+    const running = runningCards(project, board, sessions)
+    if (!hasRoom(project, running.length)) throw new ProjectError(`동시에 도는 카드 세션이 run.max_parallel(${maxParallel(project.config)})개에 찼다: ${running.map((item) => `k${item.id}`).join(', ')}. 하나가 끝난 뒤 다시 실행하거나 .uhd-kanban/config.json 의 run.max_parallel 을 바꾼다(-1 은 무제한)`)
     const from = currentSessionName(sessions) ?? USER
     const name = sessionName(id)
     const prompt = startPrompt(project, card, { skillRoot, reportTo: from })

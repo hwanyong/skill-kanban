@@ -23,7 +23,7 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 
 | 경로 | 내용 |
 |---|---|
-| `.uhd-kanban/config.json` | 열 · 순서 번호 · 의존성 · 코멘트 kind · 아카이브 · `run` · `monitor` 설정 |
+| `.uhd-kanban/config.json` | 열 · 순서 번호 · 의존성 · 코멘트 kind · 아카이브 · `run`(`status` · `max_parallel`) · `monitor` 설정 |
 | `.uhd-kanban/profiles.json` | `model:` 태그의 프로필 이름을 `claude --model` 값으로 바꾸는 표 |
 | `kanban/<n>-<status>/<순서 번호>-k<id>-<제목>.md` | 열 안의 카드. 예: `kanban/1-to-do/0010-k457-로그인-오류-재현.md` |
 | `kanban/archived/<YYYY-MM>/<YYYY-MM-DD>-k<id>-<제목>.md` | 아카이브한 카드. 날짜는 `completed_at` 의 날짜다 |
@@ -95,8 +95,8 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | `uk archive [--dry-run]` | `archive.columns` 열에서 `completed_at` 뒤 `archive.after_days`(기본 7)일이 지난 카드를 `kanban/archived/<YYYY-MM>/` 로 옮긴다 |
 | `uk comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> \| --text-file <경로>)` | 코멘트를 덧붙이고 SendMessage 줄을 낸다 |
 | `uk inbox [<이름>] [--all] [--kind a,b]` | 그 이름 앞으로 온 코멘트 중 답하지 않은 것을 낸다. `--kind` 를 주면 그 kind 의 코멘트만 낸다 |
-| `uk run <k id> [--dry-run] [--force]` | 카드 본문으로 `claude --bg` 세션을 띄운다 |
-| `uk recover [<k id>…] [--dry-run]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다 |
+| `uk run <k id> [--dry-run] [--force]` | 카드 본문으로 `claude --bg` 세션을 띄운다. 도는 카드 세션이 `run.max_parallel` 개에 찼으면 띄우지 않는다 |
+| `uk recover [<k id>…] [--dry-run] [--force]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다. `run.max_parallel` 을 넘는 카드는 띄우지 않는다. `--force` 는 끝난(state done) 세션도 이어 간다 |
 | `uk guard <경로> [--session <session id>]` | 그 세션이 그 파일을 고쳐도 되는지 판정한다. 0: 카드 세션(이름 `k<id>`) · 프로젝트 밖 · `kanban/` · `.uhd-kanban/` 안. 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). `--session` 이 없으면 `CLAUDE_CODE_SESSION_ID` 를 쓴다. 규칙은 `../delegate/SKILL.md` |
 | `uk board [--json]` | 열마다 카드 수와 `run.status` 열 카드의 세션 판정을 낸다. 파일 이름만 읽고 카드 파일은 `run.status` 열의 것만 연다. 규칙 검사는 하지 않는다 |
 
@@ -136,6 +136,18 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 `run` 은 카드의 이전 세션이 아직 돌거나 다시 뜨는 중이면 새로 띄우지 않는다.
 
+### 동시 실행
+
+카드를 함께 돌릴지는 세 가지로 정한다. 도구가 막는 것은 앞의 두 가지이고, 작업 충돌은 카드를 나누는 쪽(`../delegate/SKILL.md` 「차례」 1)이 판정한다.
+
+| 조건 | 판정 | 누가 지키는가 |
+|---|---|---|
+| 동시 실행 수 | `run.status` 열에서 세션 판정이 돈다 · 다시 뜨는 중 · 멈춤인 카드가 `config.json` 의 `run.max_parallel` 개 이상이면 `run` 은 띄우지 않고 종료 코드 1 로 그 카드 id 를 알린다. `recover` 는 이어 감 판정인 카드를 띄우지 않고 「자리를 기다린다」로 세고 종료 코드 1 을 낸다. 멈춤 판정인 카드는 이미 센 세션을 바꿔 띄우므로 수가 늘지 않는다 | `uk run` · `uk recover`(`lib/sessions.mjs` 의 `runningCards` · `hasRoom`) |
+| 업무 순서 | 앞 작업의 결과가 필요한 카드는 `depends_on` 에 앞 카드를 적는다. `run` 은 `move` 와 같은 의존성 검사로 앞 카드가 끝나기 전에 띄우지 않는다 | `uk run`(`--force` 로 건너뛴다) |
+| 작업 충돌 | 카드 세션은 모두 같은 작업 트리(프로젝트 루트)에서 돈다. 같은 파일 · 같은 생성물(빌드 폴더 · 잠금 파일 · DB 스키마)을 고치는 카드, 같은 장치 · VM 을 다루는 카드는 함께 돌리지 않는다. 뒤 카드의 `depends_on` 에 앞 카드를 적어 차례로 만든다 | 카드를 나누는 세션. 도구는 카드가 무엇을 고칠지 모르므로 검사하지 않는다 |
+
+`run.max_parallel` 은 1 이상의 정수이거나 무제한인 `-1` 이다. 키가 없으면 3 이다(`lib/project.mjs` 의 `DEFAULT_MAX_PARALLEL`). 다른 값이면 `check` 와 모든 명령이 위반으로 알린다. 바꾸려면 `config.json` 의 `run` 에 `"max_parallel": 5` 처럼 적는다. 상한 안이어도 업무 순서와 작업 충돌로 함께 돌리지 못하는 카드는 함께 띄우지 않는다.
+
 ## 이어 가기
 
 `uk recover` 는 `run.status` 열의 카드마다 `claude agents --json --all` 의 세션 상태와 대화 기록 `~/.claude/projects/<프로젝트>/<session>.jsonl` 의 마지막 줄로 판정한다.
@@ -144,7 +156,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 |---|---|---|
 | 돈다 | 프로세스가 있고 아래 「멈춤」이 아니다 | 없음 |
 | 다시 뜨는 중 | `pid` 없이 `state working` | 없음. 잠시 뒤 다시 실행한다 |
-| 끝남 | `state done` | 없음. 결과 코멘트를 보고 카드를 옮긴다 |
+| 끝남 | `state done` | 없음. 결과 코멘트를 보고 카드를 옮긴다. 작업이 남았으면 `uk recover --force k<id>` 가 이어 감과 같이 `claude --bg --resume <session>` 으로 이어 간다 |
 | 이어 감 | 세션이 목록에 없거나 `state stopped` | `claude --bg --resume <session>` |
 | 멈춤 | 데몬이 다시 띄웠고(`startedAt` 이 `session_started_at` 과 다르다) `status idle` 이고 대화 기록의 마지막 줄이 user | `claude stop` 뒤 `claude --bg --resume <session>` |
 

@@ -18,6 +18,13 @@ export class NoProjectError extends ProjectError {}
 // monitor.interval_seconds 의 하한. 갱신마다 `claude agents --json` 과 node 프로세스가 하나씩 돈다.
 export const MIN_MONITOR_SECONDS = 10
 
+// run.max_parallel 이 없을 때의 동시 실행 수와 무제한 값. 이 키보다 먼저 만든 보드의 config.json 에는 키가 없으므로 없으면 기본값을 쓴다.
+export const DEFAULT_MAX_PARALLEL = 3
+export const UNLIMITED = -1
+
+// run · recover 가 동시에 돌리는 카드 세션의 최대 수. UNLIMITED 이면 제한이 없다.
+export const maxParallel = (config) => config.run.max_parallel ?? DEFAULT_MAX_PARALLEL
+
 // run · recover 가 카드에 쓰거나 세션에 쓰라고 하는 코멘트 kind. comments.kinds 에 있어야 한다.
 export const RUN_KINDS = ['배정', '진행', '질문', '결과']
 
@@ -91,6 +98,8 @@ export const validateConfig = (config) => {
   if (!Number.isInteger(archive.after_days) || archive.after_days < 0) problems.push(`archive.after_days 는 0 이상의 정수다: ${archive.after_days}`)
   if (!/^[a-z][a-z0-9-]*$/.test(archive.dir ?? '') || dirs.has(archive.dir)) problems.push(`archive.dir 는 열 디렉터리와 겹치지 않는 영소문자 이름이다: ${archive.dir}`)
   if (!statuses.has(config?.run?.status)) problems.push(`run.status 는 columns 에 있는 status 다: ${config?.run?.status}`)
+  const parallel = config?.run?.max_parallel
+  if (parallel != null && (!Number.isInteger(parallel) || (parallel < 1 && parallel != UNLIMITED))) problems.push(`run.max_parallel 은 1 이상의 정수이거나 무제한인 ${UNLIMITED} 이다(없으면 ${DEFAULT_MAX_PARALLEL}): ${JSON.stringify(parallel)}`)
   const interval = config?.monitor?.interval_seconds
   if (!Number.isInteger(interval) || interval < MIN_MONITOR_SECONDS) problems.push(`monitor.interval_seconds 는 ${MIN_MONITOR_SECONDS} 이상의 정수다: ${interval}`)
   return problems
