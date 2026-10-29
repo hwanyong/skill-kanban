@@ -1,6 +1,6 @@
 {
   "name": "uhd-kanban",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "프로젝트마다 kanban/ 의 .md 카드로 칸반 보드를 운영하는 스킬과, 열마다 카드 수를 색 막대로 그리는 보드 모니터 pane",
   "author": { "name": "uhd" },
   "license": "MIT",

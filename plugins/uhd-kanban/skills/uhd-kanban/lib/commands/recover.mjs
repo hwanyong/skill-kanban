@@ -53,7 +53,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
         continue
       }
       if (verdict == 'restart') stopSession(session.id)
-      const shortId = launchBackground([...args, resumePrompt(project, card, { skillRoot })], project.root)
+      const shortId = launchBackground(args, resumePrompt(project, card, { skillRoot }), project.root)
       const resumed = findSession(listSessions({ all: true }), shortId)
       const changes = resumed ? { session: resumed.sessionId, session_started_at: startedAt(resumed) } : {}
       const text = `recover 로 이어 갔다(${why}). claude --bg --resume ${sessionId} → session=${resumed?.sessionId ?? `${shortId}(claude agents --json 에서 찾지 못했다)`}`

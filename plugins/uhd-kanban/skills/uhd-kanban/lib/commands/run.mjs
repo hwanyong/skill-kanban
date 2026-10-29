@@ -31,7 +31,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       console.log(`(dry-run) claude --bg ${args.join(' ')} <프롬프트>${spec.ultracode ? ' (ultracode)' : ''}\n${prompt}`)
       return 0
     }
-    const shortId = launchBackground([...args, prompt], project.root)
+    const shortId = launchBackground(args, prompt, project.root)
     const session = findSession(listSessions({ all: true }), shortId)
     if (!session) throw new ProjectError(`세션 ${shortId} 를 띄웠지만 claude agents --json 에서 찾지 못해 카드를 바꾸지 않았다. claude stop ${shortId} 로 멈추거나 카드에 session 을 직접 적는다`)
     const text = `claude --bg 로 시작했다. session=${session.sessionId} ${spec.label}${spec.ultracode ? ' ultracode' : ''}`
