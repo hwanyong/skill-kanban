@@ -97,6 +97,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | `uk inbox [<이름>] [--all]` | 그 이름 앞으로 온 코멘트 중 답하지 않은 것을 낸다 |
 | `uk run <k id> [--dry-run] [--force]` | 카드 본문으로 `claude --bg` 세션을 띄운다 |
 | `uk recover [<k id>…] [--dry-run]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다 |
+| `uk guard <경로> [--session <session id>]` | 그 세션이 그 파일을 고쳐도 되는지 판정한다. 0: 카드 세션(이름 `k<id>`) · 프로젝트 밖 · `kanban/` · `.uhd-kanban/` 안. 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). `--session` 이 없으면 `CLAUDE_CODE_SESSION_ID` 를 쓴다. 규칙은 `../delegate/SKILL.md` |
 | `uk board [--json]` | 열마다 카드 수와 `run.status` 열 카드의 세션 판정을 낸다. 파일 이름만 읽고 카드 파일은 `run.status` 열의 것만 연다. 규칙 검사는 하지 않는다 |
 
 순서 번호 사이에 빈 번호가 없으면 명령이 그 열 전체를 다시 매긴다.
@@ -156,4 +157,5 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 이 스킬이 든 플러그인 `uhd-kanban` 의 hooks 모듈(`hooks/register.tsx`)이 세션 디렉터리 위에 보드가 있으면 pane 을 열고, 열마다 카드 하나를 한 칸으로 그린다. 축(열마다 카드 수)이 위에 있고 막대는 아래로 자란다. `run.status` 열의 칸은 세션 판정(`recover` 와 같은 판정)으로 색이 바뀐다.
 
 - 갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60). 값을 바꾸면 다음 갱신부터 그 주기로 다시 읽는다.
+- 같은 모듈이 Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행하고, 종료 코드 1 이면 사용자에게 확인 창을 띄운다(`../delegate/SKILL.md`).
 - pane 은 `uk board --json` 의 stdout 을 그리기만 한다. 보드가 없는 디렉터리(종료 코드 3)에서는 열지 않는다. 닫힌 pane 은 `/kanban-board` 로 다시 연다.

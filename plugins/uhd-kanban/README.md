@@ -1,11 +1,12 @@
 # uhd-kanban
 
-프로젝트마다 `kanban/` 디렉터리의 `.md` 카드 파일로 칸반 보드를 운영하는 Claude Code 플러그인이다. 두 가지가 들어 있다.
+프로젝트마다 `kanban/` 디렉터리의 `.md` 카드 파일로 칸반 보드를 운영하는 Claude Code 플러그인이다. 세 가지가 들어 있다.
 
 | 구성 | 경로 | 하는 일 |
 |---|---|---|
 | 스킬 `uhd-kanban` | `skills/uhd-kanban/` | 카드 만들기 · 열 옮기기 · 순서 · 코멘트 · 아카이브 · 카드를 `claude --bg` 세션으로 실행 · 멈춘 세션 이어 가기. 사용법은 `skills/uhd-kanban/SKILL.md` |
-| 보드 모니터 | `hooks/register.tsx` | 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 pane 을 열고, 열마다 카드 하나를 한 칸으로 그린다. 갱신 주기는 `config.json` 의 `monitor.interval_seconds`(기본 60초) |
+| 스킬 `delegate` | `skills/delegate/` | 보드가 있는 프로젝트의 메인 세션이 작업을 직접 하지 않고 카드로 나눠 `uk run` 으로 맡기게 한다. 규칙은 `skills/delegate/SKILL.md` |
+| 보드 모니터 | `hooks/register.tsx` | 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 pane 을 열고, 열마다 카드 하나를 한 칸으로 그린다. 갱신 주기는 `config.json` 의 `monitor.interval_seconds`(기본 60초). 메인 세션이 프로젝트 파일을 Edit · Write · NotebookEdit 로 고치려 하면 `uk guard` 로 판정해 사용자에게 확인 창을 띄운다 |
 
 ## 설치
 

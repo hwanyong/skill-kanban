@@ -7,6 +7,9 @@ import { ProjectError } from './project.mjs'
 
 export const sessionName = (id) => `k${id}`
 
+// run · recover 가 띄운 카드 세션의 이름인가. guard 가 카드 세션을 메인 세션과 가른다.
+export const isCardSessionName = (name) => /^k\d+$/.test(name ?? '')
+
 const cliFor = (skillRoot) => `node ${join(skillRoot, 'bin', 'uhd-kanban.mjs')}`
 
 export const startPrompt = (project, card, { skillRoot, reportTo }) => {

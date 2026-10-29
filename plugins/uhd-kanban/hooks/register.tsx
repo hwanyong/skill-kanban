@@ -12,6 +12,8 @@ const PANE = 'uhd-kanban-board'
 const SKILL_BIN = 'skills/uhd-kanban/bin/uhd-kanban.mjs'
 const TITLE = 'uhd-kanban'
 const COMMAND = 'kanban-board'
+// 메인 세션에서 guard 명령으로 판정하는 도구. 이 셋의 입력은 고칠 파일을 file_path · notebook_path 로 갖는다.
+const GUARDED_TOOLS = ['Edit', 'Write', 'NotebookEdit'] as const
 const CELL = '█'
 const AXIS = '─'
 const GAP = 1
@@ -123,6 +125,17 @@ export const register: Register = (on) => {
     if (result.kind == 'none') return { text: '이 세션의 디렉터리 위에 .uhd-kanban/config.json 이 없어 pane 을 열지 않았다' }
     await $.ui.open({ id: PANE, title: TITLE })
     return { text: result.kind == 'ok' ? `${result.board.root} 의 보드를 열었다. ${result.board.interval_seconds}초마다 다시 읽는다` : `board 명령이 실패했다: ${result.message}` }
+  })
+
+  // delegate 스킬의 금지 1 을 도구가 지킨다. 판정은 guard 명령이 갖고, 이 훅은 종료 코드만 본다.
+  // 1 이면 거절하지 않고 사용자에게 묻는다. 사용자가 직접 하라고 한 작업은 그 질문에서 허용한다. 0 · 3(보드 없음)이면 그대로 넘긴다.
+  on('classic.PreToolUse', { tool: GUARDED_TOOLS }, async ($, e, next) => {
+    const path = e.tool == 'NotebookEdit' ? e.notebook_path : e.tool == 'Edit' || e.tool == 'Write' ? e.file_path : null
+    if (path == null) return next(e)
+    const argv = ['node', `${$.plugin.root}/${SKILL_BIN}`, 'guard', path, '--session', await $.session.id()]
+    const ran = await $.process.run(argv, { cwd: await $.session.root(), timeoutMs: 30000 })
+    if (ran.exitCode != 1) return next(e)
+    return { ask: ran.stderr.trim() }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

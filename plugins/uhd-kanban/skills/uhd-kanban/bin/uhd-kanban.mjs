@@ -21,6 +21,7 @@ const COMMANDS = {
   run: 'run.mjs',
   recover: 'recover.mjs',
   board: 'board.mjs',
+  guard: 'guard.mjs',
 }
 
 const USAGE = `사용법: uhd-kanban <명령> [인자]
@@ -37,6 +38,7 @@ const USAGE = `사용법: uhd-kanban <명령> [인자]
   run <k id> [--dry-run] [--force]   카드 본문으로 claude --bg 세션을 띄운다
   recover [<k id>…] [--dry-run]      세션이 멈춘 카드를 claude --bg --resume 으로 이어 간다
   board [--json]        열마다 카드 수와 run.status 열 카드의 세션 상태를 낸다
+  guard <경로> [--session <id>]   메인 세션이 그 프로젝트 파일을 고쳐도 되는지 판정한다(1 이면 안 된다)
   자리: --top · --bottom · --before <k id> · --after <k id> (기본 --bottom)`
 
 const [name, ...rest] = process.argv.slice(2)
