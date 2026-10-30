@@ -190,9 +190,10 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 ## 보드 모니터
 
-이 스킬이 든 플러그인 `uhd-kanban` 의 hooks 모듈(`hooks/register.tsx`)이 세션 디렉터리 위에 보드가 있으면 pane 을 열고, 열마다 카드 하나를 한 칸으로 그린다. 축(열마다 카드 수)이 위에 있고 막대는 아래로 자란다. `run.status` 열의 칸은 세션 판정(`recover` 와 같은 판정)으로 색이 바뀐다.
+이 스킬이 든 플러그인 `uhd-kanban` 의 hooks 모듈(`hooks/register.tsx`)이 세션 디렉터리 위에 보드가 있으면 pane 을 열고, 열마다 카드 하나를 한 칸으로 그린다. 열마다 카드 수가 위에 있고 막대는 아래로 자란다. `run.status` 열의 칸은 세션 판정(`recover` 와 같은 판정)으로 글자와 색이 바뀐다.
 
 - 갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60). 값을 바꾸면 다음 갱신부터 그 주기로 다시 읽는다.
-- 막대 폭은 어느 방식이든 pane 폭을 열 수로 나눈 폭이다. 카드 수가 막대보다 넓으면 서로 붙는 숫자를 다음 줄에 적는다. 카드 한 장이 차지하는 칸은 `monitor.cell` 이 정한다. `char`(문자 하나, 키가 없을 때의 값) · `row`(막대의 한 행) · `fit`(가장 긴 막대가 pane 높이에 들어가도록 한 행에 카드를 여러 장 넣고, 찬 행이 막대 폭을 채우도록 막대 폭을 그 카드들에 나눈다). 그리는 규칙은 `hooks/register.tsx` 의 `layout` 이 갖는다.
+- 막대 폭은 어느 방식이든 pane 폭을 열 수로 나눈 폭이다. 카드 수가 막대보다 넓으면 서로 붙는 숫자를 다음 줄에 적는다. 카드 한 장이 차지하는 칸은 `monitor.cell` 이 정한다. `char`(문자 하나, 키가 없을 때의 값) · `row`(막대의 한 행) · `fit`(가장 긴 막대가 pane 높이에 들어가도록 한 행에 카드를 여러 장 넣고, 찬 행이 막대 폭을 채우도록 막대 폭을 그 카드들에 나눈다). 격자를 계산하는 규칙은 `hooks/frames.ts` 의 `boardGrid` 가 갖는다.
+- 터미널에서는 `live` · `pending` · `restart` 칸을 250 ms 간격으로 다시 그리고, 카드가 생성 · 삭제 · 이동되면 재배치를 100 ms 간격으로 재생한다. 재배치 계획은 `hooks/frames.ts` 의 `planTransition`, 재생 차례는 `hooks/register.tsx` 의 `advance` 가 갖는다. 터미널 밖의 surface 와 256행이 넘는 격자는 `Text` 로 고정한다.
 - 같은 모듈이 Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행하고, 종료 코드 1 이면 사용자에게 확인 창을 띄운다(`../delegate/SKILL.md`).
 - pane 은 `uk board --json` 의 stdout 을 그리기만 한다. 보드가 없는 디렉터리(종료 코드 3)에서는 열지 않는다. 닫힌 pane 은 `/kanban-board` 로 다시 연다.

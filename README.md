@@ -11,9 +11,9 @@ English | [한국어](README.ko.md)
 
 Nothing is installed besides the plugin: no Docker, no server, no database, no npm packages. The board is Markdown and JSON files in a fixed format that `uk check` verifies, and the commands use only Node.js built-in modules.
 
-![The uhd-kanban board monitor pane in Claude Code. A header line reads "13:20 · 9 columns · 502 cards · every 60s", and a legend line reads "in-progress: live pending stalled done". Below the column counts 261, 28, 6, 160, 22, 4, 11, 6, 4, nine vertical bars, one per column, grow downward; each card is one colored cell. The in-progress bar contains green cells for card sessions that are running.](docs/images/board-monitor-502-cards.en.png)
+![The uhd-kanban board monitor pane in Claude Code. A header line reads "02:27 · 9 columns · 502 cards · every 60s", and a legend reads "in-progress: live pending restart resume done none". Below the column counts 261, 28, 6, 160, 22, 4, 11, 6, 4, nine vertical bars, one per column, grow downward; each card is one cell. In the in-progress bar each cell shows its session state: green shaded blocks for running sessions, a yellow braille dot for a session being respawned, a red arrow for a session waiting for a restart, a red hatched cell for a stopped session, a gray check mark for a finished session, and a shaded cell in the column color for a card with no session.](docs/images/board-monitor-502-cards.en.png)
 
-*A board with 502 cards in the board monitor pane. The pane shows counts and session states only; card titles are not displayed.*
+*A sample board with 502 fictional cards in the board monitor pane. The pane shows counts and session states only; card titles are not displayed.*
 
 > [!NOTE]
 > Command output, card session prompts and pane labels are available in English and Korean (see [Language](#language)). The skill documents (`SKILL.md`) are written in Korean and include English trigger phrases.
@@ -42,7 +42,7 @@ Nothing is installed besides the plugin: no Docker, no server, no database, no n
 | Edit guard | A hook asks the user before the main session edits a project file with Edit, Write or NotebookEdit. The question appears in every permission mode, including `bypassPermissions`. |
 | Dependencies and a parallel limit | `depends_on` keeps a card from starting before the cards it waits for are finished. `run.max_parallel` (default 3) caps the number of card sessions that run at once. |
 | Recovery | `uk recover` resumes card sessions that stopped or were respawned by the daemon, and records the new session id on the card. |
-| Board monitor | A pane draws one cell per card and colors the cells of the in-progress column by session state. It refreshes every 60 seconds by default. |
+| Board monitor | A pane draws one cell per card, animates the in-progress cells by session state, and plays a rearrangement when cards are created, deleted or moved. It rereads the board every 60 seconds by default. |
 
 ## What is in the plugin
 
@@ -225,19 +225,20 @@ Example output of `uk board` for the demo board below (`locale` `en`):
 
 ## Board monitor pane
 
-![The board monitor pane for a demo board with 24 cards in 9 columns. A legend line reads "in-progress: live pending stalled done". The column counts read 7, 3, 2, 8, 1, 0, 1, 1, 1. Each bar is 4 characters wide with one character per card, so the bars of 7 and 8 cards continue on a second row. In the second bar, the in-progress column, two cells are green because two card sessions are running, and one cell keeps the column color because that card has no session.](docs/images/board-monitor-demo.en.png)
+![The board monitor pane for a demo board with 24 cards in 9 columns. The column counts read 7, 6, 2, 5, 1, 0, 1, 1, 1. Each bar is 4 characters wide with one character per card. The second bar, the in-progress column, holds one card in each session state: a green shaded block (live), a yellow braille dot (pending), a red arrow (restart), a red hatched cell (resume), a gray check mark (done) and a shaded cell in the column color (none).](docs/images/board-monitor-demo.en.png)
 
-*A demo board with 24 fictional cards and two running card sessions.*
+*A demo board with 24 fictional cards and one in-progress card in each session state.*
 
 The pane opens when the session directory has `.uhd-kanban/config.json` above it. The counts row at the top lists the number of cards per column in the order of `config.json` `columns`, and each bar grows downward with one cell per card. If a pane was closed, `/kanban-board` opens it again.
 
-| Cell color in the in-progress column | Legend label | Session state |
-|---|---|---|
-| Green | `live` | Running |
-| Yellow | `pending` | Being respawned |
-| Red | `stalled` | Stopped (resume with `uk recover`) |
-| Gray | `done` | Finished |
-| Column color | - | The card has no session |
+| Cell in the in-progress column | Legend label | Session state | Repaint interval |
+|---|---|---|---|
+| Green `░▒▓█▓▒`, one character apart per card | `live` | Running | 250 ms |
+| Yellow `⠋⠙⠸⠴⠦⠇` | `pending` | Being respawned by the daemon | 250 ms |
+| Red `↻`, text and background colors swap every frame | `restart` | The respawned session is idle and the last turn is the user's. `uk recover` stops and resumes it | 250 ms |
+| Red `▨` | `resume` | Stopped. `uk recover` resumes it | - |
+| Gray `✓` | `done` | Finished | - |
+| `▒` in the column color | `none` | The card has no session | - |
 
 The refresh interval is `monitor.interval_seconds` in `config.json` (an integer of 10 or more, default 60).
 
@@ -250,6 +251,68 @@ The refresh interval is `monitor.interval_seconds` in `config.json` (an integer 
 | `fit` | The bar width divided among the cards of a row | As many as the longest bar needs to fit the pane height, up to the bar width | Same as `row` | A full row fills the bar width. When the bar width does not divide evenly, some cells are one character wider |
 
 A bar that does not fit the pane height scrolls in every mode.
+
+### Rearrangement
+
+![The demo board while cards change. A card in the to-do bar fades out through braille dots, the blank closes as the cards behind it move forward, a blank opens further along the same bar and in the in-review bar, and the new cards fade in. The in-progress cells keep animating during all of this.](docs/images/board-monitor-transition.en.png)
+
+*One card deleted, one created and one moved from in-progress to in-review, captured from a pane every 100 ms.*
+
+When a read of `uk board --json` finds that cards were created, deleted or moved, the pane plays one rearrangement before it shows the new board. Frames are 100 ms apart and a rearrangement takes at most 31 frames (3.1 seconds).
+
+| Step | Frames | What is drawn |
+|---|---|---|
+| Fade out | 0 or 8 | The cell of a deleted card changes through `▓▒░⠿⠶⠒⠂` while its color moves toward gray, then becomes blank. The count above the bar drops at the end of this step |
+| Close | 0–8 | Cards behind the blank move forward, the nearest first. With more than 8 cards to move, several move in one frame |
+| Open | 0–8 | Cards behind the place of a new card move back, the farthest first |
+| Fade in | 0 or 7 | The new card goes through the same characters in reverse. The count above the bar rises at the start of this step |
+
+- A moved card is a deletion in the old column and a creation in the new one. A card that only changes its place inside a column is played the same way.
+- A card whose session state alone changed is redrawn with no rearrangement.
+- The first read after the session starts plays nothing. A change is seen at the next read, so it can be up to `monitor.interval_seconds` late.
+- A change that arrives during a rearrangement starts a new one from the final state of the one that was playing.
+
+### Animation examples
+
+Each image is an APNG (animated PNG, a PNG file with several frames that browsers play) of the counts row and the bars on a fictional board with the columns `to-do`, `in-progress`, `in-review` and `done`. The frames were captured every 50 ms from the pane of a Claude Code session in a tmux window. The session state examples repeat one cycle. The other examples hold the first frame for 1 second and the last frame for 1.5 seconds, and their `in-progress` cards have no session, so only the rearrangement changes.
+
+| Example | Image | What changes |
+|---|---|---|
+| `live` | <img src="docs/images/animation-live.png" width="360" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 green cells that step through the characters light shade, medium shade, dark shade, full block and back, one character apart per card. The other bars do not change."> | 8 `in-progress` cards. A cycle is 6 frames of 250 ms |
+| `pending` | <img src="docs/images/animation-pending.png" width="360" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 yellow braille characters that spin together. The other bars do not change."> | 8 `in-progress` cards. A cycle is 6 frames of 250 ms |
+| `restart` | <img src="docs/images/animation-restart.png" width="360" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 red arrow characters whose text and background colors swap every frame. The other bars do not change."> | 8 `in-progress` cards. A cycle is 2 frames of 250 ms |
+| All 6 session states | <img src="docs/images/animation-mixed.png" width="360" alt="Four bars with the counts 14, 12, 5, 7. The second bar holds 12 cells, two for each of live, pending, restart, resume, done and none. The live, pending and restart cells change and the resume, done and none cells do not."> | 12 `in-progress` cards, 2 per state. `live`, `pending` and `restart` change. `resume`, `done` and `none` stay fixed |
+| Delete | <img src="docs/images/animation-delete.png" width="360" alt="The first bar has 14 cards. Its sixth cell fades out through shade and braille characters and becomes blank, the count changes to 13, and the 8 cards behind the blank move forward one at a time."> | The 6th `to-do` card is deleted. The count goes from 14 to 13 |
+| Create | <img src="docs/images/animation-create.png" width="360" alt="The first bar has 14 cards. A blank opens at the sixth cell as the 9 cards behind it move back in 8 frames, starting with the last card. The count changes to 15 and the new card fades in through braille and shade characters."> | A card is created in the 6th `to-do` place. The count goes from 14 to 15 |
+| Move between columns | <img src="docs/images/animation-move.png" width="360" alt="The fourth cell of the first bar fades out and the blank closes. A blank then opens at the second cell of the second bar and the same card fades in there in that column's color. The counts change from 14 and 3 to 13 and 4."> | The 4th `to-do` card moves to the 2nd `in-progress` place |
+| Reorder in a column | <img src="docs/images/animation-reorder.png" width="360" alt="The last cell of the first bar fades out, a blank opens at the first cell as the 13 other cards move back in 8 frames, and the card fades in at the first cell. The count goes from 14 to 13 and back to 14."> | The last `to-do` card moves to the 1st place |
+| Delete in a long bar | <img src="docs/images/animation-long.png" width="360" alt="The first bar has 60 cards on 6 rows. Its third cell fades out and becomes blank. The blank moves toward the end of the bar in 8 frames, with several cards moving forward in each frame. The count changes to 59."> | The 3rd of 60 `to-do` cards is deleted. 57 cards move forward in 8 frames, so several move in one frame |
+| Delete with `row` | <img src="docs/images/animation-row.png" width="360" alt="Each card is a full row of its bar. The second row of the first bar fades out and becomes blank, then the 4 rows below it move up one at a time. The count changes from 6 to 5."> | `monitor.cell` is `row`. The 2nd of 6 `to-do` cards is deleted |
+| Delete with `fit` | <img src="docs/images/animation-fit.png" width="360" alt="The first bar has 18 cards on 9 rows, 2 cards per row, each card about half the bar width. The second card of the second row fades out, and the 14 cards behind it move forward in 8 frames. The count changes from 18 to 17."> | `monitor.cell` is `fit` and the pane height allows 2 cards per row. The 4th of 18 `to-do` cards is deleted |
+
+### When the pane animates
+
+`Raster` is the Claude Code element that draws a grid of cells and repaints it without running the render hook (`$.ui.blit`). It exists only on the terminal surface.
+
+| Situation | Drawn with | Timer |
+|---|---|---|
+| Terminal, grid of at most 512 columns and 256 rows | `Raster` | 100 ms during a rearrangement, 250 ms while a `live`, `pending` or `restart` card exists, otherwise none |
+| Terminal, larger grid (a long bar with `monitor.cell` set to `row`) | `Text`, fixed at the first frame | None |
+| Desktop, VS Code and mobile surfaces | `Text`, fixed at the first frame | None |
+| Pane behind another tab | Not repainted | Checks every second whether the pane is shown again |
+| Pane closed | - | None |
+
+The desktop, VS Code and mobile rows were checked on the element tree with `claude plugin test`, not in those apps. Colors are fixed RGB values, so the dark cell backgrounds stay dark on the light theme.
+
+Measured on a Mac Studio (`Mac17,14`) with Claude Code 2.1.312 in a 200×50 tmux window and a board of 511 cards. CPU is the growth of `ps -o cputime=` divided by the measured time, and output is the bytes `tmux pipe-pane` received. The CPU of the terminal app itself is not included.
+
+| State | Measured for | `claude` process CPU | Output to the terminal |
+|---|---|---|---|
+| Timer off | 30 s | 0.70% | 0 B/s |
+| 250 ms repaint | 30 s, two runs | 1.90%, 1.53% | 1945 B/s, 1954 B/s |
+| A rearrangement every 3.4 s, with test `board` output set to a 1-second interval (the `config.json` minimum is 10) | 28 s | 3.79% | 2303 B/s |
+
+In a 15-minute run of two sessions side by side, the session repainting every 250 ms used 1.59% CPU and its RSS (resident memory) went from 468 MB to 504 MB. The session with the timer off used 0.35% CPU and its RSS went from 463 MB to 478 MB. Runs longer than 15 minutes were not measured.
 
 ## Requirements
 

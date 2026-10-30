@@ -1,11 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Board, BoardCard, BoardColumn, BoardView, Locale } from '../types'
+import { boardGrid, cellProps, colorRuns, columnColor, hasMovingCards, packCells, planTransition, restingSlots, sessionCell, transitionSlots } from './frames'
+import type { Body, Transition, Verdict } from './frames'
+import type { Board, BoardView, Locale } from '../types'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, 카드 하나를 막대의 한 칸으로 그린다.
-// 축(열마다 카드 수)이 맨 위에 있고 막대는 아래로 자란다. 카드 한 장이 차지하는 칸은 board 가 낸 cell(config.json 의 monitor.cell)이 정한다.
-// 가장 긴 막대가 본문 행에 들어가지 않으면 pane 을 스크롤한다.
+// 열마다 카드 수가 맨 위에 있고 막대는 아래로 자란다. 카드 한 장이 차지하는 칸은 board 가 낸 cell(config.json 의 monitor.cell)이 정한다.
+// 가장 긴 막대가 본문 행에 들어가지 않으면 pane 을 스크롤한다. 격자의 계산은 frames.ts 가 갖고, 이 모듈은 그 격자를 그리고 프레임의 차례를 정한다.
 // 보드를 읽는 규칙은 board 명령(같은 플러그인의 skills/uhd-kanban/lib/)이 갖는다. 이 모듈은 그 stdout 을 그리기만 한다.
 // pane 의 글은 locale 명령이 낸 언어(ko · en)로 고른다. 언어를 정하는 규칙도 그 명령(lib/i18n.mjs)이 갖는다.
 
@@ -16,31 +18,27 @@ const TITLE = 'uhd-kanban'
 const COMMAND = 'kanban-board'
 // 메인 세션에서 guard 명령으로 판정하는 도구. 이 셋의 입력은 고칠 파일을 file_path · notebook_path 로 갖는다.
 const GUARDED_TOOLS = ['Edit', 'Write', 'NotebookEdit'] as const
-const CELL = '█'
-const AXIS = '─'
-const GAP = 1
-// 갱신 시각 · 범례 · 축. 막대가 쓸 수 있는 행은 본문 행에서 이것과 카드 수 줄(countLines)을 뺀 것이다.
-const HEADER_ROWS = 3
-// 열의 차례(config.json 의 columns 순서)로 고른다. 열이 이보다 많으면 처음부터 다시 쓴다.
-const COLUMN_COLORS = ['#58a6ff', '#d29922', '#a371f7', '#39c5cf', '#f778ba', '#7ee787', '#ffa657', '#6e7681', '#ff7b72']
-// run.status 열의 칸만 세션 판정(sessions.mjs 의 cardSession)으로 색을 바꾼다. none(세션 없음)은 열의 색을 쓴다.
-// label 은 TEXT 의 키다. restart · resume 은 같은 이름(멈춤)으로 범례에 한 번만 낸다.
-const SESSIONS = [
-  { verdict: 'live', color: 'success', label: 'live' },
-  { verdict: 'pending', color: 'warning', label: 'pending' },
-  { verdict: 'restart', color: 'error', label: 'stalled' },
-  { verdict: 'resume', color: 'error', label: 'stalled' },
-  { verdict: 'done', color: 'subtle', label: 'done' },
-] as const
-const LEGEND = SESSIONS.filter((item, index) => SESSIONS.findIndex((other) => other.label == item.label) == index)
+// 격자의 프레임 간격. 터미널에서만 재생한다. 2.1.312 의 실측은 README 의 보드 모니터 pane 절에 있다.
+const STATUS_FRAME_MS = 250
+const TRANSITION_FRAME_MS = 100
+// 다른 탭 뒤에 있는 pane 이 다시 보이는지 확인하는 간격.
+const HIDDEN_CHECK_MS = 1000
+// RasterProps 의 columns · rows 상한.
+const RASTER_KEY = 'board'
+const MAX_RASTER_COLUMNS = 512
+const MAX_RASTER_ROWS = 256
+// run.status 열의 칸만 세션 판정(sessions.mjs 의 cardSession)으로 글자 · 색을 바꾼다. 범례의 차례이고, 판정 이름은 TEXT 의 키다.
+const VERDICTS: Verdict[] = ['live', 'pending', 'restart', 'resume', 'done', 'none']
 
 // skills/uhd-kanban/lib/messages/*.mjs 와 같은 언어 목록이다. 이 모듈은 그 표를 읽지 못하므로 pane 의 글만 따로 둔다.
 const TEXT = {
   ko: {
     live: '돈다',
     pending: '다시 뜨는 중',
-    stalled: '멈춤',
+    restart: '재시작 대기',
+    resume: '이어 가기 대기',
     done: '끝남',
+    none: '세션 없음',
     description: 'uhd-kanban 보드의 열마다 카드 수를 pane 에 막대로 그린다',
     noBoard: '이 세션의 디렉터리 위에 .uhd-kanban/config.json 이 없어 pane 을 열지 않았다',
     opened: (root: string, seconds: number) => `${root} 의 보드를 열었다. ${seconds}초마다 다시 읽는다`,
@@ -53,11 +51,13 @@ const TEXT = {
     header: (clock: string, columns: number, cards: number, seconds: number) => `${clock} · 열 ${columns}개 · 카드 ${cards}개 · ${seconds}초마다`,
   },
   en: {
-    // uk board 가 출력하는 판정 id 와 같은 낱말이다. 범례 한 줄이 기본 pane 폭(45칸)에 들어가야 한다.
+    // uk board 가 출력하는 판정 id 와 같은 낱말이다.
     live: 'live',
     pending: 'pending',
-    stalled: 'stalled',
+    restart: 'restart',
+    resume: 'resume',
     done: 'done',
+    none: 'none',
     description: 'Draws the card count of each uhd-kanban board column as a bar in a pane',
     noBoard: 'No .uhd-kanban/config.json above this session directory, so the pane was not opened',
     opened: (root: string, seconds: number) => `Opened the board of ${root}. Rereads every ${seconds}s`,
@@ -73,81 +73,100 @@ const TEXT = {
 
 const view = atom({ plugin: 'uhd-kanban', key: 'view' } as const, { kind: 'none' } as BoardView, { shape: 'view-1' })
 
-type Segment = { text: string; color?: string }
-
-const columnColor = (index: number) => COLUMN_COLORS[index % COLUMN_COLORS.length]
-
-const cellColor = (board: Board, column: BoardColumn, index: number, card: BoardCard) => {
-  if (column.status != board.run_status) return columnColor(index)
-  return SESSIONS.find((item) => item.verdict == card.session)?.color ?? columnColor(index)
-}
-
 const clockText = (ms: number) => {
   const date = new Date(ms)
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-// 막대 폭. 어느 방식이든 열이 모두 columns 칸에 들어가는 가장 넓은 폭이다. pane 폭이 바뀌면 엔진이 ui.render 를 다시 실행하므로 그때 다시 정해진다.
-const barWidth = (board: Board, columns: number) => {
-  const count = board.columns.length
-  return Math.max(1, Math.floor((columns - GAP * (count - 1)) / count))
+// 범례 한 항목은 글자 하나 · 판정 이름 · 공백 하나다. 한글은 터미널에서 2칸을 쓴다(UAX #11 의 Wide).
+const displayWidth = (text: string) => [...text].reduce((sum, char) => sum + (/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/.test(char) ? 2 : 1), 0)
+
+const legendLines = (prefix: string, label: (verdict: Verdict) => string, columns: number) => VERDICTS.reduce((lines: Verdict[][], verdict) => {
+  const last = lines.at(-1) ?? []
+  const used = displayWidth(lines.length == 1 ? prefix : '') + last.reduce((sum, item) => sum + 2 + displayWidth(label(item)), 0)
+  if (last.length > 0 && used + 2 + displayWidth(label(verdict)) > columns) return [...lines, [verdict]]
+  last.push(verdict)
+  return lines
+}, [[]])
+
+// 재생 상태. 모듈을 다시 읽으면 처음부터 시작하고 첫 읽기는 재배치를 재생하지 않는다.
+// frame: 판정 칸의 프레임. elapsedMs: frame 을 정하는 누적 시간. last: 재배치를 비교할 직전 board 결과.
+// canvas: 지금 그려진 Raster 의 크기. Text 로 그렸으면 null 이고 이때는 타이머를 돌리지 않는다. isHidden: 다른 탭 뒤에 있다.
+type Motion = { timer: Timer | null; periodMs: number; frame: number; elapsedMs: number; transition: Transition | null; step: number; last: Board | null; canvas: { columns: number; rows: number } | null; body: Body; isHidden: boolean }
+
+const newMotion = (): Motion => ({ timer: null, periodMs: 0, frame: 0, elapsedMs: 0, transition: null, step: 0, last: null, canvas: null, body: { columns: 1, rows: 1 }, isHidden: false })
+
+const currentGrid = (board: Board, motion: Motion) => {
+  const { transition, step, frame, body } = motion
+  if (!transition) return boardGrid(board, restingSlots(board), frame, body)
+  return boardGrid(board, transitionSlots(transition, step), frame, body, transition.reserve)
 }
 
-// width: 막대 폭. perRow: 한 행의 카드 수.
-//   char: 카드 한 장이 문자 하나다. 한 행의 카드 수는 막대 폭이다.
-//   row:  카드 한 장이 막대의 한 행이다.
-//   fit:  한 행의 카드 수는 가장 긴 막대가 rows 행에 들어가는 수이고 막대 폭을 넘지 않는다. 카드가 찬 행은 막대 폭을 채운다.
-type Layout = { width: number; perRow: number }
-
-const layout = (board: Board, width: number, rows: number): Layout => {
-  const most = Math.max(1, ...board.columns.map((column) => column.count))
-  if (board.cell == 'row') return { width, perRow: 1 }
-  if (board.cell == 'fit') return { width, perRow: Math.min(width, Math.ceil(most / Math.max(1, rows))) }
-  return { width, perRow: width }
+// 재배치 중이면 짧은 간격, 움직이는 판정의 카드가 있으면 긴 간격이고, 둘 다 아니면 타이머를 끈다.
+const syncTimer = ($: EngineInterface, motion: Motion, board: Board) => {
+  const ms = !motion.canvas ? 0 : motion.isHidden ? HIDDEN_CHECK_MS : motion.transition ? TRANSITION_FRAME_MS : hasMovingCards(board) ? STATUS_FRAME_MS : 0
+  if (ms == motion.periodMs) return
+  motion.timer?.cancel()
+  motion.timer = ms == 0 ? null : $.clock.every(ms, () => void advance($, motion))
+  motion.periodMs = ms
 }
 
-// 카드 수 줄. 숫자는 제 막대의 왼쪽 끝에서 시작하고, 줄 끝을 넘으면 줄 끝에 맞춰 왼쪽으로 민다.
-// 막대보다 넓은 숫자가 다음 숫자와 GAP 칸 이상 떨어지지 않으면 그 숫자를 다음 줄에 적는다. 막대 폭이 숫자보다 넓으면 한 줄이다.
-type Label = { start: number; end: number; text: string; color?: string }
-
-const countLines = (board: Board, width: number): Segment[][] => {
-  const total = board.columns.length * (width + GAP) - GAP
-  const lines: Label[][] = []
-  board.columns.forEach((column, index) => {
-    const text = String(column.count)
-    const start = Math.max(0, Math.min(index * (width + GAP), total - text.length))
-    const label = { start, end: start + text.length, text, color: columnColor(index) }
-    const line = lines.find((placed) => placed.every((other) => other.end + GAP <= label.start || label.end + GAP <= other.start))
-    if (line) return void line.push(label)
-    lines.push([label])
-  })
-  return lines.map((placed) => [...placed].sort((a, b) => a.start - b.start).flatMap((label, position, sorted) => [
-    { text: ' '.repeat(label.start - (sorted[position - 1]?.end ?? 0)) },
-    { text: label.text, color: label.color },
-  ]))
+const stopTimer = (motion: Motion) => {
+  motion.timer?.cancel()
+  motion.timer = null
+  motion.periodMs = 0
 }
 
-// 한 행의 position 번째 카드의 칸 폭(문자 수). 막대 폭을 perRow 장에 나눈 경계의 차이라, 찬 행의 칸 폭 합은 막대 폭과 같다.
-const cellWidth = ({ width, perRow }: Layout, position: number) => Math.floor(((position + 1) * width) / perRow) - Math.floor((position * width) / perRow)
-
-// 막대의 한 행. 같은 색이 이어지는 칸은 한 조각으로 묶는다.
-const barRow = (board: Board, column: BoardColumn, index: number, row: number, size: Layout) => {
-  const cards = column.cards.slice(row * size.perRow, row * size.perRow + size.perRow)
-  const segments = cards.reduce((list: Segment[], card, position) => {
-    const color = cellColor(board, column, index, card)
-    const block = CELL.repeat(cellWidth(size, position))
-    const last = list.at(-1)
-    if (last && last.color == color) return [...list.slice(0, -1), { text: last.text + block, color }]
-    return [...list, { text: block, color }]
-  }, [])
-  const used = cards.reduce((sum, _card, position) => sum + cellWidth(size, position), 0)
-  return size.width > used ? [...segments, { text: ' '.repeat(size.width - used) }] : segments
+// 격자 크기가 그려진 Raster 와 다르면(카드 수 줄이 늘었을 때 · 재배치의 시작과 끝) blit 이 거절되므로 다시 그린다.
+const paint = async ($: EngineInterface, motion: Motion, board: Board) => {
+  const grid = currentGrid(board, motion)
+  const { canvas } = motion
+  if (!canvas) return
+  if (grid.length != canvas.rows || grid[0]?.length != canvas.columns) return $.ui.invalidate('ui.render')
+  const result = await $.ui.blit({ requestId: PANE, key: RASTER_KEY, cells: packCells(grid) })
+  if (result.deny) $.ui.invalidate('ui.render')
 }
 
-const joinColumns = (parts: Segment[][]) => parts.flatMap((segments, index) => (index == 0 ? segments : [{ text: ' '.repeat(GAP) }, ...segments]))
+// 탭이 다시 보일 때 엔진은 ui.render 를 실행하지 않고 지난 결과를 쓰며 그 전환을 알리는 이벤트도 없다. 그래서 숨어 있는 동안 HIDDEN_CHECK_MS 마다 확인하고, 다시 보이면 다시 그린다.
+// pane 이 닫혔으면 타이머를 끈다. 다시 열면 엔진이 ui.render 를 실행하고 그 훅이 타이머를 켠다.
+const advance = async ($: EngineInterface, motion: Motion) => {
+  const pane = (await $.ui.panes()).find((item) => item.id == PANE)
+  const current = await read($, view)
+  if (!pane || current.kind != 'ok') {
+    motion.transition = null
+    motion.isHidden = false
+    return stopTimer(motion)
+  }
+  if (!pane.isShown) {
+    motion.transition = null
+    motion.isHidden = true
+    return syncTimer($, motion, current.board)
+  }
+  if (motion.isHidden) {
+    motion.isHidden = false
+    syncTimer($, motion, current.board)
+    return $.ui.invalidate('ui.render')
+  }
+  motion.elapsedMs += motion.periodMs
+  motion.frame = Math.floor(motion.elapsedMs / STATUS_FRAME_MS)
+  if (motion.transition) motion.step += 1
+  if (motion.transition && motion.step >= motion.transition.total) motion.transition = null
+  syncTimer($, motion, current.board)
+  await paint($, motion, current.board)
+}
+
+// 재생 중에 새 변경이 오면 재생하던 것의 마지막 상태에서 새 재배치를 시작한다. 보이지 않는 pane 과 Text 로 그린 pane 은 재생하지 않는다.
+const beginTransition = async ($: EngineInterface, motion: Motion, board: Board) => {
+  const isShown = (await $.ui.panes()).some((item) => item.id == PANE && item.isShown)
+  const plan = motion.last && motion.canvas && isShown ? planTransition(motion.last, board) : null
+  motion.last = board
+  if (!plan) return
+  motion.transition = plan
+  motion.step = 0
+}
 
 // locale 은 session.start 에서 locale 명령으로 정한다. 정하기 전에 쓰는 값은 en 이다.
-type Polling = { timer: Timer | null; periodMs: number; locale: Locale }
+type Polling = { timer: Timer | null; periodMs: number; locale: Locale; motion: Motion }
 
 const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardView> => {
   const text = TEXT[polling.locale]
@@ -160,6 +179,7 @@ const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardView>
     : ran.exitCode == 0
       ? { kind: 'ok', board: JSON.parse(ran.stdout), refreshedAt }
       : { kind: 'error', message: ran.stderr.trim() || text.exitCode(ran.exitCode), refreshedAt }
+  if (result.kind == 'ok') await beginTransition($, polling.motion, result.board)
   await update($, view, () => result)
   return result
 }
@@ -197,7 +217,7 @@ const start = async ($: EngineInterface, polling: Polling) => {
 
 // 타이머는 모듈을 다시 읽으면 엔진이 버린다. 그래서 상태도 register 가 돌 때마다 새로 만든다.
 export const register: Register = (on) => {
-  const polling: Polling = { timer: null, periodMs: 0, locale: 'en' }
+  const polling: Polling = { timer: null, periodMs: 0, locale: 'en', motion: newMotion() }
 
   on('session.start', async ($, e, next) => {
     polling.locale = await resolveLocale($)
@@ -228,8 +248,14 @@ export const register: Register = (on) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text } = $.ui.resolve(e)
+    const Raster = e.surface == 'terminal' ? $.ui.resolve(e).Raster : null
+    const { motion } = polling
     const text = TEXT[polling.locale]
     const current = await read($, view)
+    if (current.kind != 'ok') {
+      motion.canvas = null
+      stopTimer(motion)
+    }
     if (current.kind == 'none') return <Text dimColor>{text.reading}</Text>
     if (current.kind == 'error') {
       return (
@@ -241,26 +267,31 @@ export const register: Register = (on) => {
       )
     }
     const { board } = current
-    const width = barWidth(board, e.props.bodyColumns)
-    const counts = countLines(board, width)
-    const size = layout(board, width, e.props.scroll.bodyRows - HEADER_ROWS - counts.length)
-    const height = Math.max(0, ...board.columns.map((column) => Math.ceil(column.count / size.perRow)))
+    const prefix = `${board.run_status}: `
+    const legend = legendLines(prefix, (verdict) => text[verdict], e.props.bodyColumns)
+    motion.body = { columns: e.props.bodyColumns, rows: e.props.scroll.bodyRows - 1 - legend.length }
+    const grid = currentGrid(board, motion)
+    const columns = grid[0]?.length ?? 0
+    motion.canvas = Raster && grid.length <= MAX_RASTER_ROWS && columns <= MAX_RASTER_COLUMNS ? { columns, rows: grid.length } : null
+    if (!motion.canvas) motion.transition = null
+    syncTimer($, motion, board)
     const total = board.columns.reduce((sum, column) => sum + column.count, 0)
-    const axis = joinColumns(board.columns.map((column, index) => [{ text: AXIS.repeat(width), color: columnColor(index) }]))
-    const rows = Array.from({ length: height }, (_, row) => joinColumns(board.columns.map((column, index) => barRow(board, column, index, row, size))))
-    const line = (segments: Segment[]) => (
-      <Text wrap="truncate-end">{segments.map((segment) => (segment.color ? <Text color={segment.color}>{segment.text}</Text> : segment.text))}</Text>
-    )
+    const runIndex = board.columns.findIndex((column) => column.status == board.run_status)
+    const legendItem = (verdict: Verdict) => {
+      const cell = sessionCell(verdict, 0, 0, columnColor(Math.max(0, runIndex)))
+      return <Text><Text {...cellProps(cell)}>{cell.glyph}</Text><Text dimColor>{text[verdict]} </Text></Text>
+    }
+    const textRows = () => grid.map((row) => <Text wrap="truncate-end">{colorRuns(row).map((run) => <Text color={run.color} backgroundColor={run.backgroundColor}>{run.text}</Text>)}</Text>)
     return (
       <Box flexDirection="column">
         <Text dimColor wrap="truncate-end">{text.header(clockText(current.refreshedAt), board.columns.length, total, board.interval_seconds)}</Text>
-        <Text wrap="truncate-end">
-          <Text dimColor>{board.run_status}: </Text>
-          {LEGEND.map((item) => <Text color={item.color}>{CELL}{text[item.label]} </Text>)}
-        </Text>
-        {counts.map(line)}
-        {line(axis)}
-        {rows.map(line)}
+        {legend.map((verdicts, index) => (
+          <Text wrap="truncate-end">
+            {index == 0 ? <Text dimColor>{prefix}</Text> : null}
+            {verdicts.map(legendItem)}
+          </Text>
+        ))}
+        {Raster && motion.canvas ? <Raster key={RASTER_KEY} columns={motion.canvas.columns} rows={motion.canvas.rows} cells={packCells(grid)} /> : textRows()}
       </Box>
     )
   })
