@@ -11,9 +11,9 @@ English | [한국어](README.ko.md)
 
 Nothing is installed besides the plugin: no Docker, no server, no database, no npm packages. The board is Markdown and JSON files in a fixed format that `uk check` verifies, and the commands use only Node.js built-in modules.
 
-![The uhd-kanban board monitor pane in Claude Code. A header line reads "02:27 · 9 columns · 502 cards · every 60s", and a legend reads "in-progress: live pending restart resume done none". Below the column counts 261, 28, 6, 160, 22, 4, 11, 6, 4, nine vertical bars, one per column, grow downward; each card is one cell. In the in-progress bar each cell shows its session state: green shaded blocks for running sessions, a yellow braille dot for a session being respawned, a red arrow for a session waiting for a restart, a red hatched cell for a stopped session, a gray check mark for a finished session, and a shaded cell in the column color for a card with no session.](docs/images/board-monitor-502-cards.en.png)
+<img src="docs/images/board-monitor-hero.en.png" width="640" alt="The uhd-kanban board monitor pane in Claude Code on a board of 82 fictional cards in 9 columns. A header line and a legend are above the column counts and nine vertical bars with one cell per card. A line under the pane names each step while the board changes. Step 1, uk new: 3 cards fade in at the end of the to-do bar. Step 2, uk run: the first 3 to-do cards fade out and appear at the end of the in-progress bar as green animated cells. Step 3: those 3 cells become gray check marks. Step 4, uk move: the 3 cards move to the in-review bar. Step 5, uk move: they move to the done bar. Step 6, uk archive: the first 3 cards of the done bar fade out and the board has the counts it started with. The other in-progress cells keep animating, and the image repeats.">
 
-*A sample board with 502 fictional cards in the board monitor pane. The pane shows counts and session states only; card titles are not displayed.*
+*A sample board with fictional cards. The pane was captured from a Claude Code session with test `board` output, so no card sessions ran. The line under the pane names the step and is not part of the pane. The pane shows counts and session states only; card titles are not displayed.*
 
 > [!NOTE]
 > Command output, card session prompts and pane labels are available in English and Korean (see [Language](#language)). The skill documents (`SKILL.md`) are written in Korean and include English trigger phrases.
@@ -251,6 +251,10 @@ The refresh interval is `monitor.interval_seconds` in `config.json` (an integer 
 | `fit` | The bar width divided among the cards of a row | As many as the longest bar needs to fit the pane height, up to the bar width | Same as `row` | A full row fills the bar width. When the bar width does not divide evenly, some cells are one character wider |
 
 A bar that does not fit the pane height scrolls in every mode.
+
+![The uhd-kanban board monitor pane in Claude Code. A header line reads "02:27 · 9 columns · 502 cards · every 60s", and a legend reads "in-progress: live pending restart resume done none". Below the column counts 261, 28, 6, 160, 22, 4, 11, 6, 4, nine vertical bars, one per column, grow downward; each card is one cell. In the in-progress bar each cell shows its session state: green shaded blocks for running sessions, a yellow braille dot for a session being respawned, a red arrow for a session waiting for a restart, a red hatched cell for a stopped session, a gray check mark for a finished session, and a shaded cell in the column color for a card with no session.](docs/images/board-monitor-502-cards.en.png)
+
+*A sample board with 502 fictional cards in the board monitor pane. The pane shows counts and session states only; card titles are not displayed.*
 
 ### Rearrangement
 
