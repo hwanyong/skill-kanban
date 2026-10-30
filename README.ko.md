@@ -273,19 +273,71 @@ pane 높이에 들어가지 않는 막대는 어느 방식이든 스크롤한다
 
 아래 이미지는 APNG(animated PNG. 프레임이 여러 장 든 PNG 파일이고 브라우저가 재생한다)이고, 열이 `to-do` · `in-progress` · `in-review` · `done` 인 가상의 보드에서 카드 수 행과 막대만 담았다. 프레임은 tmux 창에서 실행한 Claude Code 세션의 pane 을 50 ms 마다 캡처했다. 세션 상태 사례는 한 주기를 반복한다. 나머지 사례는 첫 프레임을 1초, 마지막 프레임을 1.5초 표시하고, `in-progress` 카드에 세션이 없어 재배치만 바뀐다.
 
-| 사례 | 이미지 | 바뀌는 것 |
-|---|---|---|
-| `live` | <img src="docs/images/animation-live.png" width="360" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 초록 칸 8개가 옅은 음영, 중간 음영, 짙은 음영, 전체 블록 글자를 차례로 거쳐 되돌아오고 카드마다 글자 한 개씩 어긋난다. 나머지 막대는 바뀌지 않는다."> | `in-progress` 카드 8장. 한 주기는 250 ms 프레임 6장이다 |
-| `pending` | <img src="docs/images/animation-pending.png" width="360" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 노란 점자 글자 8개가 함께 회전한다. 나머지 막대는 바뀌지 않는다."> | `in-progress` 카드 8장. 한 주기는 250 ms 프레임 6장이다 |
-| `restart` | <img src="docs/images/animation-restart.png" width="360" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 빨간 화살표 글자 8개가 프레임마다 글자색과 배경색을 맞바꾼다. 나머지 막대는 바뀌지 않는다."> | `in-progress` 카드 8장. 한 주기는 250 ms 프레임 2장이다 |
-| 세션 상태 6가지 | <img src="docs/images/animation-mixed.png" width="360" alt="카드 수가 14, 12, 5, 7 인 막대 네 개. 둘째 막대에 live, pending, restart, resume, done, none 칸이 2개씩 모두 12개 있다. live, pending, restart 칸은 바뀌고 resume, done, none 칸은 바뀌지 않는다."> | `in-progress` 카드 12장, 상태마다 2장. `live` · `pending` · `restart` 는 바뀌고 `resume` · `done` · `none` 은 그대로다 |
-| 삭제 | <img src="docs/images/animation-delete.png" width="360" alt="첫째 막대의 카드는 14장이다. 여섯째 칸이 음영과 점자 글자를 거쳐 비워지고, 카드 수가 13 으로 바뀌고, 빈칸 뒤의 카드 8장이 한 장씩 앞으로 옮겨진다."> | `to-do` 의 6번째 카드를 삭제했다. 카드 수가 14 에서 13 으로 바뀐다 |
-| 생성 | <img src="docs/images/animation-create.png" width="360" alt="첫째 막대의 카드는 14장이다. 여섯째 칸 뒤의 카드 9장이 마지막 카드부터 8프레임 동안 뒤로 옮겨져 빈칸이 열리고, 카드 수가 15 로 바뀌고, 새 카드가 점자와 음영 글자를 거쳐 나타난다."> | `to-do` 의 6번째 자리에 카드를 생성했다. 카드 수가 14 에서 15 로 바뀐다 |
-| 열 사이 이동 | <img src="docs/images/animation-move.png" width="360" alt="첫째 막대의 넷째 칸이 사라지고 빈칸이 닫힌다. 이어서 둘째 막대의 둘째 칸에 빈칸이 열리고 같은 카드가 그 열의 색으로 나타난다. 카드 수가 14 와 3 에서 13 과 4 로 바뀐다."> | `to-do` 의 4번째 카드를 `in-progress` 의 2번째 자리로 옮겼다 |
-| 같은 열 차례 변경 | <img src="docs/images/animation-reorder.png" width="360" alt="첫째 막대의 마지막 칸이 사라지고, 다른 카드 13장이 8프레임 동안 뒤로 옮겨져 첫째 칸에 빈칸이 열리고, 그 카드가 첫째 칸에 나타난다. 카드 수가 14 에서 13 을 거쳐 14 로 돌아온다."> | `to-do` 의 마지막 카드를 1번째 자리로 옮겼다 |
-| 긴 막대에서 삭제 | <img src="docs/images/animation-long.png" width="360" alt="첫째 막대의 카드는 60장이고 6행이다. 셋째 칸이 사라져 비워진다. 빈칸이 8프레임 동안 막대 끝쪽으로 옮겨지고 프레임마다 카드 여러 장이 앞으로 옮겨진다. 카드 수가 59 로 바뀐다."> | `to-do` 카드 60장 중 3번째를 삭제했다. 카드 57장을 8프레임에 옮기므로 한 프레임에 여러 장이 옮겨진다 |
-| `row` 에서 삭제 | <img src="docs/images/animation-row.png" width="360" alt="카드 한 장이 막대의 한 행 전체다. 첫째 막대의 둘째 행이 사라져 비워지고, 그 아래 4행이 한 행씩 위로 옮겨진다. 카드 수가 6 에서 5 로 바뀐다."> | `monitor.cell` 이 `row` 다. `to-do` 카드 6장 중 2번째를 삭제했다 |
-| `fit` 에서 삭제 | <img src="docs/images/animation-fit.png" width="360" alt="첫째 막대의 카드는 18장이고 9행이며 한 행에 2장이고 카드 한 장의 폭은 막대 폭의 약 절반이다. 둘째 행의 둘째 카드가 사라지고 그 뒤의 카드 14장이 8프레임 동안 앞으로 옮겨진다. 카드 수가 18 에서 17 로 바뀐다."> | `monitor.cell` 이 `fit` 이고 pane 높이에 맞춰 한 행에 2장이다. `to-do` 카드 18장 중 4번째를 삭제했다 |
+#### `live`
+
+`in-progress` 카드 8장. 한 주기는 250 ms 프레임 6장이다.
+
+<img src="docs/images/animation-live.png" width="500" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 초록 칸 8개가 옅은 음영, 중간 음영, 짙은 음영, 전체 블록 글자를 차례로 거쳐 되돌아오고 카드마다 글자 한 개씩 어긋난다. 나머지 막대는 바뀌지 않는다.">
+
+#### `pending`
+
+`in-progress` 카드 8장. 한 주기는 250 ms 프레임 6장이다.
+
+<img src="docs/images/animation-pending.png" width="500" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 노란 점자 글자 8개가 함께 회전한다. 나머지 막대는 바뀌지 않는다.">
+
+#### `restart`
+
+`in-progress` 카드 8장. 한 주기는 250 ms 프레임 2장이다.
+
+<img src="docs/images/animation-restart.png" width="500" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 빨간 화살표 글자 8개가 프레임마다 글자색과 배경색을 맞바꾼다. 나머지 막대는 바뀌지 않는다.">
+
+#### 세션 상태 6가지
+
+`in-progress` 카드 12장, 상태마다 2장. `live` · `pending` · `restart` 는 바뀌고 `resume` · `done` · `none` 은 그대로다.
+
+<img src="docs/images/animation-mixed.png" width="500" alt="카드 수가 14, 12, 5, 7 인 막대 네 개. 둘째 막대에 live, pending, restart, resume, done, none 칸이 2개씩 모두 12개 있다. live, pending, restart 칸은 바뀌고 resume, done, none 칸은 바뀌지 않는다.">
+
+#### 삭제
+
+`to-do` 의 6번째 카드를 삭제했다. 카드 수가 14 에서 13 으로 바뀐다.
+
+<img src="docs/images/animation-delete.png" width="500" alt="첫째 막대의 카드는 14장이다. 여섯째 칸이 음영과 점자 글자를 거쳐 비워지고, 카드 수가 13 으로 바뀌고, 빈칸 뒤의 카드 8장이 한 장씩 앞으로 옮겨진다.">
+
+#### 생성
+
+`to-do` 의 6번째 자리에 카드를 생성했다. 카드 수가 14 에서 15 로 바뀐다.
+
+<img src="docs/images/animation-create.png" width="500" alt="첫째 막대의 카드는 14장이다. 여섯째 칸 뒤의 카드 9장이 마지막 카드부터 8프레임 동안 뒤로 옮겨져 빈칸이 열리고, 카드 수가 15 로 바뀌고, 새 카드가 점자와 음영 글자를 거쳐 나타난다.">
+
+#### 열 사이 이동
+
+`to-do` 의 4번째 카드를 `in-progress` 의 2번째 자리로 옮겼다.
+
+<img src="docs/images/animation-move.png" width="500" alt="첫째 막대의 넷째 칸이 사라지고 빈칸이 닫힌다. 이어서 둘째 막대의 둘째 칸에 빈칸이 열리고 같은 카드가 그 열의 색으로 나타난다. 카드 수가 14 와 3 에서 13 과 4 로 바뀐다.">
+
+#### 같은 열 차례 변경
+
+`to-do` 의 마지막 카드를 1번째 자리로 옮겼다.
+
+<img src="docs/images/animation-reorder.png" width="500" alt="첫째 막대의 마지막 칸이 사라지고, 다른 카드 13장이 8프레임 동안 뒤로 옮겨져 첫째 칸에 빈칸이 열리고, 그 카드가 첫째 칸에 나타난다. 카드 수가 14 에서 13 을 거쳐 14 로 돌아온다.">
+
+#### 긴 막대에서 삭제
+
+`to-do` 카드 60장 중 3번째를 삭제했다. 카드 57장을 8프레임에 옮기므로 한 프레임에 여러 장이 옮겨진다.
+
+<img src="docs/images/animation-long.png" width="500" alt="첫째 막대의 카드는 60장이고 6행이다. 셋째 칸이 사라져 비워진다. 빈칸이 8프레임 동안 막대 끝쪽으로 옮겨지고 프레임마다 카드 여러 장이 앞으로 옮겨진다. 카드 수가 59 로 바뀐다.">
+
+#### `row` 에서 삭제
+
+`monitor.cell` 이 `row` 다. `to-do` 카드 6장 중 2번째를 삭제했다.
+
+<img src="docs/images/animation-row.png" width="500" alt="카드 한 장이 막대의 한 행 전체다. 첫째 막대의 둘째 행이 사라져 비워지고, 그 아래 4행이 한 행씩 위로 옮겨진다. 카드 수가 6 에서 5 로 바뀐다.">
+
+#### `fit` 에서 삭제
+
+`monitor.cell` 이 `fit` 이고 pane 높이에 맞춰 한 행에 2장이다. `to-do` 카드 18장 중 4번째를 삭제했다.
+
+<img src="docs/images/animation-fit.png" width="500" alt="첫째 막대의 카드는 18장이고 9행이며 한 행에 2장이고 카드 한 장의 폭은 막대 폭의 약 절반이다. 둘째 행의 둘째 카드가 사라지고 그 뒤의 카드 14장이 8프레임 동안 앞으로 옮겨진다. 카드 수가 18 에서 17 로 바뀐다.">
 
 ### 애니메이션 재생 조건
 

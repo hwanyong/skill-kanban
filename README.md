@@ -276,19 +276,71 @@ When a read of `uk board --json` finds that cards were created, deleted or moved
 
 Each image is an APNG (animated PNG, a PNG file with several frames that browsers play) of the counts row and the bars on a fictional board with the columns `to-do`, `in-progress`, `in-review` and `done`. The frames were captured every 50 ms from the pane of a Claude Code session in a tmux window. The session state examples repeat one cycle. The other examples hold the first frame for 1 second and the last frame for 1.5 seconds, and their `in-progress` cards have no session, so only the rearrangement changes.
 
-| Example | Image | What changes |
-|---|---|---|
-| `live` | <img src="docs/images/animation-live.png" width="360" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 green cells that step through the characters light shade, medium shade, dark shade, full block and back, one character apart per card. The other bars do not change."> | 8 `in-progress` cards. A cycle is 6 frames of 250 ms |
-| `pending` | <img src="docs/images/animation-pending.png" width="360" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 yellow braille characters that spin together. The other bars do not change."> | 8 `in-progress` cards. A cycle is 6 frames of 250 ms |
-| `restart` | <img src="docs/images/animation-restart.png" width="360" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 red arrow characters whose text and background colors swap every frame. The other bars do not change."> | 8 `in-progress` cards. A cycle is 2 frames of 250 ms |
-| All 6 session states | <img src="docs/images/animation-mixed.png" width="360" alt="Four bars with the counts 14, 12, 5, 7. The second bar holds 12 cells, two for each of live, pending, restart, resume, done and none. The live, pending and restart cells change and the resume, done and none cells do not."> | 12 `in-progress` cards, 2 per state. `live`, `pending` and `restart` change. `resume`, `done` and `none` stay fixed |
-| Delete | <img src="docs/images/animation-delete.png" width="360" alt="The first bar has 14 cards. Its sixth cell fades out through shade and braille characters and becomes blank, the count changes to 13, and the 8 cards behind the blank move forward one at a time."> | The 6th `to-do` card is deleted. The count goes from 14 to 13 |
-| Create | <img src="docs/images/animation-create.png" width="360" alt="The first bar has 14 cards. A blank opens at the sixth cell as the 9 cards behind it move back in 8 frames, starting with the last card. The count changes to 15 and the new card fades in through braille and shade characters."> | A card is created in the 6th `to-do` place. The count goes from 14 to 15 |
-| Move between columns | <img src="docs/images/animation-move.png" width="360" alt="The fourth cell of the first bar fades out and the blank closes. A blank then opens at the second cell of the second bar and the same card fades in there in that column's color. The counts change from 14 and 3 to 13 and 4."> | The 4th `to-do` card moves to the 2nd `in-progress` place |
-| Reorder in a column | <img src="docs/images/animation-reorder.png" width="360" alt="The last cell of the first bar fades out, a blank opens at the first cell as the 13 other cards move back in 8 frames, and the card fades in at the first cell. The count goes from 14 to 13 and back to 14."> | The last `to-do` card moves to the 1st place |
-| Delete in a long bar | <img src="docs/images/animation-long.png" width="360" alt="The first bar has 60 cards on 6 rows. Its third cell fades out and becomes blank. The blank moves toward the end of the bar in 8 frames, with several cards moving forward in each frame. The count changes to 59."> | The 3rd of 60 `to-do` cards is deleted. 57 cards move forward in 8 frames, so several move in one frame |
-| Delete with `row` | <img src="docs/images/animation-row.png" width="360" alt="Each card is a full row of its bar. The second row of the first bar fades out and becomes blank, then the 4 rows below it move up one at a time. The count changes from 6 to 5."> | `monitor.cell` is `row`. The 2nd of 6 `to-do` cards is deleted |
-| Delete with `fit` | <img src="docs/images/animation-fit.png" width="360" alt="The first bar has 18 cards on 9 rows, 2 cards per row, each card about half the bar width. The second card of the second row fades out, and the 14 cards behind it move forward in 8 frames. The count changes from 18 to 17."> | `monitor.cell` is `fit` and the pane height allows 2 cards per row. The 4th of 18 `to-do` cards is deleted |
+#### `live`
+
+8 `in-progress` cards. A cycle is 6 frames of 250 ms.
+
+<img src="docs/images/animation-live.png" width="500" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 green cells that step through the characters light shade, medium shade, dark shade, full block and back, one character apart per card. The other bars do not change.">
+
+#### `pending`
+
+8 `in-progress` cards. A cycle is 6 frames of 250 ms.
+
+<img src="docs/images/animation-pending.png" width="500" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 yellow braille characters that spin together. The other bars do not change.">
+
+#### `restart`
+
+8 `in-progress` cards. A cycle is 2 frames of 250 ms.
+
+<img src="docs/images/animation-restart.png" width="500" alt="Four bars with the counts 14, 8, 5, 7. The second bar holds 8 red arrow characters whose text and background colors swap every frame. The other bars do not change.">
+
+#### All 6 session states
+
+12 `in-progress` cards, 2 per state. `live`, `pending` and `restart` change. `resume`, `done` and `none` stay fixed.
+
+<img src="docs/images/animation-mixed.png" width="500" alt="Four bars with the counts 14, 12, 5, 7. The second bar holds 12 cells, two for each of live, pending, restart, resume, done and none. The live, pending and restart cells change and the resume, done and none cells do not.">
+
+#### Delete
+
+The 6th `to-do` card is deleted. The count goes from 14 to 13.
+
+<img src="docs/images/animation-delete.png" width="500" alt="The first bar has 14 cards. Its sixth cell fades out through shade and braille characters and becomes blank, the count changes to 13, and the 8 cards behind the blank move forward one at a time.">
+
+#### Create
+
+A card is created in the 6th `to-do` place. The count goes from 14 to 15.
+
+<img src="docs/images/animation-create.png" width="500" alt="The first bar has 14 cards. A blank opens at the sixth cell as the 9 cards behind it move back in 8 frames, starting with the last card. The count changes to 15 and the new card fades in through braille and shade characters.">
+
+#### Move between columns
+
+The 4th `to-do` card moves to the 2nd `in-progress` place.
+
+<img src="docs/images/animation-move.png" width="500" alt="The fourth cell of the first bar fades out and the blank closes. A blank then opens at the second cell of the second bar and the same card fades in there in that column's color. The counts change from 14 and 3 to 13 and 4.">
+
+#### Reorder in a column
+
+The last `to-do` card moves to the 1st place.
+
+<img src="docs/images/animation-reorder.png" width="500" alt="The last cell of the first bar fades out, a blank opens at the first cell as the 13 other cards move back in 8 frames, and the card fades in at the first cell. The count goes from 14 to 13 and back to 14.">
+
+#### Delete in a long bar
+
+The 3rd of 60 `to-do` cards is deleted. 57 cards move forward in 8 frames, so several move in one frame.
+
+<img src="docs/images/animation-long.png" width="500" alt="The first bar has 60 cards on 6 rows. Its third cell fades out and becomes blank. The blank moves toward the end of the bar in 8 frames, with several cards moving forward in each frame. The count changes to 59.">
+
+#### Delete with `row`
+
+`monitor.cell` is `row`. The 2nd of 6 `to-do` cards is deleted.
+
+<img src="docs/images/animation-row.png" width="500" alt="Each card is a full row of its bar. The second row of the first bar fades out and becomes blank, then the 4 rows below it move up one at a time. The count changes from 6 to 5.">
+
+#### Delete with `fit`
+
+`monitor.cell` is `fit` and the pane height allows 2 cards per row. The 4th of 18 `to-do` cards is deleted.
+
+<img src="docs/images/animation-fit.png" width="500" alt="The first bar has 18 cards on 9 rows, 2 cards per row, each card about half the bar width. The second card of the second row fades out, and the 14 cards behind it move forward in 8 frames. The count changes from 18 to 17.">
 
 ### When the pane animates
 
