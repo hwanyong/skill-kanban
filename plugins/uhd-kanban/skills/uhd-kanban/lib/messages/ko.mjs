@@ -88,6 +88,7 @@ export default {
   // board.mjs
   'card.idMismatch': ({ value, id }) => `frontmatter id ${value} 가 파일 이름의 k${id} 와 다르다`,
   'card.noTitle': 'title 이 없다',
+  'card.titleControl': 'title 에 제어 문자가 있다',
   'card.slugMismatch': ({ expected }) => `파일 이름의 제목이 title 과 다르다(기대: ${expected})`,
   'card.typeNotAllowed': ({ type, status, types }) => `type ${type} 는 ${status} 열에 둘 수 없다(허용: ${types.join(', ')})`,
   'card.priority': ({ priorities, value }) => `priority 는 ${priorities.join(' · ')} 중 하나다: ${value}`,

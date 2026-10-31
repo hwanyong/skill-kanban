@@ -137,7 +137,7 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | 디렉터리 | `kanban/` 아래 디렉터리 · 파일은 모두 `config.json` 의 `columns` 에 있는 열이거나 `archive.dir`(기본 `archived/`)이다 |
 | 열과 `type` | 카드의 `type` 이 그 열의 `types` 에 있다 |
 | 카드 id | 카드 id 하나가 보드의 한 곳에만 있다 |
-| frontmatter 값 | `priority` 는 정해진 값, `tags` 는 문자열 목록, `depends_on` · `collection` 은 카드 id 목록이다 |
+| frontmatter 값 | `title` 에 제어 문자가 없고, `priority` 는 정해진 값, `tags` 는 문자열 목록, `depends_on` · `collection` 은 카드 id 목록이다 |
 | 코멘트 | `### c<n> [kind]` 의 kind 가 `config.json` 의 `comments.kinds` 에 있다 |
 
 ### 기본 열

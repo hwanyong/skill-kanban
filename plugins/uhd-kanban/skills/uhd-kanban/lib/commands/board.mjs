@@ -4,10 +4,14 @@
 // uhd-kanban board [--json]
 
 import { readBoard } from '../board.mjs'
+import { stripControl } from '../control.mjs'
 import { t } from '../i18n.mjs'
 import { boardLanes, isWork } from '../lanes.mjs'
 import { COLLECTION_TYPE, loadProject, milestoneStatuses } from '../project.mjs'
 import { cardSession, listSessions } from '../sessions.mjs'
+
+// --json 은 제어 문자를 \u001b 로 escape 해서 bin 의 write 를 지나고, pane 이 JSON.parse 로 되돌려 Text 에 넘긴다. 그래서 여기서 뺀다.
+const laneTitle = (title) => (typeof title == 'string' ? stripControl(title) : title ?? null)
 
 export const run = async ({ flags }) => {
   const project = loadProject()
@@ -29,7 +33,7 @@ export const run = async ({ flags }) => {
     lanes: boardLanes(project, board).map(({ milestone, cards, finished, total }) => ({
       key: milestone ? `k${milestone.id}` : 'none',
       id: milestone?.id ?? null,
-      title: milestone?.data.title ?? null,
+      title: laneTitle(milestone?.data.title),
       status: milestone?.status ?? null,
       is_running: milestone?.status == milestoneStatuses(config).running,
       finished,

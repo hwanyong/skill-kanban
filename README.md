@@ -140,7 +140,7 @@ The format is fixed, so `uk check` alone verifies every card file. Commands that
 | Directory | Every directory and file under `kanban/` is a column in `columns` of `config.json` or `archive.dir` (default `archived/`) |
 | Column and `type` | The card `type` is in `types` of its column |
 | Card id | One card id appears in one place on the board |
-| Frontmatter values | `priority` is a known value, `tags` is a list of strings, `depends_on` and `collection` are lists of card ids |
+| Frontmatter values | `title` has no control characters, `priority` is a known value, `tags` is a list of strings, `depends_on` and `collection` are lists of card ids |
 | Comments | Each `### c<n> [kind]` kind is in `comments.kinds` of `config.json` |
 
 ### Default columns

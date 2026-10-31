@@ -90,6 +90,7 @@ export default {
   // board.mjs
   'card.idMismatch': ({ value, id }) => `frontmatter id ${value} differs from k${id} in the file name`,
   'card.noTitle': 'title is missing',
+  'card.titleControl': 'title contains a control character',
   'card.slugMismatch': ({ expected }) => `The title in the file name differs from title (expected: ${expected})`,
   'card.typeNotAllowed': ({ type, status, types }) => `type ${type} cannot be in the ${status} column (allowed: ${types.join(', ')})`,
   'card.priority': ({ priorities, value }) => `priority must be one of ${priorities.join(', ')}: ${value}`,

@@ -3,6 +3,7 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { hasControl } from './control.mjs'
 import { FrontmatterError, parse } from './frontmatter.mjs'
 import { parseName, titleSlug } from './filename.mjs'
 import { parseComments } from './comments.mjs'
@@ -25,6 +26,7 @@ const checkData = (project, data, card, column, problems) => {
   const add = (message) => problems.push(`${at}: ${message}`)
   if (data.id != card.id) add(t('card.idMismatch', { value: data.id, id: card.id }))
   if (typeof data.title != 'string' || data.title.trim() == '') add(t('card.noTitle'))
+  if (typeof data.title == 'string' && hasControl(data.title)) add(t('card.titleControl'))
   if (typeof data.title == 'string' && titleSlug(data.title) != card.slug) add(t('card.slugMismatch', { expected: titleSlug(data.title) }))
   if (column && !column.types.includes(data.type)) add(t('card.typeNotAllowed', { type: data.type, status: column.status, types: column.types }))
   if (data.priority != null && !PRIORITIES.includes(data.priority)) add(t('card.priority', { priorities: PRIORITIES, value: data.priority }))

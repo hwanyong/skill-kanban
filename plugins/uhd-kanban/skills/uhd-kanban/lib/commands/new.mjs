@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { PRIORITIES } from '../board.mjs'
 import { UsageError, cardId, listFrom, positionFrom } from '../args.mjs'
 import { assertRefs, assertTags, checkPosition, nextId, now, place, writeCard } from '../cards.mjs'
+import { hasControl } from '../control.mjs'
 import { editBoard } from '../edit.mjs'
 import { renumberNote, t } from '../i18n.mjs'
 import { COLLECTION_TYPE, ProjectError, initialStatus } from '../project.mjs'
@@ -14,6 +15,7 @@ import { COLLECTION_TYPE, ProjectError, initialStatus } from '../project.mjs'
 export const run = async ({ flags }) => {
   if (typeof flags.type != 'string') throw new UsageError(t('args.required', { flag: '--type' }))
   if (typeof flags.title != 'string' || flags.title.trim() == '') throw new UsageError(t('args.required', { flag: '--title' }))
+  if (hasControl(flags.title.trim())) throw new UsageError(t('card.titleControl'))
   const priority = typeof flags.priority == 'string' ? flags.priority : 'medium'
   if (!PRIORITIES.includes(priority)) throw new UsageError(t('args.priority', { values: PRIORITIES }))
   const dependsOn = listFrom(flags.depends).map((ref) => cardId(ref, '--depends'))

@@ -5,6 +5,7 @@ import { join, dirname } from 'node:path'
 import { PRIORITIES } from '../board.mjs'
 import { UsageError, cardId, listFrom } from '../args.mjs'
 import { assertRefs, assertTags, findCard, moveFile, now, writeCard } from '../cards.mjs'
+import { hasControl } from '../control.mjs'
 import { editBoard } from '../edit.mjs'
 import { activeName, archivedName } from '../filename.mjs'
 import { t } from '../i18n.mjs'
@@ -20,6 +21,7 @@ export const run = async ({ positional, flags }) => {
   const id = cardId(positional[0])
   const title = typeof flags.title == 'string' ? flags.title.trim() : null
   if (title == '') throw new UsageError(t('set.emptyTitle'))
+  if (title != null && hasControl(title)) throw new UsageError(t('card.titleControl'))
   const priority = typeof flags.priority == 'string' ? flags.priority : null
   if (priority != null && !PRIORITIES.includes(priority)) throw new UsageError(t('args.priority', { values: PRIORITIES }))
   const add = listFrom(flags['add-tag'])
