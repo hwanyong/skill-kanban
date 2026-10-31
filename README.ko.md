@@ -91,7 +91,7 @@ uk migrate             # comments.kinds 를 바꾸고 "locale": "ko" 를 넣고,
 
 ![uhd-kanban 이 보드를 저장하는 방식을 카드 24장인 데모 보드의 파일로 그린 그림. 왼쪽: sample-app 의 파일 트리. .uhd-kanban/config.json 은 locale · 열 9개 · run · archive · monitor 설정을, .uhd-kanban/profiles.json 은 model: 태그를 claude --model 값으로 바꾸는 표를 갖는다. kanban/ 아래 열 디렉터리는 1-to-do(카드 7장) · 2-in-progress(3장) · 3-in-review(2장) · 4-done(8장) · 5-decided(1장) · 7-implemented(1장) · 8-cancelled(1장) · 9-active(1장)다. 6-planned/ 는 없다. 열 디렉터리는 카드가 있는 동안만 있다. 오른쪽 위: 경로 kanban/2-in-progress/0030-k2-Add-login-form-validation.md 를 열 디렉터리 2-in-progress(status in-progress) · 열 안의 순서 0030 · 카드 id k2 · 제목 Add-login-form-validation 으로 나눴다. 오른쪽 아래: 그 파일 29줄. 1~13줄은 YAML frontmatter(id · type · title · priority · tags · depends_on · collection · created_at · updated_at · session · session_started_at)이고 uk 명령만 .uhd-kanban/lock/ 디렉터리를 잡은 채 파일 이름 · 디렉터리와 함께 바꾼다. collection 은 카드가 속한 milestone 의 id 목록이다. 15줄은 본문이고 uk run 이 카드 세션의 프롬프트에 넣는다. 17~29줄은 ## Comments 이고 블록 세 개가 있다. c1 [assign] 은 uk run 이 남긴 기록, c2 [question] 은 카드 세션의 질문, c3 [answer] 는 사용자의 답이다.](docs/images/board-storage.png)
 
-*`uk` 명령으로 만든 데모 보드의 파일로 그린 그림. 트리와 파일 내용은 디스크의 파일 그대로이고, 보기 폭보다 긴 줄은 … 로 끝냈다. 카드 세션은 띄우지 않았다. `uk run` 은 세션 목록만 적는 `claude` 대역으로 실행했고, c2 · c3 은 `uk comment` 로 적었다.*
+*`uk` 명령으로 만든 데모 보드의 파일로 그린 그림. 트리와 파일 내용은 디스크의 파일 그대로이고, 보기 폭보다 긴 줄은 … 로 끝냈다. 카드 세션은 띄우지 않았다. `uk run` 은 세션 목록만 파일에 적는 `claude` 스텁(stub: 실제 프로그램 대신 정해진 값만 내는 스크립트)으로 실행했고, c2 · c3 은 `uk comment` 로 적었다.*
 
 | 경로 | 내용 |
 |---|---|
