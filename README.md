@@ -29,6 +29,7 @@ Nothing is installed besides the plugin: no Docker, no server, no database, no n
 - [Commands](#commands)
 - [Board monitor pane](#board-monitor-pane)
 - [Requirements](#requirements)
+- [Usage notes](#usage-notes)
 - [FAQ](#faq)
 - [Credits](#credits)
 - [License](#license)
@@ -397,6 +398,12 @@ In a 15-minute run of two sessions side by side, the session repainting every 25
 - Node.js 21 or later on `PATH` (`Object.groupBy`)
 - Nothing else to install: no Docker, no database, no npm packages. `git` is used only when the project is a git repository (cards tracked by git move with `git mv`).
 - Developed on macOS. Other platforms have not been verified.
+
+## Usage notes
+
+- **A control character in a card title stops board edits.** While the `title` of any card contains a control character, `uk check` reports a violation and commands that change the board refuse to run. This includes `uk set --title`, so edit `title` in that card's frontmatter directly and run `uk check` again. The title part of the file name must still match `title`.
+- **The rendered pane has not been tested with such a title.** `uk board --json` removes control characters from milestone titles, and the pane draws that value. The JSON output was verified. The pane on screen was not.
+- **Uncaught exceptions are not filtered.** Control characters are removed from what commands write to stdout and stderr. When a command ends with an uncaught exception, Node.js prints the error to stderr without going through that filter, so control characters in the error message are output as they are.
 
 ## FAQ
 
