@@ -1,35 +1,40 @@
-// 열마다 카드 수와 순서, run.status 열 카드의 세션 상태를 낸다. 보드 모니터 mod 가 monitor.interval_seconds 마다 --json 으로 부른다.
-// 1분마다 도는 명령이라 카드 1,189개(poieve, 2026-10-29)를 다 읽는 readBoard 를 쓰지 않는다. 열 디렉터리의 파일 이름만 읽고, 카드 파일은 run.status 열의 것만 연다.
+// 작업 열마다 카드 수와, milestone 마다 소속 카드(swimlane)를 낸다. run.status 열 카드에는 세션 판정을 붙인다. 보드 모니터 mod 가 monitor.interval_seconds 마다 --json 으로 부른다.
+// swimlane 은 카드마다 collection 이 있어야 하고 끝낸 수는 아카이브까지 세므로 readBoard 로 모든 카드를 읽는다.
 // 규칙 검사는 하지 않는다. 위반은 uhd-kanban check 가 알린다.
 // uhd-kanban board [--json]
 
-import { join } from 'node:path'
-import { readCard, readColumnNames } from '../board.mjs'
+import { readBoard } from '../board.mjs'
 import { t } from '../i18n.mjs'
-import { loadProject, monitorCell } from '../project.mjs'
+import { boardLanes, isWork } from '../lanes.mjs'
+import { COLLECTION_TYPE, loadProject, milestoneStatuses } from '../project.mjs'
 import { cardSession, listSessions } from '../sessions.mjs'
-
-const sessionOf = (project, column, card, sessions) => {
-  const path = join(project.boardPath, column.dir, card.name)
-  const read = readCard(project, path, `kanban/${column.dir}/${card.name.normalize('NFC')}`, card.name, column, [])
-  return read ? cardSession(read, sessions).verdict : 'none'
-}
 
 export const run = async ({ flags }) => {
   const project = loadProject()
-  const runStatus = project.config.run.status
-  const columns = readColumnNames(project)
-  const sessions = columns.some(({ column, cards }) => column.status == runStatus && cards.length > 0) ? listSessions({ all: true }) : []
+  const { config } = project
+  const runStatus = config.run.status
+  const board = readBoard(project)
+  const running = board.cards.filter((card) => card.status == runStatus)
+  const sessions = running.length > 0 ? listSessions({ all: true }) : []
+  const verdicts = new Map(running.map((card) => [card.id, cardSession(card, sessions).verdict]))
+  const cardView = ({ id, status }) => (verdicts.has(id) ? { id, status, session: verdicts.get(id) } : { id, status })
   const result = {
     root: project.root,
-    interval_seconds: project.config.monitor.interval_seconds,
-    cell: monitorCell(project.config),
+    interval_seconds: config.monitor.interval_seconds,
     run_status: runStatus,
-    columns: columns.map(({ column, cards }) => ({
-      status: column.status,
-      dir: column.dir,
-      count: cards.length,
-      cards: cards.map((card) => (column.status == runStatus ? { id: card.id, session: sessionOf(project, column, card, sessions) } : { id: card.id })),
+    // index: config.json 의 columns 안의 차례. pane 이 이 값으로 색을 고르므로 milestone 만 받는 열을 빼도 색이 바뀌지 않는다.
+    columns: config.columns.flatMap((column, index) => (column.types.some((type) => type != COLLECTION_TYPE)
+      ? [{ status: column.status, dir: column.dir, index, count: board.cards.filter((card) => card.status == column.status && isWork(card)).length }]
+      : [])),
+    lanes: boardLanes(project, board).map(({ milestone, cards, finished, total }) => ({
+      key: milestone ? `k${milestone.id}` : 'none',
+      id: milestone?.id ?? null,
+      title: milestone?.data.title ?? null,
+      status: milestone?.status ?? null,
+      is_running: milestone?.status == milestoneStatuses(config).running,
+      finished,
+      total,
+      cards: cards.map(cardView),
     })),
   }
   if (flags.json == true) {
@@ -37,8 +42,9 @@ export const run = async ({ flags }) => {
     return 0
   }
   result.columns.forEach((column) => {
-    const verdicts = column.status == runStatus ? Object.entries(Object.groupBy(column.cards, (card) => card.session)).map(([verdict, cards]) => `${verdict} ${cards.length}`) : []
-    console.log(t('board.column', { dir: column.dir, count: column.count, verdicts }))
+    const counts = column.status == runStatus ? Object.entries(Object.groupBy(running, (card) => verdicts.get(card.id))).map(([verdict, cards]) => `${verdict} ${cards.length}`) : []
+    console.log(t('board.column', { dir: column.dir, count: column.count, verdicts: counts }))
   })
+  result.lanes.forEach((lane) => console.log(t('board.lane', lane)))
   return 0
 }

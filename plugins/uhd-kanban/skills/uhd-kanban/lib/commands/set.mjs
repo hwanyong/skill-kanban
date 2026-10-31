@@ -4,10 +4,11 @@
 import { join, dirname } from 'node:path'
 import { PRIORITIES } from '../board.mjs'
 import { UsageError, cardId, listFrom } from '../args.mjs'
-import { COLLECTION_TYPE, assertRefs, assertTags, findCard, moveFile, now, writeCard } from '../cards.mjs'
+import { assertRefs, assertTags, findCard, moveFile, now, writeCard } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
 import { activeName, archivedName } from '../filename.mjs'
 import { t } from '../i18n.mjs'
+import { COLLECTION_TYPE } from '../project.mjs'
 
 // 목록에서 remove 를 빼고 없는 add 를 뒤에 붙인다.
 const edited = (list, add, remove) => [...list.filter((item) => !remove.includes(item)), ...add.filter((item) => !list.includes(item))]

@@ -4,11 +4,11 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { KEY_ORDER } from './board.mjs'
+import { KEY_ORDER, readBoard } from './board.mjs'
 import { serialize } from './frontmatter.mjs'
 import { activeName } from './filename.mjs'
 import { t } from './i18n.mjs'
-import { ProjectError } from './project.mjs'
+import { COLLECTION_TYPE, ProjectError, milestoneStatuses } from './project.mjs'
 import { parseComments } from './comments.mjs'
 import { tagProblems } from './profiles.mjs'
 
@@ -36,7 +36,8 @@ const removeIfEmpty = (project, dir) => {
 }
 
 export const moveFile = (project, from, to) => {
-  if (from == to) return
+  // SMB 공유의 readdir 은 한글 이름을 NFD 로 내고 filename.mjs 가 만든 이름은 NFC 다. 같은 파일을 옮기라는 요청을 대상 충돌로 보지 않으려고 NFC 로 비교한다.
+  if (from.normalize('NFC') == to.normalize('NFC')) return
   if (existsSync(to)) throw new ProjectError(t('cards.targetExists', { path: relative(project.root, to) }))
   mkdirSync(dirname(to), { recursive: true })
   if (isTracked(project.root, from)) git(project.root, ['mv', '--', relative(project.root, from), relative(project.root, to)])
@@ -60,9 +61,6 @@ export const findCard = (board, id) => {
   if (!card) throw new ProjectError(t('cards.notFound', { id }))
   return card
 }
-
-// collection 은 카드가 속한 milestone 카드의 id 목록이다(Nimbalyst 의 items 를 옮긴 키).
-export const COLLECTION_TYPE = 'milestone'
 
 // depends_on · collection 에 적을 id 를 본다. 카드가 있어야 하고 자기 자신이 아니어야 하며, type 을 주면 그 type 의 카드여야 한다.
 export const assertRefs = (board, ids, { key, self = null, type = null }) => ids.forEach((id) => {
@@ -160,7 +158,8 @@ const unresolved = (project, board, card) => {
 // card 를 status 열로 옮긴다. move 와 run 이 함께 쓴다. changes 는 함께 바꿀 frontmatter 값이다.
 // dependencies.gate 의 열로 옮길 때 depends_on 카드가 모두 끝나야 한다. force 는 이 검사를 건너뛴다.
 // archive.columns 의 열로 들어가면 completed_at 을 적고, 그 열에서 나가면 지운다.
-// 반환: { path, renumbered, blocking }. blocking 은 force 로 건너뛴 카드 id 다.
+// run.status 로 옮기면 waiting 열에 있는 소속 milestone 을 running 열로 함께 옮긴다. 작업 카드가 이미 옮겨졌으므로 의존 검사로 막지 않는다.
+// 반환: { path, renumbered, blocking, started }. blocking 은 force 로 건너뛴 카드 id, started 는 함께 옮긴 milestone id 다.
 // 파일을 바꾸지 않고 옮길 수 있는지만 본다. 반환: force 로 건너뛸 카드 id.
 export const checkMove = (project, board, card, status, { position = { bottom: true }, force = false } = {}) => {
   if (card.kind != 'active') throw new ProjectError(t('cards.archived', { id: card.id, path: card.relPath }))
@@ -181,5 +180,19 @@ export const moveCard = (project, board, card, status, { position = { bottom: tr
   const leaving = !archiveColumns.includes(status)
   const data = { ...card.data, ...changes, updated_at: at, completed_at: entering ? at : leaving ? undefined : card.data.completed_at }
   writeCard(card.path, data, card.body)
-  return { ...place(project, board, { ...card, data }, status, position), blocking }
+  const placed = place(project, board, { ...card, data }, status, position)
+  return { ...placed, blocking, started: startMilestones(project, board, data, status) }
+}
+
+// milestone 을 옮길 때마다 보드를 다시 읽는다. 앞 milestone 의 새 순서 번호가 board 에 없으면 다음 milestone 이 같은 번호를 받는다.
+const startMilestones = (project, board, data, status) => {
+  const { waiting, running } = milestoneStatuses(project.config)
+  if (status != project.config.run.status || running == null) return []
+  const isWaiting = (card) => (data.collection ?? []).includes(card.id) && card.data.type == COLLECTION_TYPE && card.status == waiting
+  const started = board.cards.filter(isWaiting).map((card) => card.id)
+  for (const id of started) {
+    const current = readBoard(project)
+    moveCard(project, current, findCard(current, id), running, { force: true })
+  }
+  return started
 }

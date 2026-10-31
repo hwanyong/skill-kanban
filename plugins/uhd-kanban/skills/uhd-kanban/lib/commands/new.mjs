@@ -6,10 +6,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PRIORITIES } from '../board.mjs'
 import { UsageError, cardId, listFrom, positionFrom } from '../args.mjs'
-import { COLLECTION_TYPE, assertRefs, assertTags, checkPosition, nextId, now, place, writeCard } from '../cards.mjs'
+import { assertRefs, assertTags, checkPosition, nextId, now, place, writeCard } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
 import { renumberNote, t } from '../i18n.mjs'
-import { ProjectError, initialStatus } from '../project.mjs'
+import { COLLECTION_TYPE, ProjectError, initialStatus } from '../project.mjs'
 
 export const run = async ({ flags }) => {
   if (typeof flags.type != 'string') throw new UsageError(t('args.required', { flag: '--type' }))

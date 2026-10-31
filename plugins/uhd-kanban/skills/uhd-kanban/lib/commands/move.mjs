@@ -6,7 +6,7 @@ import { UsageError, cardId, positionFrom } from '../args.mjs'
 import { dependentsOf, findCard, moveCard } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
 import { abandonedStatuses } from '../project.mjs'
-import { forceNote, renumberNote, t } from '../i18n.mjs'
+import { forceNote, renumberNote, startedNote, t } from '../i18n.mjs'
 
 export const run = async ({ positional, flags }) => {
   const [ref, status] = positional
@@ -15,8 +15,8 @@ export const run = async ({ positional, flags }) => {
   const position = positionFrom(flags)
   return editBoard(async ({ project, board }) => {
     const card = findCard(board, id)
-    const { path, renumbered, blocking } = moveCard(project, board, card, status, { position, force: flags.force == true })
-    console.log(`k${id} ${card.status} → ${status}: ${path.slice(project.root.length + 1)}${renumberNote(renumbered)}${forceNote(blocking)}`)
+    const { path, renumbered, blocking, started } = moveCard(project, board, card, status, { position, force: flags.force == true })
+    console.log(`k${id} ${card.status} → ${status}: ${path.slice(project.root.length + 1)}${renumberNote(renumbered)}${forceNote(blocking)}${startedNote(started)}`)
     if (!abandonedStatuses(project.config).includes(status)) return 0
     const waiting = dependentsOf(board, id)
     if (waiting.length == 0) return 0

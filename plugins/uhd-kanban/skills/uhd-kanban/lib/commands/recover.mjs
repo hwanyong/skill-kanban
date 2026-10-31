@@ -10,7 +10,7 @@ import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
 import { readBoard } from '../board.mjs'
 import { USER, appendComment } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
-import { t, translator } from '../i18n.mjs'
+import { startedNote, t, translator } from '../i18n.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError, maxParallel } from '../project.mjs'
 import { resumePrompt, sessionName } from '../prompt.mjs'
@@ -95,7 +95,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       const { body } = appendComment(card.body, { kind: 'assign', from, to: [sessionName(card.id)], at: now(), text })
       const moved = card.status == status ? null : moveCard(project, current, { ...card, body }, status, { changes })
       if (!moved) writeCard(card.path, { ...card.data, ...changes, updated_at: now() }, body)
-      console.log(`k${card.id} ${t('recover.resumed', { why })}: ${shortId} ${resumed?.sessionId ?? ''}${moved ? ` ${card.status} → ${status}: ${moved.path.slice(project.root.length + 1)}` : ''}`)
+      console.log(`k${card.id} ${t('recover.resumed', { why })}: ${shortId} ${resumed?.sessionId ?? ''}${moved ? ` ${card.status} → ${status}: ${moved.path.slice(project.root.length + 1)}${startedNote(moved.started)}` : ''}`)
     }
     console.log(t(dryRun ? 'recover.summaryDry' : 'recover.summary', { total: targets.length, ...counts }))
     return counts.failed + counts.waiting > 0 ? 1 : 0

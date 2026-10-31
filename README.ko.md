@@ -7,13 +7,13 @@
 
 [English](README.md) | 한국어
 
-**uhd-kanban** 은 프로젝트마다 칸반 보드를 `kanban/` 디렉터리의 마크다운 파일로 운영하는 Claude Code 플러그인이다. 메인 세션이 요청을 카드로 나누고, 카드마다 백그라운드 세션(`claude --bg`)을 하나씩 띄워 맡기고, 결과를 검토한다. Claude Code 의 pane 이 열마다 카드 수와 카드 세션이 도는지를 보인다.
+**uhd-kanban** 은 프로젝트마다 칸반 보드를 `kanban/` 디렉터리의 마크다운 파일로 운영하는 Claude Code 플러그인이다. 메인 세션이 요청을 카드로 나누고, 카드마다 백그라운드 세션(`claude --bg`)을 하나씩 띄워 맡기고, 결과를 검토한다. Claude Code 의 pane 이 milestone 마다 소속 카드의 열과 카드 세션이 도는지를 보인다.
 
 플러그인 말고는 설치하는 것이 없다. Docker · 서버 · 데이터베이스 · npm 패키지를 쓰지 않는다. 보드는 `uk check` 가 검사하는 정해진 형식의 마크다운 · JSON 파일이고, 명령은 Node.js 내장 모듈만 쓴다.
 
-<img src="docs/images/board-monitor-hero.png" width="640" alt="가상의 카드 82장, 열 9개인 보드의 Claude Code 안 uhd-kanban 보드 모니터 pane. 머리 줄과 범례 아래에 열마다 카드 수와 세로 막대가 있고 카드 하나가 한 칸이다. pane 아래 줄에 보드가 바뀌는 단계를 적었다. 1단계 uk new: to-do 막대 끝에 카드 3장이 나타난다. 2단계 uk run: to-do 의 앞 카드 3장이 사라지고 in-progress 막대 끝에 초록 애니메이션 칸으로 나타난다. 3단계: 그 3칸이 회색 체크 표시로 바뀐다. 4단계 uk move: 그 카드 3장이 in-review 막대로 옮겨진다. 5단계 uk move: done 막대로 옮겨진다. 6단계 uk archive: done 막대의 앞 카드 3장이 사라지고 보드의 카드 수가 처음과 같아진다. 다른 in-progress 칸의 애니메이션은 계속되고 이미지는 반복된다.">
+<img src="docs/images/board-monitor-hero.png" width="640" alt="가상의 카드 82장으로 시작하는 보드의 Claude Code 안 uhd-kanban 보드 모니터 pane. 머리 줄과 범례 아래에 k1 결제 화면, k2 검색, k3 월간 보고서, 소속 없음 행이 있고 행마다 막대가 있다. pane 아래 줄에 보드가 바뀌는 단계를 적었다. 1단계 uk new: k3 막대 끝에 카드 3장이 나타나 수가 0/9 가 된다. 2단계 uk run: 그 3장이 사라지고 k3 막대의 in-progress 자리에 초록 애니메이션 칸으로 나타나며, k3 머리 줄이 반전되고 기호가 빈 원에서 초록 음영 글자로 바뀐다. 3단계: 그 3칸이 회색 체크 표시로 바뀌고 머리 줄 기호가 찬 원으로 바뀐다. 4단계 uk move: 3장이 in-review 칸으로 옮겨진다. 5단계 uk move: 3장이 done 칸으로 옮겨져 수가 3/9 가 된다. 다른 행의 in-progress 칸은 계속 바뀌고 이미지는 반복된다.">
 
-*가상의 카드로 만든 보드다. 시험용 `board` 출력으로 Claude Code 세션의 pane 을 캡처했고 카드 세션은 실행하지 않았다. pane 아래 줄은 단계를 적은 것이고 pane 의 일부가 아니다. pane 은 카드 수와 세션 상태만 보이고 카드 제목은 보이지 않는다.*
+*가상의 카드로 만든 보드다. 시험용 `board` 출력으로 Claude Code 세션의 pane 을 캡처했고 카드 세션은 실행하지 않았다. 캡처용 사본은 보드를 1초마다 다시 읽게 고쳤다. pane 아래 줄은 단계를 적은 것이고 pane 의 일부가 아니다. pane 은 milestone 제목 · 카드 수 · 세션 상태를 보이고 작업 카드의 제목은 보이지 않는다.*
 
 ## 목차
 
@@ -39,7 +39,7 @@
 | 편집 확인 | 메인 세션이 Edit · Write · NotebookEdit 로 프로젝트 파일을 고치려 하면 훅이 사용자에게 확인 창을 띄운다. `bypassPermissions` 를 포함한 모든 권한 모드에서 뜬다. |
 | 의존성 · 동시 실행 상한 | `depends_on` 에 적은 카드가 끝나기 전에는 카드를 시작하지 않는다. `run.max_parallel`(기본 3)이 동시에 도는 카드 세션 수를 제한한다. |
 | 이어 가기 | `uk recover` 가 멈췄거나 데몬이 다시 띄운 카드 세션을 이어 가고 새 session id 를 카드에 적는다. |
-| 보드 모니터 | pane 이 카드 하나를 한 칸으로 그리고, in-progress 열의 칸을 세션 상태에 따라 애니메이션으로 그리며, 카드가 생성 · 삭제 · 이동되면 재배치를 재생한다. 기본 갱신 주기는 60초다. |
+| 보드 모니터 | pane 이 milestone 마다 행 하나를 그려 소속 카드 하나를 한 칸으로 그리고, in-progress 열의 칸을 세션 상태에 따라 애니메이션으로 그리며, 카드가 생성 · 삭제 · 이동되면 재배치를 재생한다. 행은 클릭이나 키보드로 접는다. 기본 갱신 주기는 60초다. |
 
 ## 플러그인 구성
 
@@ -89,9 +89,9 @@ uk migrate             # comments.kinds 를 바꾸고 "locale": "ko" 를 넣고,
 
 ## 보드 파일 배치
 
-![uhd-kanban 이 보드를 저장하는 방식을 카드 24장인 데모 보드의 파일로 그린 그림. 왼쪽: sample-app 의 파일 트리. .uhd-kanban/config.json 은 locale · 열 9개 · run · archive · monitor 설정을, .uhd-kanban/profiles.json 은 model: 태그를 claude --model 값으로 바꾸는 표를 갖는다. kanban/ 아래 열 디렉터리는 1-to-do(카드 7장) · 2-in-progress(3장) · 3-in-review(2장) · 4-done(8장) · 5-decided(1장) · 7-implemented(1장) · 8-cancelled(1장) · 9-active(1장)다. 6-planned/ 는 없다. 열 디렉터리는 카드가 있는 동안만 있다. 오른쪽 위: 경로 kanban/2-in-progress/0040-k2-Add-login-form-validation.md 를 열 디렉터리 2-in-progress(status in-progress) · 열 안의 순서 0040 · 카드 id k2 · 제목 Add-login-form-validation 으로 나눴다. 오른쪽 아래: 그 파일 28줄. 1~12줄은 YAML frontmatter(id · type · title · priority · tags · depends_on · created_at · updated_at · session · session_started_at)이고 uk 명령만 .uhd-kanban/lock/ 디렉터리를 잡은 채 파일 이름 · 디렉터리와 함께 바꾼다. 14줄은 본문이고 uk run 이 카드 세션의 프롬프트에 넣는다. 16~28줄은 ## Comments 이고 블록 세 개가 있다. c1 [assign] 은 uk run, c2 [question] 은 카드 세션, c3 [assign] 은 uk recover 가 남겼다.](docs/images/board-storage.png)
+![uhd-kanban 이 보드를 저장하는 방식을 카드 24장인 데모 보드의 파일로 그린 그림. 왼쪽: sample-app 의 파일 트리. .uhd-kanban/config.json 은 locale · 열 9개 · run · archive · monitor 설정을, .uhd-kanban/profiles.json 은 model: 태그를 claude --model 값으로 바꾸는 표를 갖는다. kanban/ 아래 열 디렉터리는 1-to-do(카드 7장) · 2-in-progress(3장) · 3-in-review(2장) · 4-done(8장) · 5-decided(1장) · 7-implemented(1장) · 8-cancelled(1장) · 9-active(1장)다. 6-planned/ 는 없다. 열 디렉터리는 카드가 있는 동안만 있다. 오른쪽 위: 경로 kanban/2-in-progress/0030-k2-Add-login-form-validation.md 를 열 디렉터리 2-in-progress(status in-progress) · 열 안의 순서 0030 · 카드 id k2 · 제목 Add-login-form-validation 으로 나눴다. 오른쪽 아래: 그 파일 29줄. 1~13줄은 YAML frontmatter(id · type · title · priority · tags · depends_on · collection · created_at · updated_at · session · session_started_at)이고 uk 명령만 .uhd-kanban/lock/ 디렉터리를 잡은 채 파일 이름 · 디렉터리와 함께 바꾼다. collection 은 카드가 속한 milestone 의 id 목록이다. 15줄은 본문이고 uk run 이 카드 세션의 프롬프트에 넣는다. 17~29줄은 ## Comments 이고 블록 세 개가 있다. c1 [assign] 은 uk run 이 남긴 기록, c2 [question] 은 카드 세션의 질문, c3 [answer] 는 사용자의 답이다.](docs/images/board-storage.png)
 
-*데모 보드의 파일로 만든 그림. 트리와 파일 내용은 디스크의 파일 그대로이고, 보기 폭보다 긴 줄은 … 로 끝냈다.*
+*`uk` 명령으로 만든 데모 보드의 파일로 그린 그림. 트리와 파일 내용은 디스크의 파일 그대로이고, 보기 폭보다 긴 줄은 … 로 끝냈다. 카드 세션은 띄우지 않았다. `uk run` 은 세션 목록만 적는 `claude` 대역으로 실행했고, c2 · c3 은 `uk comment` 로 적었다.*
 
 | 경로 | 내용 |
 |---|---|
@@ -100,7 +100,7 @@ uk migrate             # comments.kinds 를 바꾸고 "locale": "ko" 를 넣고,
 | `kanban/<n>-<status>/<순서 번호>-k<id>-<제목>.md` | 열 안의 카드. 예: `kanban/1-to-do/0010-k457-로그인-오류-재현.md` |
 | `kanban/archived/<YYYY-MM>/<YYYY-MM-DD>-k<id>-<제목>.md` | 아카이브한 카드. 날짜는 `completed_at` 의 날짜다 |
 
-카드는 YAML frontmatter · 본문 · `## Comments` 절로 이루어진다. `uk run` 은 본문을 카드 세션의 프롬프트로 쓴다.
+카드는 YAML frontmatter · 본문 · `## Comments` 절로 이루어진다. `uk run` 은 본문을 카드 세션의 프롬프트로 쓴다. `collection` 은 카드가 속한 milestone 의 id 목록이고 [보드 모니터 pane](#보드-모니터-pane) 의 행을 정한다.
 
 ```markdown
 ---
@@ -110,6 +110,7 @@ title: 로그인 오류 재현
 priority: high
 tags: [model:deep, effort:high]
 depends_on: [455]
+collection: [450]
 created_at: 2026-10-29T08:00:00Z
 updated_at: 2026-10-29T09:10:00Z
 ---
@@ -136,7 +137,7 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | 디렉터리 | `kanban/` 아래 디렉터리 · 파일은 모두 `config.json` 의 `columns` 에 있는 열이거나 `archive.dir`(기본 `archived/`)이다 |
 | 열과 `type` | 카드의 `type` 이 그 열의 `types` 에 있다 |
 | 카드 id | 카드 id 하나가 보드의 한 곳에만 있다 |
-| frontmatter 값 | `priority` 는 정해진 값, `tags` 는 문자열 목록, `depends_on` 은 카드 id 목록이다 |
+| frontmatter 값 | `priority` 는 정해진 값, `tags` 는 문자열 목록, `depends_on` · `collection` 은 카드 id 목록이다 |
 | 코멘트 | `### c<n> [kind]` 의 kind 가 `config.json` 의 `comments.kinds` 에 있다 |
 
 ### 기본 열
@@ -200,35 +201,50 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | `uk run` | 카드를 `claude --bg` 세션으로 띄운다 |
 | `uk recover` | 멈춘 카드 세션을 `claude --bg --resume` 으로 이어 간다 |
 | `uk guard` | 그 세션이 그 파일을 고쳐도 되는지 판정한다(훅이 쓴다) |
-| `uk board` | 열마다 카드 수와 세션 상태를 출력한다(pane 이 쓴다) |
+| `uk board` | 열마다 카드 수, 세션 상태, milestone 마다 끝난 수 / 전체 수를 출력한다(pane 이 쓴다) |
 | `uk migrate` | 0.4.0 까지 만든 보드의 kind 를 영어 id 로 바꾸고 `locale` 을 넣는다 |
 | `uk locale` | 지금 디렉터리에서 쓸 언어를 출력한다(pane 이 쓴다) |
 
 종료 코드는 `0` 성공 · `1` 규칙 위반이나 실행 실패(내용은 stderr) · `2` 사용법 오류 · `3` 부른 디렉터리 위에 보드가 없음이다. 전체 옵션은 [`SKILL.md`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md#명령) 에 있다.
 
-아래 데모 보드에서 `uk board` 를 실행한 출력:
+[보드 파일 배치](#보드-파일-배치) 그림의 데모 보드에서 `locale` 을 `ko` 로 바꿔 `uk board` 를 실행한 출력:
 
 ```
 1-to-do 7개
-2-in-progress 3개 (세션: live 2 · none 1)
+2-in-progress 3개 (세션: none 2 · resume 1)
 3-in-review 2개
 4-done 8개
 5-decided 1개
-6-planned 0개
 7-implemented 1개
 8-cancelled 1개
-9-active 1개
+k1 v1.0 release (active) 7/17
+소속 없음 4/6
 ```
+
+수는 작업 카드만 센다. `6-planned` · `9-active` 는 milestone 만 받는 열이라 나오지 않는다. 이 보드의 k2 는 세션을 실제로 띄우지 않았으므로 판정이 `resume` 이다.
 
 ## 보드 모니터 pane
 
-![카드 24장 · 열 9개인 데모 보드의 보드 모니터 pane. 열마다 카드 수는 7, 6, 2, 5, 1, 0, 1, 1, 1 이다. 막대 폭은 4칸이고 카드 한 장이 문자 하나다. 두 번째 막대인 in-progress 열에는 세션 상태마다 카드가 한 장씩 있다. 차례대로 초록 음영 블록(live), 노란 점자 글자(pending), 빨간 화살표(restart), 빨간 빗금(resume), 회색 체크 표시(done), 열의 색 음영(none)이다.](docs/images/board-monitor-demo.png)
+![작업 카드 24장 · milestone 2개인 데모 보드의 보드 모니터 pane. 머리 줄과 범례 아래에 행이 3개 있고 행마다 접기 기호 ▾ 가 있다. k1 행은 머리 줄 기호가 노란 점자 글자이고 끝난 수 / 전체 수가 2/9 이며, 막대는 왼쪽부터 done 칸 2개, in-review 칸 1개, in-progress 칸 3개(초록 음영 블록, 노란 점자 글자, 회색 체크 표시), to-do 칸 3개다. k2 행은 기호가 빈 원이고 제목이 흐리며 0/3 이고 to-do 칸이 3개다. 소속 없음 행은 기호가 빨간 화살표이고 4/12 이며 막대는 done 칸 4개, in-review 칸 1개, in-progress 칸 2개(빨간 화살표, 빨간 빗금), to-do 칸 5개다.](docs/images/board-monitor-demo.png)
 
-*가상의 카드 24장이 있고 in-progress 열에 세션 상태마다 카드가 한 장씩 있는 데모 보드.*
+*가상의 작업 카드 24장으로 만든 시험용 `board` 출력을 캡처했다. 세션 상태를 여러 가지 보이려고 만든 출력이고, [보드 파일 배치](#보드-파일-배치) 의 데모 보드와는 다른 보드다.*
 
-pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열린다. 맨 위 줄의 수는 `config.json` 의 `columns` 차례대로 열마다 카드 수이고, 막대는 카드 하나를 한 칸으로 아래로 자란다. 닫힌 pane 은 `/kanban-board` 로 다시 연다.
+pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열린다. 닫힌 pane 은 `/kanban-board` 로 다시 연다. 맨 위 줄은 시각 · 작업 카드 수 · 끝나지 않은 milestone 수 · 갱신 주기이고, 그 아래는 열의 색과 세션 상태의 범례다. 그 아래에 끝나지 않은 milestone 마다 행 하나(swimlane: 소속으로 묶은 가로 행)가 있고, `collection` 이 빈 카드는 마지막 `소속 없음` 행에 든다. 행의 차례는 `active` milestone → `planned` milestone → `소속 없음` 이다.
 
-| in-progress 열의 칸 | 범례 | 세션 상태 | 다시 그리는 간격 |
+| 행의 부분 | 보이는 것 |
+|---|---|
+| 머리 줄 기호 | `active` 는 `●`, `planned` 는 `○`. 소속 카드의 세션 상태가 `restart` · `pending` · `live` · `resume` 중 하나이면 이 차례로 앞선 상태의 글자로 바뀐다 |
+| 접기 기호 | `▾` 는 막대를 펼친 행, `▸` 는 접은 행이다 |
+| 제목 | `k<id>` 와 milestone 제목. `planned` 는 흐리게 그린다. 작업 카드의 제목은 보이지 않는다 |
+| 오른쪽 수 | 끝난 카드 수 / 소속 카드 수. 아카이브한 카드를 포함해 센다. 끝난 카드는 `dependencies.resolved` 와 `dependencies.abandoned` 의 열에 있는 카드다 |
+| 막대 | 소속 작업 카드 하나가 한 칸이고 pane 폭에서 줄을 바꾼다. 칸의 색은 카드의 열이고, 왼쪽부터 끝난 열(`done` · `decided` · `implemented` · `cancelled`) → `in-review` → `in-progress` → `to-do` 차례다 |
+
+- milestone 의 소속은 작업 카드의 `collection` 이다. 여러 milestone 에 속한 카드는 행마다 칸이 있다.
+- `done` 으로 옮긴 milestone 은 행을 그리지 않는다. 그 소속 카드는 어느 행에도 들지 않고 맨 위 범례의 열별 카드 수에는 남는다.
+- 머리 줄의 `▾ k<id>` 를 클릭하면 그 행의 막대를 접고, 다시 클릭하면 편다. 키보드로는 `ctrl+x tab` 으로 pane 에 포커스를 옮긴 뒤 `Tab` 으로 고르고 `Enter` 로 누른다. 접어도 머리 줄 기호의 애니메이션과 오른쪽 수는 그대로다. 접은 행의 목록은 세션 디렉터리마다 저장되어 세션을 다시 시작해도 유지된다.
+- 작업 카드가 `run.status` 의 열로 옮겨지면 `uk move` · `uk run` · `uk recover` 가 그 카드가 속한 `planned` milestone 을 `active` 로 함께 옮긴다. 그 밖의 어긋남(`planned` 인데 `in-progress` 소속 카드가 있다, `active` 인데 소속 카드가 모두 끝났다)은 `uk check` 가 stderr 로 알리고 옮기지 않는다.
+
+| in-progress 칸 | 범례 | 세션 상태 | 다시 그리는 간격 |
 |---|---|---|---|
 | 초록 `░▒▓█▓▒`. 카드마다 한 글자씩 어긋난다 | `돈다` | `live`: 실행 중이다 | 250 ms |
 | 노랑 `⠋⠙⠸⠴⠦⠇` | `다시 뜨는 중` | `pending`: 데몬이 세션을 다시 띄우는 중이다 | 250 ms |
@@ -237,135 +253,140 @@ pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열�
 | 회색 `✓` | `끝남` | `done`: 끝났다 | - |
 | 열의 색 `▒` | `세션 없음` | `none`: 카드에 세션이 없다 | - |
 
-갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60).
+갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60). 0.8.0 에서 `monitor.cell` 키를 없앴다. 기존 `config.json` 에 남아 있으면 오류 없이 무시한다.
 
-카드 한 장이 막대에서 차지하는 칸은 `config.json` 의 `monitor.cell` 이 정한다. 막대 폭은 어느 방식이든 pane 폭을 열 수로 나눈 폭이라, pane 을 넓히거나 좁히면 막대도 따라 바뀐다. 카드 수가 막대보다 넓으면 서로 붙는 숫자를 다음 줄에 적는다.
+pane 높이에 들어가지 않는 행은 스크롤한다. `uk board` 는 소속을 읽으려고 아카이브까지 모든 카드 파일을 연다. 카드 파일 1,277개인 보드에서 `uk board --json` 은 5회 실행에 회당 1.24–1.48초 걸렸다(SMB 공유 위의 저장소).
 
-| `monitor.cell` | 카드 한 장 | 한 행의 카드 수 | 카드가 적은 보드 | 카드가 수백 장인 보드 |
-|---|---|---|---|---|
-| `char`(기본값, 키가 없을 때도 이 값) | 문자 하나 | 막대 폭 | 열의 카드 수가 막대 폭 이상일 때만 첫 행이 막대 폭을 채운다 | 카드 한 장이 문자 하나라 긴 막대의 행 수가 가장 적다 |
-| `row` | 막대의 한 행 | 1 | 카드 한 장이 막대 폭을 채운다 | 한 행에 카드 한 장이라 긴 막대는 스크롤이 늘어난다 |
-| `fit` | 막대 폭을 한 행의 카드 수로 나눈 칸 | 가장 긴 막대가 pane 높이에 들어가는 수. 막대 폭을 넘지 않는다 | `row` 와 같다 | 카드가 찬 행은 막대 폭을 채운다. 막대 폭이 나누어떨어지지 않으면 일부 칸이 한 문자 넓다 |
+![Claude Code 안의 uhd-kanban 보드 모니터 pane. 머리 줄에 카드 559개 · milestone 10개 · 60초마다가 있고, 그 아래 범례가 있다. 행은 차례대로 끝난 수 / 전체 수가 493/646, 222/233, 9/10, 12/13, 2/3, 118/152, 0/2, 126/184, 0/2, 3/41 이고 소속 없음 행은 없다. 첫 행의 막대는 여섯 줄이다. 그 막대 가운데에 in-progress 칸(회색 체크 표시 1개, 세션 없음 음영 5개, 초록 음영 블록 4개)이 있고 그 행의 머리 줄 기호는 초록 음영 글자로 바뀐다. 여섯째 행의 막대에는 세션 없음 음영 1개가 있다.](docs/images/board-monitor-559-cards.png)
 
-pane 높이에 들어가지 않는 막대는 어느 방식이든 스크롤한다.
-
-![Claude Code 안의 uhd-kanban 보드 모니터 pane. 머리 줄에 「02:27 · 열 9개 · 카드 501개 · 60초마다」가 있고, 그 아래 범례가 있다. 열마다 카드 수는 261, 28, 6, 159, 22, 4, 11, 6, 4 이고, 열마다 세로 막대 하나가 아래로 자라며 카드 하나가 한 칸이다. in-progress 막대의 칸은 세션 상태를 나타낸다. 초록 음영 블록은 실행 중인 세션, 노란 점자 글자는 다시 뜨는 중인 세션, 빨간 화살표는 재시작을 기다리는 세션, 빨간 빗금은 멈춘 세션, 회색 체크 표시는 끝난 세션, 열의 색 음영은 세션이 없는 카드다.](docs/images/board-monitor-501-cards.png)
-
-*카드 501장인 보드의 보드 모니터 pane. pane 은 카드 수와 세션 상태만 보이고 카드 제목은 보이지 않는다.*
+*실제 프로젝트 보드(작업 카드 559장, 소속 카드는 아카이브 포함 수)의 `uk board --json` 출력을 캡처했다. milestone 제목은 가상의 값으로 바꿨다.*
 
 ### 재배치
 
-![카드가 바뀌는 동안의 데모 보드. to-do 막대의 카드 한 장이 점자 글자를 거쳐 사라지고, 그 뒤의 카드가 앞으로 옮겨져 빈칸이 닫힌다. 같은 막대의 다른 자리와 in-review 막대에 빈칸이 열리고 새 카드가 나타난다. 그동안 in-progress 칸의 애니메이션은 계속된다.](docs/images/board-monitor-transition.png)
+![카드가 바뀌는 동안의 데모 보드. k1 행에서 to-do 칸 하나가 점자 글자를 거쳐 사라지고, in-progress 칸 하나가 사라진다. 남은 칸이 밀린 뒤 in-review 칸과 to-do 칸에 새 카드가 나타난다. 그동안 in-progress 칸과 소속 없음 행의 칸 애니메이션은 계속된다.](docs/images/board-monitor-transition.png)
 
-*카드 한 장 삭제 · 한 장 생성 · 한 장을 in-progress 에서 in-review 로 이동. pane 을 100 ms 마다 캡처했다.*
+*k1 행에서 카드 한 장 삭제 · 한 장 생성 · 한 장을 in-progress 에서 in-review 로 이동. pane 을 50 ms 마다 캡처했다.*
 
-`uk board --json` 을 다시 읽어 카드가 생성 · 삭제 · 이동된 것을 찾으면 새 보드를 그리기 전에 재배치를 한 번 재생한다. 프레임 간격은 100 ms 이고 재배치 하나는 최대 31프레임(3.1초)이다.
+`uk board --json` 을 다시 읽어 카드가 생성 · 삭제 · 이동되었거나 milestone 의 열이 바뀐 것을 찾으면 새 보드를 그리기 전에 재배치를 한 번 재생한다. 프레임 간격은 100 ms 이고 재배치 하나는 최대 23프레임(2.3초)이다.
 
 | 단계 | 프레임 수 | 그리는 것 |
 |---|---|---|
-| 사라짐 | 0 또는 8 | 삭제된 카드의 칸이 `▓▒░⠿⠶⠒⠂` 차례로 바뀌고 색이 회색에 가까워진 뒤 비워진다. 막대 위의 카드 수는 이 단계 끝에 줄어든다 |
-| 빈칸 닫힘 | 0–8 | 빈칸 뒤의 카드가 가까운 카드부터 앞으로 옮겨진다. 옮길 카드가 8장보다 많으면 한 프레임에 여러 장이 옮겨진다 |
-| 빈칸 열림 | 0–8 | 새 카드 자리 뒤의 카드가 먼 카드부터 뒤로 옮겨진다 |
-| 나타남 | 0 또는 7 | 새 카드의 칸이 같은 글자를 거꾸로 거친다. 막대 위의 카드 수는 이 단계 시작에 늘어난다 |
+| 사라짐 | 0 또는 8 | 삭제된 카드의 칸이 `▓▒░⠿⠶⠒⠂` 차례로 바뀌고 색이 회색에 가까워진 뒤 비워진다 |
+| 밀림 | 0–8 | 남는 카드가 새 자리로 옮겨진다. 앞으로 밀리는 카드는 앞 카드부터, 뒤로 밀리는 카드는 뒤 카드부터 옮겨지므로 칸이 겹치지 않고 빈칸은 옛 자리와 새 자리 사이만 지난다. 옮길 카드가 8장보다 많으면 한 프레임에 여러 장이 옮겨진다 |
+| 나타남 | 0 또는 7 | 새 카드의 칸이 같은 글자를 거꾸로 거친다 |
 
-- 이동한 카드는 옛 열의 삭제와 새 열의 생성으로 재생한다. 같은 열에서 차례만 바뀐 카드도 같다.
+- 머리 줄의 수는 재배치가 시작될 때 새 값으로 바뀐다.
+- 이동한 카드는 옛 행의 삭제와 새 행의 생성으로 재생한다. 같은 행 안에서 차례가 바뀐 카드도 같고, 막대 안의 차례를 유지하는 카드 중 가장 많은 수만 밀린다.
+- milestone 의 열이 바뀌면 그 머리 줄을 8프레임 반전한다. 새 보드에 없는 행은 옛 자리에 둔 채 칸이 사라진 뒤 없앤다.
 - 세션 상태만 바뀐 카드는 재배치 없이 다시 그린다.
 - 세션이 시작된 뒤의 첫 읽기는 재생하지 않는다. 변경은 다음 읽기에서 찾으므로 최대 `monitor.interval_seconds` 늦다.
 - 재배치 중에 온 변경은 재생하던 재배치의 마지막 상태에서 새 재배치를 시작한다.
 
 ### 애니메이션 사례
 
-아래 이미지는 APNG(animated PNG. 프레임이 여러 장 든 PNG 파일이고 브라우저가 재생한다)이고, 열이 `to-do` · `in-progress` · `in-review` · `done` 인 가상의 보드에서 카드 수 행과 막대만 담았다. 프레임은 tmux 창에서 실행한 Claude Code 세션의 pane 을 50 ms 마다 캡처했다. 세션 상태 사례는 한 주기를 반복한다. 나머지 사례는 첫 프레임을 1초, 마지막 프레임을 1.5초 표시하고, `in-progress` 카드에 세션이 없어 재배치만 바뀐다.
+아래 이미지는 APNG(animated PNG. 프레임이 여러 장 든 PNG 파일이고 브라우저가 재생한다)이고, 열이 `to-do` · `in-progress` · `in-review` · `done` 인 가상의 보드에서 행만 담았다. 프레임은 tmux 창에서 실행한 Claude Code 세션의 pane 을 50 ms 마다 캡처했고, 시험 사본은 보드를 1초마다 다시 읽게 고쳤다. 세션 상태 사례는 한 주기를 반복한다. 나머지 사례는 첫 프레임을 1초, 마지막 프레임을 1.5초 표시한다. `animation-start` 를 뺀 나머지 재배치 사례는 `in-progress` 카드에 세션이 없어 재배치만 바뀐다.
 
 #### `live`
 
 `in-progress` 카드 8장. 한 주기는 250 ms 프레임 6장이다.
 
-<img src="docs/images/animation-live.png" width="500" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 초록 칸 8개가 옅은 음영, 중간 음영, 짙은 음영, 전체 블록 글자를 차례로 거쳐 되돌아오고 카드마다 글자 한 개씩 어긋난다. 나머지 막대는 바뀌지 않는다.">
+<img src="docs/images/animation-live.png" width="500" alt="k1 Checkout 행(7/34)과 k2 Search 행(0/5). k1 막대의 초록 칸 8개가 옅은 음영, 중간 음영, 짙은 음영, 전체 블록 글자를 차례로 거쳐 되돌아오고 카드마다 글자 한 개씩 어긋난다. k1 머리 줄 기호도 같은 글자로 바뀐다. 나머지 칸은 바뀌지 않는다.">
 
 #### `pending`
 
 `in-progress` 카드 8장. 한 주기는 250 ms 프레임 6장이다.
 
-<img src="docs/images/animation-pending.png" width="500" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 노란 점자 글자 8개가 함께 회전한다. 나머지 막대는 바뀌지 않는다.">
+<img src="docs/images/animation-pending.png" width="500" alt="k1 Checkout 행(7/34)과 k2 Search 행(0/5). k1 막대의 노란 점자 글자 8개와 머리 줄 기호가 함께 회전한다. 나머지 칸은 바뀌지 않는다.">
 
 #### `restart`
 
 `in-progress` 카드 8장. 한 주기는 250 ms 프레임 2장이다.
 
-<img src="docs/images/animation-restart.png" width="500" alt="카드 수가 14, 8, 5, 7 인 막대 네 개. 둘째 막대의 빨간 화살표 글자 8개가 프레임마다 글자색과 배경색을 맞바꾼다. 나머지 막대는 바뀌지 않는다.">
+<img src="docs/images/animation-restart.png" width="500" alt="k1 Checkout 행(7/34)과 k2 Search 행(0/5). k1 막대의 빨간 화살표 글자 8개와 머리 줄 기호가 프레임마다 글자색과 배경색을 맞바꾼다. 나머지 칸은 바뀌지 않는다.">
 
 #### 세션 상태 6가지
 
-`in-progress` 카드 12장, 상태마다 2장. `live` · `pending` · `restart` 는 바뀌고 `resume` · `done` · `none` 은 그대로다.
+`in-progress` 카드 12장, 상태마다 2장. `live` · `pending` · `restart` 는 바뀌고 `resume` · `done` · `none` 은 그대로다. 머리 줄 기호는 `restart` 다.
 
-<img src="docs/images/animation-mixed.png" width="500" alt="카드 수가 14, 12, 5, 7 인 막대 네 개. 둘째 막대에 live, pending, restart, resume, done, none 칸이 2개씩 모두 12개 있다. live, pending, restart 칸은 바뀌고 resume, done, none 칸은 바뀌지 않는다.">
+<img src="docs/images/animation-mixed.png" width="500" alt="k1 Checkout 행(7/38)과 k2 Search 행(0/5). k1 막대에 live, pending, restart, resume, done, none 칸이 2개씩 모두 12개 있다. live, pending, restart 칸은 바뀌고 resume, done, none 칸은 바뀌지 않는다. k1 머리 줄 기호는 빨간 화살표다.">
 
 #### 삭제
 
-`to-do` 의 6번째 카드를 삭제했다. 카드 수가 14 에서 13 으로 바뀐다.
+k1 의 `to-do` 6번째 카드를 삭제했다. 전체 수가 34 에서 33 으로 바뀐다.
 
-<img src="docs/images/animation-delete.png" width="500" alt="첫째 막대의 카드는 14장이다. 여섯째 칸이 음영과 점자 글자를 거쳐 비워지고, 카드 수가 13 으로 바뀌고, 빈칸 뒤의 카드 8장이 한 장씩 앞으로 옮겨진다.">
+<img src="docs/images/animation-delete.png" width="500" alt="k1 머리 줄의 수가 7/34 에서 7/33 으로 바뀐다. to-do 칸 하나가 음영과 점자 글자를 거쳐 비워지고, 빈칸 뒤의 to-do 칸 8개가 한 칸씩 앞으로 옮겨진다.">
 
 #### 생성
 
-`to-do` 의 6번째 자리에 카드를 생성했다. 카드 수가 14 에서 15 로 바뀐다.
+k1 의 `to-do` 6번째 자리에 카드를 생성했다. 전체 수가 34 에서 35 로 바뀐다.
 
-<img src="docs/images/animation-create.png" width="500" alt="첫째 막대의 카드는 14장이다. 여섯째 칸 뒤의 카드 9장이 마지막 카드부터 8프레임 동안 뒤로 옮겨져 빈칸이 열리고, 카드 수가 15 로 바뀌고, 새 카드가 점자와 음영 글자를 거쳐 나타난다.">
+<img src="docs/images/animation-create.png" width="500" alt="k1 머리 줄의 수가 7/34 에서 7/35 로 바뀐다. 마지막 to-do 칸부터 9개가 한 칸씩 뒤로 옮겨져 빈칸이 생기고, 새 카드가 점자와 음영 글자를 거쳐 나타난다.">
 
-#### 열 사이 이동
+#### 같은 행에서 열 이동
 
-`to-do` 의 4번째 카드를 `in-progress` 의 2번째 자리로 옮겼다.
+k1 의 `to-do` 4번째 카드를 `in-progress` 의 2번째 자리로 옮겼다. 전체 수는 그대로다.
 
-<img src="docs/images/animation-move.png" width="500" alt="첫째 막대의 넷째 칸이 사라지고 빈칸이 닫힌다. 이어서 둘째 막대의 둘째 칸에 빈칸이 열리고 같은 카드가 그 열의 색으로 나타난다. 카드 수가 14 와 3 에서 13 과 4 로 바뀐다.">
+<img src="docs/images/animation-move.png" width="500" alt="k1 막대의 파란 to-do 칸 하나가 사라진다. 그 칸과 in-progress 2번째 자리 사이의 칸이 한 칸씩 뒤로 옮겨지고, 같은 카드가 in-progress 의 색으로 나타난다. 머리 줄의 수는 7/34 그대로다.">
+
+#### 행 사이 이동
+
+k1 의 `to-do` 4번째 카드를 k2 의 `to-do` 2번째 자리로 옮겼다. 카드의 `collection` 이 바뀐 경우다.
+
+<img src="docs/images/animation-lane-move.png" width="500" alt="k1 머리 줄의 수가 7/34 에서 7/33 으로, k2 머리 줄의 수가 0/5 에서 0/6 으로 바뀐다. k1 막대의 to-do 칸 하나가 사라지고 뒤의 칸이 앞으로 옮겨진다. k2 막대의 뒤 칸이 뒤로 옮겨진 뒤 2번째 자리에 카드가 나타난다.">
 
 #### 같은 열 차례 변경
 
-`to-do` 의 마지막 카드를 1번째 자리로 옮겼다.
+k1 의 `to-do` 마지막 카드를 첫 자리로 옮겼다.
 
-<img src="docs/images/animation-reorder.png" width="500" alt="첫째 막대의 마지막 칸이 사라지고, 다른 카드 13장이 8프레임 동안 뒤로 옮겨져 첫째 칸에 빈칸이 열리고, 그 카드가 첫째 칸에 나타난다. 카드 수가 14 에서 13 을 거쳐 14 로 돌아온다.">
+<img src="docs/images/animation-reorder.png" width="500" alt="k1 막대의 마지막 칸이 사라지고, 다른 to-do 칸 13개가 뒤로 옮겨져 첫 to-do 자리가 비고, 그 카드가 그 자리에 나타난다. 머리 줄의 수는 7/34 그대로다.">
 
 #### 긴 막대에서 삭제
 
-`to-do` 카드 60장 중 3번째를 삭제했다. 카드 57장을 8프레임에 옮기므로 한 프레임에 여러 장이 옮겨진다.
+k1 의 `to-do` 카드 200장 중 3번째를 삭제했다. 카드 197장을 8프레임에 옮기므로 한 프레임에 여러 장이 옮겨진다.
 
-<img src="docs/images/animation-long.png" width="500" alt="첫째 막대의 카드는 60장이고 6행이다. 셋째 칸이 사라져 비워진다. 빈칸이 8프레임 동안 막대 끝쪽으로 옮겨지고 프레임마다 카드 여러 장이 앞으로 옮겨진다. 카드 수가 59 로 바뀐다.">
+<img src="docs/images/animation-long.png" width="500" alt="k1 막대가 4행이다. 머리 줄의 수가 7/220 에서 7/219 로 바뀐다. to-do 칸 하나가 사라지고 빈칸이 8프레임 동안 막대 끝쪽으로 옮겨지며 프레임마다 카드 여러 장이 앞으로 옮겨진다.">
 
-#### `row` 에서 삭제
+#### milestone 시작
 
-`monitor.cell` 이 `row` 다. `to-do` 카드 6장 중 2번째를 삭제했다.
+k2 의 첫 카드를 `in-progress` 로 옮겼고 `uk move` 가 k2 를 `active` 로 함께 옮긴 상태다. `live` 세션이 있다.
 
-<img src="docs/images/animation-row.png" width="500" alt="카드 한 장이 막대의 한 행 전체다. 첫째 막대의 둘째 행이 사라져 비워지고, 그 아래 4행이 한 행씩 위로 옮겨진다. 카드 수가 6 에서 5 로 바뀐다.">
+<img src="docs/images/animation-start.png" width="500" alt="k2 머리 줄이 8프레임 반전되고 흐리던 제목이 밝아지며, 기호가 빈 원에서 초록 음영 글자로 바뀐다. k2 막대의 첫 to-do 칸이 사라지고 칸이 옮겨진 뒤 in-progress 칸으로 나타난다.">
 
-#### `fit` 에서 삭제
+#### milestone 완료
 
-`monitor.cell` 이 `fit` 이고 pane 높이에 맞춰 한 행에 2장이다. `to-do` 카드 18장 중 4번째를 삭제했다.
+k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이 없어지고 `소속 없음` 행의 수는 3/11 그대로다.
 
-<img src="docs/images/animation-fit.png" width="500" alt="첫째 막대의 카드는 18장이고 9행이며 한 행에 2장이고 카드 한 장의 폭은 막대 폭의 약 절반이다. 둘째 행의 둘째 카드가 사라지고 그 뒤의 카드 14장이 8프레임 동안 앞으로 옮겨진다. 카드 수가 18 에서 17 로 바뀐다.">
+<img src="docs/images/animation-finish.png" width="500" alt="k1 Checkout, k2 Search(5/5), 소속 없음(3/11) 행이 있다. k2 의 done 칸 5개가 사라진 뒤 k2 행이 없어진다. 소속 없음 행의 칸과 수 3/11 은 그대로다.">
+
+#### 행 접기
+
+`▾ k1` 을 클릭해 k1 행을 접고, 약 2초 뒤 `▸ k1` 을 클릭해 폈다. 머리 줄의 수는 그대로다.
+
+<img src="docs/images/animation-collapse.png" width="500" alt="k1 Checkout 행(7/34)과 k2 Search 행(0/5). k1 머리 줄의 접기 기호가 ▾ 에서 ▸ 로 바뀌고 k1 막대가 없어져 k2 행이 그 자리로 옮겨진다. 다음 프레임에서 기호가 ▾ 로 돌아오고 막대가 다시 나타난다. 머리 줄의 수는 바뀌지 않는다.">
 
 ### 애니메이션 재생 조건
 
-`Raster` 는 칸 격자를 그리고 render 훅을 실행하지 않고 다시 그리는(`$.ui.blit`) Claude Code 요소다. 터미널 surface 에만 있다.
+`Raster` 는 칸 격자를 그리고 render 훅을 실행하지 않고 다시 그리는(`$.ui.blit`) Claude Code 요소다. 터미널 surface 에만 있다. 행마다 머리 줄 기호와 막대가 각각 `Raster` 이고, 프레임에서 바뀐 `Raster` 만 다시 그린다. 접은 행에는 머리 줄 기호의 `Raster` 만 있다.
 
 | 상황 | 그리는 요소 | 타이머 |
 |---|---|---|
-| 터미널, 격자가 512열 · 256행 이하 | `Raster` | 재배치 중 100 ms, `live` · `pending` · `restart` 카드가 있으면 250 ms, 그 밖에는 없다 |
-| 터미널, 격자가 그보다 크다(`monitor.cell` 이 `row` 인 긴 막대) | `Text`. 첫 프레임으로 고정한다 | 없다 |
+| 터미널, pane 이 512열 이하이고 막대가 256행 이하 | `Raster` | 재배치 중 100 ms, `live` · `pending` · `restart` 카드가 있으면 250 ms, 그 밖에는 없다 |
+| 터미널, pane 이 512열을 넘거나 막대가 256행을 넘는다 | `Text`. 첫 프레임으로 고정한다 | 없다 |
 | 데스크톱 · VS Code · 모바일 surface | `Text`. 첫 프레임으로 고정한다 | 없다 |
 | pane 이 다른 탭 뒤에 있다 | 다시 그리지 않는다 | 1초마다 다시 표시되었는지 확인한다 |
 | pane 을 닫았다 | - | 없다 |
 
-데스크톱 · VS Code · 모바일 행은 `claude plugin test` 로 요소 트리를 확인했고 그 앱에서 확인하지는 않았다. 색은 고정 RGB 값이므로 light 테마에서도 칸의 어두운 배경색은 그대로다.
+데스크톱 · VS Code · 모바일 행은 그 앱에서 확인하지 않았다. 색은 고정 RGB 값이므로 light 테마에서도 칸의 어두운 배경색은 그대로다.
 
-아래 값은 Mac Studio(`Mac17,14`)에서 Claude Code 2.1.312 를 200×50 tmux 창으로 실행해 카드 511장 보드로 쟀다. CPU 는 `ps -o cputime=` 의 증가량을 잰 시간으로 나눈 값이고, 출력량은 `tmux pipe-pane` 이 받은 바이트 수다. 터미널 앱 자체의 CPU 는 포함되지 않는다.
+아래 값은 Mac Studio(`Mac17,14`)에서 Claude Code 2.1.312 를 200×50 tmux 창으로 실행해 작업 카드 557장 · 행 9개인 보드의 `uk board --json` 출력으로 쟀다. CPU 는 `ps -o cputime=` 의 증가량을 잰 시간으로 나눈 값이고, 출력량은 `tmux pipe-pane` 이 받은 바이트 수다. 터미널 앱 자체의 CPU 는 포함되지 않는다.
 
 | 상태 | 잰 시간 | `claude` 프로세스 CPU | 터미널로 보낸 출력량 |
 |---|---|---|---|
-| 타이머 꺼짐 | 30초 | 0.70% | 0 B/s |
-| 250 ms 간격 | 30초 2회 | 1.90%, 1.53% | 1945 B/s, 1954 B/s |
-| 3.4초마다 재배치. 시험용 `board` 출력으로 갱신 주기를 1초로 낮췄다(`config.json` 의 하한은 10초다) | 28초 | 3.79% | 2303 B/s |
+| 타이머 꺼짐 | 30초 | 0.50% | 10 B/s |
+| 250 ms 간격(`live` 카드 3장) | 30초 2회 | 2.10%, 2.20% | 852 B/s, 854 B/s |
+| 재배치를 쉬지 않고 재생. 시험용 `board` 출력이 1초마다 카드 차례를 바꾸고 갱신 주기를 1초로 낮췄다(`config.json` 의 하한은 10초다) | 30초 | 5.50% | 1672 B/s |
 
-세션 두 개를 나란히 15분 동안 실행했을 때, 250 ms 간격으로 다시 그린 세션은 CPU 1.59% 를 썼고 RSS(프로세스 상주 메모리)가 468 MB 에서 504 MB 로 늘었다. 타이머가 꺼진 세션은 CPU 0.35% 를 썼고 RSS 가 463 MB 에서 478 MB 로 늘었다. 15분보다 긴 실행은 재지 않았다.
+세션 두 개를 나란히 15분 동안 실행했을 때, 250 ms 간격으로 다시 그린 세션은 CPU 2.05% 를 썼고 RSS(프로세스 상주 메모리)가 438 MB 에서 486 MB 로 늘었다. 타이머가 꺼진 세션은 CPU 0.43% 를 썼고 RSS 가 426 MB 에서 449 MB 로 늘었다. 15분보다 긴 실행은 재지 않았다.
 
 ## 필요한 것
 
@@ -399,6 +420,10 @@ pane 높이에 들어가지 않는 막대는 어느 방식이든 스크롤한다
 ### 카드 세션이 멈추면 어떻게 되는가?
 
 `uk board` 와 pane 이 멈춤으로 표시한다. `uk recover` 가 `claude --bg --resume` 으로 이어 가고, 새 session id 를 카드에 적고, `assign` 코멘트를 남긴다. 검토에서 돌아온 카드는 `uk recover --force k<id>` 로 이어 간다.
+
+### 세션이 끝났는데 카드가 왜 `done` 으로 옮겨지지 않는가?
+
+pane 의 `끝남` 은 세션 상태이고 `done` 은 카드의 열이다. 도구는 세션이 끝났다는 이유로 카드를 옮기지 않는다. 카드 세션은 `run.finish` 의 열(기본값은 task · bug 가 `in-review`, decision 이 `decided`)로 카드를 옮기고 끝난다. 옮기지 않고 끝났으면 메인 세션이 결과 코멘트를 보고 정한다. 작업이 남았으면 `uk recover --force k<id>` 로 이어 가고, 다른 카드가 끝나야 할 수 있는 작업이면 `uk set --add-depends` 로 `depends_on` 을 적고 `to-do` 로 돌린다.
 
 ### git worktree 에서도 쓸 수 있는가?
 

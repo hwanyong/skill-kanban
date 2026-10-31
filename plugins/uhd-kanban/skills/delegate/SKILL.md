@@ -65,15 +65,19 @@ description: 칸반 보드가 있는 프로젝트(루트에 `.uhd-kanban/`)의 �
 | 고를 것이 있고 그 답이 다른 카드의 작업을 정하는 일 | `decision` | `to-do`. 카드 세션이 선택지를 조사해 `[question]` 으로 올리고, 답을 받아 `[result]` 에 정한 것을 적는다 |
 | 여러 카드를 한 목표로 묶는 것 | `milestone` | `planned`(`uk new` 의 기본). 묶일 카드는 `--collection k<milestone id>` 로 만든다 |
 
+작업 카드를 만들 때 `uk board` 가 낸 milestone 줄에 `(active)` 가 있으면 카드가 그 목표에 속하는지 판단한다. 속하면 `--collection k<milestone id>` 를 적고, 속하는 milestone 이 없으면 적지 않는다. 소속이 없는 카드는 보드 모니터 pane 의 「소속 없음」 행에 든다.
+
+`uk move` · `uk run` · `uk recover` 가 작업 카드를 `run.status` 의 열로 옮기면 그 카드가 속한 `planned` milestone 을 `active` 로 함께 옮긴다. 메인 세션이 따로 옮기지 않는다.
+
 | 그때 | 하는 일 |
 |---|---|
-| milestone 에 묶인 카드를 처음 `uk run` 할 때 | `uk move k<milestone id> active` |
 | task · bug 가 `in-review` 에 왔고 끝난 판정을 만족한다 | `uk move k<id> done` |
 | decision 이 `decided` 에 왔다 | 그 결정을 반영할 task 카드를 만들고 `--depends` 에 decision 카드를 넣는다. `decided` 는 `dependencies.resolved` 에 있어 바로 띄울 수 있다 |
 | decision 을 반영한 카드가 모두 `done` 이다 | `uk move k<decision id> implemented` |
 | decision 에 반영할 코드가 없다 | `uk move k<decision id> done` |
 | 카드 세션이 `run.finish` 의 열로 옮기지 않고 끝났다(`uk recover` 의 「끝남」) | `[result]` 를 읽고 그 열로 옮긴다 |
-| milestone 에 묶인 카드가 모두 `done` 이나 `cancelled` 다 | `uk move k<milestone id> done`. 묶인 카드는 `grep -l -E 'collection: \[([0-9]+, )*<milestone id>(, [0-9]+)*\]' kanban/*/*.md` 로 찾는다. 아카이브(`kanban/archived/`)에 있는 카드는 `done` 에서 옮겨진 것이다 |
+| `uk check` 가 `active` milestone 의 소속 카드가 모두 끝났다고 알렸다 | 그 목표를 마쳤으면 `uk move k<milestone id> done`. 카드를 더 만들 목표면 그대로 둔다. `active → done` 은 도구가 옮기지 않는다 |
+| `uk check` 가 `planned` milestone 에 `in-progress` 소속 카드가 있다고 알렸다 | 진행 중이면 `uk move k<milestone id> active` |
 | task · bug · decision 을 하지 않기로 했다 | `uk board` 로 세션이 도는지 보고, 돌면 `claude stop <session>` 뒤 `uk move k<id> cancelled` |
 | `cancelled` 로 옮긴 `move` 가 기다리는 카드를 냈다 | 카드마다 고른다. 그만둔 카드의 결과가 없어도 할 수 있는 일이면 낸 `uk set … --remove-depends` 를, 아니면 함께 그만두는 `uk move … cancelled` 를 실행한다. 이 둘로 정할 수 없으면 「결정 모으기」로 사용자에게 묻는다 |
 

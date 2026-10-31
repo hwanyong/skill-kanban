@@ -6,7 +6,7 @@ import { UsageError, cardId } from '../args.mjs'
 import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
 import { USER, appendComment } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
-import { forceNote, t, translator } from '../i18n.mjs'
+import { forceNote, startedNote, t, translator } from '../i18n.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError, maxParallel } from '../project.mjs'
 import { sessionName, startPrompt } from '../prompt.mjs'
@@ -40,10 +40,10 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
     const text = translator(project.locale)('run.assigned', { session: session.sessionId, label: `${spec.label}${spec.ultracode ? ' ultracode' : ''}` })
     const { body } = appendComment(card.body, { kind: 'assign', from, to: [name], at: now(), text })
     const changes = { session: session.sessionId, session_started_at: startedAt(session) }
-    let path = card.path
-    if (card.status == status) writeCard(card.path, { ...card.data, ...changes, updated_at: now() }, body)
-    else path = moveCard(project, board, { ...card, body }, status, { force, changes }).path
-    console.log(`k${id} ${shortId} ${session.sessionId} ${path.slice(project.root.length + 1)}${forceNote(blocking)}`)
+    const moved = card.status == status ? null : moveCard(project, board, { ...card, body }, status, { force, changes })
+    if (!moved) writeCard(card.path, { ...card.data, ...changes, updated_at: now() }, body)
+    const path = moved?.path ?? card.path
+    console.log(`k${id} ${shortId} ${session.sessionId} ${path.slice(project.root.length + 1)}${forceNote(blocking)}${startedNote(moved?.started ?? [])}`)
     return 0
   })
 }

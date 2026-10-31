@@ -52,3 +52,4 @@ export const kindText = (kind, locale = LOCALE) => {
 // 여러 명령이 같은 꼴로 덧붙이는 출력. 값이 없으면 빈 글이다.
 export const renumberNote = (count) => (count > 0 ? ` ${t('note.renumbered', { count })}` : '')
 export const forceNote = (blocking) => (blocking.length > 0 ? ` ${t('note.forced', { ids: blocking.map((id) => `k${id}`) })}` : '')
+export const startedNote = (started) => (started.length > 0 ? ` ${t('note.started', { ids: started.map((id) => `k${id}`) })}` : '')
