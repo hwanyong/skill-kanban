@@ -5,19 +5,25 @@ import { COLLECTION_TYPE, endedStatuses, milestoneStatuses } from './project.mjs
 export const isWork = (card) => card.data.type != COLLECTION_TYPE
 
 // 막대 칸의 차례: 끝난 열(columns 차례) → 나머지 열의 역순. 끝난 카드가 막대의 왼쪽에 모인다.
+// run.status 열 안에서는 세션이 live 인 카드가 앞(in-review 쪽)에, 나머지가 뒤(to-do 쪽)에 온다. 그래서 막대가 to-do 에서 done 까지 진행 차례로 쌓인다.
 const finishOrder = (config) => {
   const statuses = config.columns.map((column) => column.status)
   const ended = endedStatuses(config)
   return [...statuses.filter((status) => ended.includes(status)), ...statuses.filter((status) => !ended.includes(status)).reverse()]
 }
 
+// verdicts: 카드 id → 세션 판정. board 명령이 넘기고, 넘기지 않으면 열 안의 차례는 보드 차례 그대로다.
 // 반환: [{ milestone, cards, finished, total }]. 차례는 진행이 앞선 열의 milestone → 소속이 없는 카드이고, 소속이 없는 묶음의 milestone 은 null 이다.
 // cards 는 열 안의 작업 카드이고 finished · total 은 아카이브한 소속 카드를 포함해 센다. 여러 milestone 에 속한 카드는 묶음마다 든다.
 // 소속이 없는 묶음은 collection 이 빈 카드다. 끝난 milestone 은 묶지 않으므로 그 소속 카드는 어느 묶음에도 들지 않는다.
-export const boardLanes = (project, { cards, archived }) => {
+export const boardLanes = (project, { cards, archived }, verdicts = new Map()) => {
   const { config } = project
   const ended = endedStatuses(config)
-  const work = finishOrder(config).flatMap((status) => cards.filter((card) => card.status == status && isWork(card)))
+  const isLive = (card) => verdicts.get(card.id) == 'live'
+  const work = finishOrder(config).flatMap((status) => {
+    const inColumn = cards.filter((card) => card.status == status && isWork(card))
+    return status == config.run.status ? [...inColumn.filter(isLive), ...inColumn.filter((card) => !isLive(card))] : inColumn
+  })
   const past = archived.filter(isWork)
   const milestones = milestoneStatuses(config).open.toReversed().flatMap((status) => cards.filter((card) => card.status == status && !isWork(card)))
   const collection = (card) => card.data.collection ?? []

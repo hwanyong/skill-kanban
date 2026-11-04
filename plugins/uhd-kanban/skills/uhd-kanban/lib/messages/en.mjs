@@ -160,11 +160,21 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'comment.badText': ({ problems }) => `The comment text cannot be written:${list(problems)}`,
   'comment.noteNoSessions': 'could not read the session list',
   'comment.noteUnknown': 'name not in claude agents --json',
+  'comment.noteNoMain': 'no main session is registered. Run uhd-kanban main --set in the main session',
   'inbox.noName': 'The name of this session was not found in claude agents --json. Give it as inbox <name>',
   'inbox.boardProblems': ({ count: n }) => `The board has ${count(n, 'rule violation')}. Run uhd-kanban check to see them`,
   'inbox.answered': 'answered',
   'inbox.summary': ({ name, count: n }) => `${count(n, 'unanswered comment')} addressed to ${name}`,
   'inbox.summaryAll': ({ name, count: n }) => `${count(n, 'comment')} addressed to ${name}`,
+  'main.none': 'No main session is registered. Run uhd-kanban main --set in the main session',
+  'main.show': ({ name, session, at }) => `Main session ${name} · session ${session} · registered ${at}`,
+  'main.noName': 'The name of this session was not found in claude agents --json. Give it as main --set <name>',
+  'main.badName': ({ name }) => `${name} cannot be registered as the main session. Card session names (k<id>), main, user, and names with spaces, commas, = or [ ] are not allowed`,
+  'main.unknown': ({ name }) => `claude agents --json has no session named ${name}`,
+  'main.duplicate': ({ name, count: n }) => `claude agents --json has ${count(n, 'session')} named ${name}. SendMessage addresses sessions by name, so it cannot pick the recipient. Rename one of them and run this again`,
+  'main.set': ({ name, previous }) => `Registered ${name} as the main session${previous ? ` (was ${previous})` : ''}. SendMessage lines addressed to main now come out as to=${name}`,
+  'main.registered': ({ name }) => `No main session was registered, so this session ${name} was registered (.uhd-kanban/main.json). When another session takes over as the main session, run uhd-kanban main --set in that session`,
+  'main.badFile': ({ path }) => `The name in ${path} is not a session name that can be the main session`,
   'migrate.unknownKinds': ({ items }) => `Some comments use a kind that is neither in comments.kinds nor in the LEGACY_KINDS table, so nothing was changed. Add that kind to comments.kinds in config.json as an English id (lowercase letters, digits, -) or fix the card header lines:${list(items)}`,
   'migrate.config': ({ before, after, locale }) => `config.json: locale ${locale} · comments.kinds ${before.join(', ')} → ${after.join(', ')}`,
   'migrate.summary': ({ cards, total, headers, config }) => `Changed ${count(headers, 'header line')} in ${cards} of ${count(total, 'card')} · config.json ${config ? 'changed' : 'unchanged'}`,
@@ -232,6 +242,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   archive [--dry-run]
   comment <k id> --kind <kind> --to <name>[,<name>] [--from <name>] (--text <text> | --text-file <path>)
   inbox [<name>] [--all] [--kind a,b]
+  main [--set [<name>]]   Show or register the main session that card sessions report to (.uhd-kanban/main.json). Without a name, this session
   run <k id> [--dry-run] [--force]   starts a claude --bg session from the card body. Up to run.max_parallel (-1 means unlimited)
   recover [<k id>…] [--dry-run] [--force]   resumes stalled card sessions with claude --bg --resume. --force also resumes finished sessions
   board [--json]        prints card counts per column and the session state of cards in the run.status column

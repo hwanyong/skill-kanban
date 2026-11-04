@@ -30,7 +30,7 @@ export const run = async ({ flags }) => {
     columns: config.columns.flatMap((column, index) => (column.types.some((type) => type != COLLECTION_TYPE)
       ? [{ status: column.status, dir: column.dir, index, count: board.cards.filter((card) => card.status == column.status && isWork(card)).length }]
       : [])),
-    lanes: boardLanes(project, board).map(({ milestone, cards, finished, total }) => ({
+    lanes: boardLanes(project, board, verdicts).map(({ milestone, cards, finished, total }) => ({
       key: milestone ? `k${milestone.id}` : 'none',
       id: milestone?.id ?? null,
       title: laneTitle(milestone?.data.title),

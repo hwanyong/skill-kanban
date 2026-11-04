@@ -1,4 +1,5 @@
 // 카드 본문을 프롬프트로 `claude --bg` 세션을 띄우고, 카드를 run.status 열로 옮기고, session 에 세션 id 를 적는다.
+// 카드 세션이 보고할 이름은 lib/main.mjs 의 reportName 이다. 등록된 메인 세션이 부르면 역할 이름 main 이다.
 // 모델 · effort 는 카드의 model: · effort: 태그를 profiles.json 으로 바꾼 값이다. 태그가 없으면 claude 의 기본값이다. 세션 이름은 k<id> 다.
 // uhd-kanban run <k id> [--dry-run] [--force]   --force 는 의존성 검사를 건너뛴다.
 
@@ -7,10 +8,11 @@ import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
 import { USER, appendComment } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
 import { forceNote, startedNote, t, translator } from '../i18n.mjs'
+import { claimMain, reportName } from '../main.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError, maxParallel } from '../project.mjs'
 import { sessionName, startPrompt } from '../prompt.mjs'
-import { BACKGROUND_ARGS, RUNNING_VERDICTS, cardSession, hasRoom, runningCards, currentSessionName, findSession, launchBackground, listSessions, startedAt } from '../sessions.mjs'
+import { BACKGROUND_ARGS, RUNNING_VERDICTS, cardSession, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt } from '../sessions.mjs'
 
 export const run = async ({ positional, flags }, { skillRoot }) => {
   if (positional[0] == null) throw new UsageError(t('run.usage'))
@@ -26,7 +28,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
     if (RUNNING_VERDICTS.includes(previous.verdict)) throw new ProjectError(t('run.stillRunning', { id, session: card.data.session, state: previous.session.state }))
     const running = runningCards(project, board, sessions)
     if (!hasRoom(project, running.length)) throw new ProjectError(t('run.full', { max: maxParallel(project.config), ids: running.map((item) => `k${item.id}`) }))
-    const from = currentSessionName(sessions) ?? USER
+    const from = reportName(project, sessions) ?? USER
     const name = sessionName(id)
     const prompt = startPrompt(project, card, { skillRoot, reportTo: from })
     const args = ['-n', name, ...spec.cliArgs]
@@ -35,6 +37,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       return 0
     }
     const shortId = launchBackground(args, prompt, project.root)
+    claimMain(project, sessions)
     const session = findSession(listSessions({ all: true }), shortId)
     if (!session) throw new ProjectError(t('run.notFound', { shortId }))
     const text = translator(project.locale)('run.assigned', { session: session.sessionId, label: `${spec.label}${spec.ultracode ? ' ultracode' : ''}` })

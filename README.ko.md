@@ -183,6 +183,8 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 
 카드 세션은 코멘트로 보고한다. `uk comment` 는 코멘트를 덧붙이고 받는 세션 앞으로 보낼 `SendMessage` 줄을 출력하고, `uk inbox` 는 그 세션 앞으로 온 코멘트 중 답하지 않은 것을 출력한다.
 
+카드 세션이 보고하는 곳은 역할 이름 `main` 이다. `main` 이 가리키는 세션 이름은 `.uhd-kanban/main.json` 한 곳에 있고, `uk comment` 가 `SendMessage` 줄을 낼 때만 그 이름으로 바꾼다. 메인 세션의 대화가 길어지면 새 세션을 다른 이름으로 열고 그 세션에서 `uk main --set` 을 실행한다. 이미 돌고 있는 카드 세션의 보고도 그 뒤로는 새 세션 앞으로 나온다.
+
 ## 명령
 
 스킬 문서에서 `uk` 는 `node <스킬 폴더>/bin/uhd-kanban.mjs` 를 줄여 적은 것이다. 대개 사용자가 직접 입력하지 않고 Claude 가 스킬에 따라 실행한다. 카드는 `k457` 또는 `457` 로 가리킨다.
@@ -199,6 +201,7 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | `uk archive` | 끝난 뒤 `archive.after_days`(기본 7)일이 지난 카드를 `kanban/archived/` 로 옮긴다 |
 | `uk comment` | 코멘트를 덧붙이고 `SendMessage` 줄을 출력한다 |
 | `uk inbox` | 한 세션 앞으로 온 코멘트 중 답하지 않은 것을 출력한다 |
+| `uk main` | 카드 세션이 보고하는 메인 세션을 출력하거나 `--set` 으로 등록한다 |
 | `uk run` | 카드를 `claude --bg` 세션으로 띄운다 |
 | `uk recover` | 멈춘 카드 세션을 `claude --bg --resume` 으로 이어 간다 |
 | `uk guard` | 그 세션이 그 파일을 고쳐도 되는지 판정한다(훅이 쓴다) |
@@ -238,7 +241,7 @@ pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열�
 | 접기 기호 | `▾` 는 막대를 펼친 행, `▸` 는 접은 행이다 |
 | 제목 | `k<id>` 와 milestone 제목. `planned` 는 흐리게 그린다. 작업 카드의 제목은 보이지 않는다 |
 | 오른쪽 수 | 끝난 카드 수 / 소속 카드 수. 아카이브한 카드를 포함해 센다. 끝난 카드는 `dependencies.resolved` 와 `dependencies.abandoned` 의 열에 있는 카드다 |
-| 막대 | 소속 작업 카드 하나가 한 칸이고 pane 폭에서 줄을 바꾼다. 칸의 색은 카드의 열이고, 왼쪽부터 끝난 열(`done` · `decided` · `implemented` · `cancelled`) → `in-review` → `in-progress` → `to-do` 차례다 |
+| 막대 | 소속 작업 카드 하나가 한 칸이고 pane 폭에서 줄을 바꾼다. 칸의 색은 카드의 열이고, 왼쪽부터 끝난 열(`done` · `decided` · `implemented` · `cancelled`) → `in-review` → `in-progress` → `to-do` 차례다. `in-progress` 안에서는 세션이 live 인 카드가 먼저 오고 나머지 카드가 뒤에 와서, 막대가 `to-do` 에서 `done` 까지 진행 차례로 이어진다 |
 
 - milestone 의 소속은 작업 카드의 `collection` 이다. 여러 milestone 에 속한 카드는 행마다 칸이 있다.
 - `done` 으로 옮긴 milestone 은 행을 그리지 않는다. 그 소속 카드는 어느 행에도 들지 않고 맨 위 범례의 열별 카드 수에는 남는다.
@@ -400,6 +403,7 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 
 - **카드 제목에 제어 문자가 있으면 보드를 바꾸는 명령이 멈춘다.** 어느 카드든 `title` 에 제어 문자가 있으면 `uk check` 가 위반으로 알리고, 보드를 바꾸는 명령은 실행을 거절한다. `uk set --title` 도 거절하므로 그 카드의 frontmatter 에서 `title` 을 직접 고치고 `uk check` 를 다시 실행한다. 파일 이름의 제목 부분은 `title` 과 같아야 한다.
 - **그런 제목을 실제 pane 화면으로는 시험하지 않았다.** `uk board --json` 이 milestone 제목에서 제어 문자를 빼고 pane 은 그 값을 그린다. 시험한 것은 JSON 출력까지다.
+- **`.uhd-kanban/main.json` 은 이 Mac 의 세션 이름이다.** `.uhd-kanban/` 을 저장소에 올리는 프로젝트라면 `main.json` 을 `.gitignore` 에 넣는다. 다른 컴퓨터에서 받은 `main.json` 은 그 컴퓨터에 없는 세션을 가리킨다.
 - **처리되지 않은 예외는 거르지 않는다.** 명령이 stdout · stderr 로 쓰는 출력에서는 제어 문자를 뺀다. 명령이 처리되지 않은 예외로 끝나면 Node.js 가 그 필터를 거치지 않고 오류를 stderr 로 내므로, 오류 메시지의 제어 문자가 그대로 나간다.
 
 ## 자주 묻는 질문
@@ -431,6 +435,10 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 ### 세션이 끝났는데 카드가 왜 `done` 으로 옮겨지지 않는가?
 
 pane 의 `끝남` 은 세션 상태이고 `done` 은 카드의 열이다. 도구는 세션이 끝났다는 이유로 카드를 옮기지 않는다. 카드 세션은 `run.finish` 의 열(기본값은 task · bug 가 `in-review`, decision 이 `decided`)로 카드를 옮기고 끝난다. 옮기지 않고 끝났으면 메인 세션이 결과 코멘트를 보고 정한다. 작업이 남았으면 `uk recover --force k<id>` 로 이어 가고, 다른 카드가 끝나야 할 수 있는 작업이면 `uk set --add-depends` 로 `depends_on` 을 적고 `to-do` 로 돌린다.
+
+### 메인 세션을 새 세션으로 바꾸면 카드 세션의 보고는 어디로 가는가?
+
+새 세션에서 `uk main --set` 을 실행한 뒤로는 새 세션 앞으로 나온다. 카드 프롬프트와 코멘트에는 역할 이름 `main` 이 적히고, `uk comment` 가 `.uhd-kanban/main.json` 의 이름으로 `SendMessage` 줄을 낸다. 0.8.1 까지 띄운 카드 세션은 프롬프트에 그때의 세션 이름이 적혀 있어 옛 이름 앞으로 보고한다.
 
 ### git worktree 에서도 쓸 수 있는가?
 

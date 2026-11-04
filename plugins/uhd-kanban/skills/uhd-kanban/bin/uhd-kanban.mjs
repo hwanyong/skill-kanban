@@ -20,6 +20,7 @@ const COMMANDS = {
   archive: 'archive.mjs',
   comment: 'comment.mjs',
   inbox: 'inbox.mjs',
+  main: 'main.mjs',
   run: 'run.mjs',
   recover: 'recover.mjs',
   board: 'board.mjs',

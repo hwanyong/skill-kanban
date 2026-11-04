@@ -158,11 +158,21 @@ export default {
   'comment.badText': ({ problems }) => `코멘트 본문을 쓸 수 없다:${list(problems)}`,
   'comment.noteNoSessions': '세션 목록을 읽지 못했다',
   'comment.noteUnknown': 'claude agents --json 에 없는 이름이다',
+  'comment.noteNoMain': '메인 세션이 등록되지 않았다. 메인 세션에서 uhd-kanban main --set 을 실행한다',
   'inbox.noName': '이 세션의 이름을 claude agents --json 에서 찾지 못했다. inbox <이름> 으로 준다',
   'inbox.boardProblems': ({ count }) => `보드에 규칙 위반 ${count}건이 있다. uhd-kanban check 로 확인한다`,
   'inbox.answered': '답함',
   'inbox.summary': ({ name, count }) => `${name} 앞으로 온 답하지 않은 코멘트 ${count}개`,
   'inbox.summaryAll': ({ name, count }) => `${name} 앞으로 온 코멘트 ${count}개`,
+  'main.none': '메인 세션이 등록되지 않았다. 메인 세션에서 uhd-kanban main --set 을 실행한다',
+  'main.show': ({ name, session, at }) => `메인 세션 ${name} · session ${session} · 등록 ${at}`,
+  'main.noName': '이 세션의 이름을 claude agents --json 에서 찾지 못했다. main --set <이름> 으로 준다',
+  'main.badName': ({ name }) => `${name} 은 메인 세션으로 등록할 수 없다. 카드 세션 이름(k<id>) · main · user 와 공백 · 쉼표 · = · [ ] 이 든 이름은 쓸 수 없다`,
+  'main.unknown': ({ name }) => `claude agents --json 에 이름이 ${name} 인 세션이 없다`,
+  'main.duplicate': ({ name, count }) => `claude agents --json 에 이름이 ${name} 인 세션이 ${count}개다. SendMessage 는 이름으로 보내므로 받는 쪽을 고르지 못한다. 한 세션의 이름을 바꾼 뒤 다시 실행한다`,
+  'main.set': ({ name, previous }) => `메인 세션을 ${name} 으로 등록했다${previous ? `(이전 ${previous})` : ''}. 받는 이름이 main 인 SendMessage 줄은 이제 to=${name} 으로 나온다`,
+  'main.registered': ({ name }) => `메인 세션이 등록되지 않아 이 세션 ${name} 을 등록했다(.uhd-kanban/main.json). 다른 세션이 메인 세션을 이어받으면 그 세션에서 uhd-kanban main --set 을 실행한다`,
+  'main.badFile': ({ path }) => `${path} 의 name 이 메인 세션으로 쓸 수 있는 세션 이름이 아니다`,
   'migrate.unknownKinds': ({ items }) => `comments.kinds 에도 LEGACY_KINDS 표에도 없는 kind 를 쓴 코멘트가 있어 아무것도 바꾸지 않았다. 그 kind 를 config.json 의 comments.kinds 에 영어 id(소문자 · 숫자 · -)로 넣거나 카드의 머리 줄을 고친다:${list(items)}`,
   'migrate.config': ({ before, after, locale }) => `config.json: locale ${locale} · comments.kinds ${before.join(', ')} → ${after.join(', ')}`,
   'migrate.summary': ({ cards, total, headers, config }) => `카드 ${total}개 중 ${cards}개의 머리 줄 ${headers}줄을 바꿨다 · config.json ${config ? '바꿨다' : '그대로다'}`,
@@ -230,6 +240,7 @@ export default {
   archive [--dry-run]
   comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> | --text-file <경로>)
   inbox [<이름>] [--all] [--kind a,b]
+  main [--set [<이름>]]   카드 세션이 보고하는 메인 세션(.uhd-kanban/main.json)을 내거나 등록한다. 이름이 없으면 이 세션
   run <k id> [--dry-run] [--force]   카드 본문으로 claude --bg 세션을 띄운다. run.max_parallel(-1 은 무제한)개까지
   recover [<k id>…] [--dry-run] [--force]   세션이 멈춘 카드를 claude --bg --resume 으로 이어 간다. --force 는 끝난 세션도
   board [--json]        열마다 카드 수와 run.status 열 카드의 세션 상태를 낸다

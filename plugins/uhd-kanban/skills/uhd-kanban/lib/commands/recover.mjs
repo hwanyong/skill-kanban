@@ -11,10 +11,11 @@ import { readBoard } from '../board.mjs'
 import { USER, appendComment } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
 import { startedNote, t, translator } from '../i18n.mjs'
+import { claimMain, reportName } from '../main.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError, maxParallel } from '../project.mjs'
 import { resumePrompt, sessionName } from '../prompt.mjs'
-import { BACKGROUND_ARGS, cardSession, hasRoom, runningCards, currentSessionName, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
+import { BACKGROUND_ARGS, cardSession, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
 
 // 이어 가지 않는 판정. 메시지는 recover.<판정> 키에 있다.
 const SKIPPED = ['live', 'pending', 'done']
@@ -38,7 +39,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
     const status = project.config.run.status
     const targets = ids.length > 0 ? ids.map((id) => findCard(board, id).id) : board.cards.filter((card) => card.status == status).map((card) => card.id)
     const sessions = listSessions({ all: true })
-    const from = currentSessionName(sessions) ?? USER
+    const from = reportName(project, sessions) ?? USER
     const counts = { live: 0, pending: 0, done: 0, resumed: 0, waiting: 0, failed: 0 }
     // run.status 열에서 멈춘(restart) 세션은 이미 센 것을 바꿔 띄우므로 수가 늘지 않는다. 그 밖의 이어 가는 세션은 하나씩 늘린다.
     let running = runningCards(project, board, sessions).length
@@ -89,6 +90,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       }
       if (verdict == 'restart') stopSession(session.id)
       const shortId = launchBackground(args, resumePrompt(project, card, { skillRoot }), project.root)
+      claimMain(project, sessions)
       const resumed = findSession(listSessions({ all: true }), shortId)
       const changes = resumed ? { session: resumed.sessionId, session_started_at: startedAt(resumed) } : {}
       const text = tr('recover.assigned', { why, sessionId, resumed: resumed?.sessionId ?? `${shortId}(${tr('recover.notFound')})` })

@@ -54,6 +54,18 @@ description: 칸반 보드가 있는 프로젝트(루트에 `.uhd-kanban/`)의 �
 7. **검토한다.** 카드 세션은 `[result]` 를 남긴 뒤 카드를 `run.finish` 의 열(task · bug 는 `in-review`, decision 은 `decided`)로 옮긴다. `[result]` 코멘트와 `git diff` 를 읽고 끝난 판정을 만족하는지 본다. 판정에 따라 옮기는 열은 아래 「열 옮기기」가 갖는다. 고칠 것이 있으면 그 카드에 `--kind answer` 코멘트로 고칠 것과 끝난 판정을 남기고 `uk recover --force k<id>` 로 이어 가게 하거나(`[result]` 를 남긴 세션은 대개 state done 이라 `--force` 가 없으면 건너뛴다. `recover` 가 카드를 `in-progress` 로 되돌린다) 고칠 일을 새 카드로 만든다. 검토하다 고칠 자리를 찾아도 메인 세션이 고치지 않는다.
 8. **보고한다.** 사용자에게 카드 id · 판정 · 남은 결정을 알린다.
 
+## 메인 세션 바꾸기
+
+메인 세션의 대화가 길어지면 새 세션을 열어 이어받는다. 카드 세션은 역할 이름 `main` 앞으로 보고하고, `main` 이 가리키는 세션은 `.uhd-kanban/main.json` 한 곳에 있다(`../uhd-kanban/SKILL.md` 「코멘트」).
+
+1. 옛 세션이 대화에만 있는 지시와 남은 결정을 그 카드에 `uk comment` 로 남긴다. 새 세션은 옛 세션의 대화를 읽지 못한다.
+2. 새 세션을 옛 세션과 다른 이름으로 연다. SendMessage 는 이름으로 보내므로 같은 이름의 세션이 둘이면 `uk main --set` 이 거절한다.
+3. 새 세션에서 `uk main --set` 을 실행한다. 그 뒤로 `uk comment` 가 `main` 앞으로 내는 SendMessage 줄은 새 세션 이름으로 나온다.
+4. 새 세션에서 `uk inbox` 로 답하지 않은 코멘트를 읽고 `uk board` 로 도는 카드를 본다.
+5. 옛 세션을 `claude stop` 으로 멈춘다.
+
+`uk main` 으로 지금 등록된 세션을 본다. 등록된 세션이 없으면 `uk run` · `uk recover` 가 카드 세션을 띄운 뒤 그 명령을 부른 세션을 등록한다.
+
 ## 열 옮기기
 
 각 열의 뜻은 `../uhd-kanban/SKILL.md` 의 열 표가 갖는다. 메인 세션은 카드의 상태가 그 뜻과 맞도록 아래대로 만들고 옮긴다.

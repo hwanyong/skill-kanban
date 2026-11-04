@@ -16,7 +16,7 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 1. **frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다.** 순서 번호 · id · 상태가 파일 이름과 frontmatter 에 나뉘어 있고, 명령은 잠금(`.uhd-kanban/lock/` 디렉터리) 안에서 둘을 함께 바꾼다. 파일을 직접 옮기거나 이름을 바꾸지 않는다.
 2. **코멘트는 `uk comment` 로만 쓴다.** 번호 · 머리 줄 형식을 명령이 정한다.
 3. **카드 본문(`## Comments` 앞)을 직접 고쳤으면 `uk check` 를 실행한다.** 종료 코드 0 이 나와야 한다.
-4. **`uk comment` 가 낸 `SendMessage to=<이름> message=<JSON>` 줄은 그대로 SendMessage 도구로 보낸다.** 명령은 메시지를 보내지 않는다(Claude Code 2.1.312 에 메시지를 보내는 CLI 명령이 없다). `# claude agents --json 에 없는 이름이다` 가 붙은 줄은 보내지 말고 사용자에게 알린다.
+4. **`uk comment` 가 낸 `SendMessage to=<이름> message=<JSON>` 줄은 그대로 SendMessage 도구로 보낸다.** 명령은 메시지를 보내지 않는다(Claude Code 2.1.312 에 메시지를 보내는 CLI 명령이 없다). `#` 뒤에 알림이 붙은 줄(`# claude agents --json 에 없는 이름이다` · `# 메인 세션이 등록되지 않았다 …`)은 보내지 말고 사용자에게 알린다.
 5. **본문과 코멘트에서 낱말 `ultracode` 는 감싸서 쓴다.** 백틱 · `[ ]` · `" "` · `' '` 중 하나로 감싼다. 감싸지 않은 낱말은 그 본문을 프롬프트로 받은 세션을 Workflow 로 바꾼다. 트리거로 쓸 때만 본문 첫 줄에 `ultracode` 한 줄을 두고 카드에 `ultracode` 태그를 단다. 둘 중 하나만 있으면 `check` 가 위반으로 알린다.
 
 ## 파일 배치
@@ -25,6 +25,7 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 |---|---|
 | `.uhd-kanban/config.json` | 출력 · 카드 세션 프롬프트의 언어(`locale`: `ko` · `en`. 없으면 `LC_ALL` → `LC_MESSAGES` → `LANG`) · 열 · 처음 열(`initial`) · 순서 번호 · 의존성(`gate` · `resolved` · `abandoned`) · 코멘트 kind · 아카이브 · `run`(`status` · `max_parallel` · `finish`) · `monitor` 설정 |
 | `.uhd-kanban/profiles.json` | `model:` 태그의 프로필 이름을 `claude --model` 값으로 바꾸는 표 |
+| `.uhd-kanban/main.json` | 카드 세션이 보고하는 메인 세션의 이름 · session id · 등록 시각. `uk main --set` 이 쓰고, 없으면 `uk run` · `uk recover` 가 세션을 띄운 뒤 그 명령을 부른 세션으로 쓴다 |
 | `kanban/<n>-<status>/<순서 번호>-k<id>-<제목>.md` | 열 안의 카드. 예: `kanban/1-to-do/0010-k457-로그인-오류-재현.md` |
 | `kanban/archived/<YYYY-MM>/<YYYY-MM-DD>-k<id>-<제목>.md` | 아카이브한 카드. 날짜는 `completed_at` 의 날짜다 |
 
@@ -115,7 +116,8 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | `uk set <k id> [--title] [--priority] [--add-tag a,b] [--remove-tag a,b] [--add-depends k1] [--remove-depends k1] [--add-collection k1] [--remove-collection k1]` | 제목 · 우선순위 · 태그 · `depends_on` · `collection` 을 바꾼다. 준 목록만 고친다. 제목이 바뀌면 파일 이름도 바뀐다 |
 | `uk archive [--dry-run]` | `archive.columns` 열에서 `completed_at` 뒤 `archive.after_days`(기본 7)일이 지난 카드를 `kanban/archived/<YYYY-MM>/` 로 옮긴다 |
 | `uk comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> \| --text-file <경로>)` | 코멘트를 덧붙이고 SendMessage 줄을 낸다 |
-| `uk inbox [<이름>] [--all] [--kind a,b]` | 그 이름 앞으로 온 코멘트 중 답하지 않은 것을 낸다. `--kind` 를 주면 그 kind 의 코멘트만 낸다 |
+| `uk inbox [<이름>] [--all] [--kind a,b]` | 그 이름 앞으로 온 코멘트 중 답하지 않은 것을 낸다. `--kind` 를 주면 그 kind 의 코멘트만 낸다. 등록된 메인 세션이면 `main` 앞으로 온 코멘트도 낸다 |
+| `uk main [--set [<이름>]]` | 등록된 메인 세션을 낸다. `--set` 은 그 이름(없으면 이 세션)을 `.uhd-kanban/main.json` 에 등록한다. 카드 세션 이름(`k<id>`) · `main` · `user`, `claude agents --json` 에 없는 이름, 같은 이름의 세션이 둘 이상인 이름은 거절한다 |
 | `uk run <k id> [--dry-run] [--force]` | 카드 본문으로 `claude --bg` 세션을 띄운다. 도는 카드 세션이 `run.max_parallel` 개에 찼으면 띄우지 않는다 |
 | `uk recover [<k id>…] [--dry-run] [--force]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다. `run.max_parallel` 을 넘는 카드는 띄우지 않는다. `--force` 는 끝난(state done) 세션도 이어 간다. 다른 열(`in-review` 등)의 카드를 id 로 주면 이어 갈 때 `run.status` 열로 옮긴다 |
 | `uk guard <경로> [--session <session id>]` | 그 세션이 그 파일을 고쳐도 되는지 판정한다. 0: 카드 세션(이름 `k<id>`) · 프로젝트 밖 · `kanban/` · `.uhd-kanban/` 안. 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). `--session` 이 없으면 `CLAUDE_CODE_SESSION_ID` 를 쓴다. 규칙은 `../delegate/SKILL.md` |
@@ -128,6 +130,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 머리 줄 형식은 `### c<번호> [<kind>] from=<이름> to=<이름>[,<이름>] at=<ISO 8601 UTC>` 다. 번호는 카드마다 1 부터 빈 번호 없이 늘어난다.
 
 - 이름은 `claude agents --json` 의 세션 이름이다. 사용자는 `user` 다. `uk run` 이 띄운 세션의 이름은 `k<id>` 다.
+- `main` 은 등록된 메인 세션(`.uhd-kanban/main.json`)의 역할 이름이다. 등록된 메인 세션이 `uk run` · `uk recover` 를 부르면 카드 프롬프트와 `[assign]` 코멘트에 `main` 을 적고, `uk comment` 의 `--from` 기본값도 `main` 이다. 코멘트 머리 줄에는 `main` 이 남고, `uk comment` 가 내는 SendMessage 줄에만 등록된 세션 이름이 적힌다. 그래서 메인 세션을 새 세션으로 바꿔도(`uk main --set`) 돌고 있는 카드 세션의 프롬프트를 고치지 않는다. 0.8.1 까지 띄운 카드 세션의 프롬프트에는 그때의 세션 이름이 적혀 있으므로 그 세션의 보고는 옛 이름 앞으로 나온다.
 - `--from` 을 주지 않으면 이 세션의 이름을 쓴다(`CLAUDE_CODE_SESSION_ID` 로 `claude agents --json` 에서 찾는다).
 - kind 는 `config.json` 의 `comments.kinds` 중 하나이고 영어 id(소문자 · 숫자 · `-`)다. 보드의 locale 과 무관하게 카드 파일에는 id 를 쓴다. `assign` · `progress` · `question` · `result` 는 `run` · `recover` 가 쓰므로 빼면 `check` 가 위반으로 알린다.
 - `uk comment` · `uk inbox` 의 `--kind` 는 0.4.0 까지의 한국어 낱말(`진행` · `질문` · `결과` · `답` · `사용자 결정` 등 14개, `lib/kinds.mjs` 의 `LEGACY_KINDS`)도 받아 id 로 바꿔 쓴다. 0.4.0 의 프롬프트를 받은 채 돌고 있는 카드 세션 때문이다. 출력은 `progress(진행)` 처럼 id 와 표시 이름을 함께 적는다.

@@ -186,6 +186,8 @@ Card sessions run without permission prompts because nobody is present to answer
 
 Card sessions report back through comments. `uk comment` appends a comment and prints a `SendMessage` line for the recipient session, and `uk inbox` lists comments addressed to a session that have not been answered.
 
+Card sessions report to the role name `main`. The session name that `main` stands for is kept in one place, `.uhd-kanban/main.json`, and `uk comment` substitutes it only when it prints a `SendMessage` line. When the main session's conversation grows long, open a new session under a different name and run `uk main --set` in it. From then on, reports from card sessions that are already running come out addressed to the new session.
+
 ## Commands
 
 In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`. You usually do not type these commands; Claude runs them through the skills. Cards are referred to as `k457` or `457`.
@@ -202,6 +204,7 @@ In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`
 | `uk archive` | Moves finished cards older than `archive.after_days` (default 7) to `kanban/archived/` |
 | `uk comment` | Appends a comment and prints the `SendMessage` line |
 | `uk inbox` | Lists unanswered comments addressed to a session |
+| `uk main` | Prints the main session that card sessions report to, or registers one with `--set` |
 | `uk run` | Starts a card as a `claude --bg` session |
 | `uk recover` | Resumes stopped card sessions with `claude --bg --resume` |
 | `uk guard` | Decides whether a session may edit a file (used by the hook) |
@@ -241,7 +244,7 @@ The pane opens when `.uhd-kanban/config.json` exists above the session directory
 | Collapse symbol | `▾` for a row with its bar expanded, `▸` for a collapsed row |
 | Title | `k<id>` and the milestone title, dimmed for `planned`. Work card titles are not displayed |
 | Number on the right | Finished member cards / all member cards, counting archived cards. Finished means in a column of `dependencies.resolved` or `dependencies.abandoned` |
-| Bar | One cell per member work card, wrapping at the pane width. The cell color is the card's column, ordered from the left: finished columns (`done`, `decided`, `implemented`, `cancelled`), `in-review`, `in-progress`, `to-do` |
+| Bar | One cell per member work card, wrapping at the pane width. The cell color is the card's column, ordered from the left: finished columns (`done`, `decided`, `implemented`, `cancelled`), `in-review`, `in-progress`, `to-do`. Inside `in-progress`, cards whose session is live come first and the other cards follow, so the bar runs in order of progress from `to-do` to `done` |
 
 - A card's milestones are its `collection`. A card in several milestones has a cell in each row.
 - A milestone moved to `done` has no row. Its member cards appear in no row and still count in the per-column numbers of the legend.
@@ -403,6 +406,7 @@ In a 15-minute run of two sessions side by side, the session repainting every 25
 
 - **A control character in a card title stops board edits.** While the `title` of any card contains a control character, `uk check` reports a violation and commands that change the board refuse to run. This includes `uk set --title`, so edit `title` in that card's frontmatter directly and run `uk check` again. The title part of the file name must still match `title`.
 - **The rendered pane has not been tested with such a title.** `uk board --json` removes control characters from milestone titles, and the pane draws that value. The JSON output was verified. The pane on screen was not.
+- **`.uhd-kanban/main.json` holds a session name on this Mac.** If the project commits `.uhd-kanban/` to its repository, add `main.json` to `.gitignore`. A `main.json` pulled from another computer names a session that does not exist on this one.
 - **Uncaught exceptions are not filtered.** Control characters are removed from what commands write to stdout and stderr. When a command ends with an uncaught exception, Node.js prints the error to stderr without going through that filter, so control characters in the error message are output as they are.
 
 ## FAQ
@@ -434,6 +438,10 @@ You can edit the card body (the part before `## Comments`) and then run `uk chec
 ### Why does a card not move to `done` when its session ends?
 
 `done` in the pane legend is a session state, and the `done` column is where a card sits. The tool does not move a card because its session ended. A card session moves the card to its `run.finish` column before it ends (by default `in-review` for task and bug, `decided` for decision). If it ended without moving the card, the main session reads the result comment and decides. If work remains, resume it with `uk recover --force k<id>`. If the work has to wait for another card, add that card with `uk set --add-depends` and move the card back to `to-do`.
+
+### Where do card session reports go after the main session moves to a new session?
+
+To the new session, once `uk main --set` has run in it. Card prompts and comments carry the role name `main`, and `uk comment` prints the `SendMessage` line with the name in `.uhd-kanban/main.json`. Card sessions started by 0.8.1 or earlier have the old session name in their prompt, so they keep reporting to that name.
 
 ### Does it work with git worktrees?
 
