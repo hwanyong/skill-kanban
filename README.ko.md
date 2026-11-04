@@ -241,7 +241,7 @@ pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열�
 | 접기 기호 | `▾` 는 막대를 펼친 행, `▸` 는 접은 행이다 |
 | 제목 | `k<id>` 와 milestone 제목. `planned` 는 흐리게 그린다. 작업 카드의 제목은 보이지 않는다 |
 | 오른쪽 수 | 끝난 카드 수 / 소속 카드 수. 아카이브한 카드를 포함해 센다. 끝난 카드는 `dependencies.resolved` 와 `dependencies.abandoned` 의 열에 있는 카드다 |
-| 막대 | 소속 작업 카드 하나가 한 칸이고 pane 폭에서 줄을 바꾼다. 칸의 색은 카드의 열이고, 왼쪽부터 끝난 열(`done` · `decided` · `implemented` · `cancelled`) → `in-review` → `in-progress` → `to-do` 차례다. `in-progress` 안에서는 세션이 live 인 카드가 먼저 오고 나머지 카드가 뒤에 와서, 막대가 `to-do` 에서 `done` 까지 진행 차례로 이어진다 |
+| 막대 | 소속 작업 카드 하나가 한 칸이고 pane 폭에서 줄을 바꾼다. 칸의 색은 카드의 열이고, 왼쪽부터 끝난 열(`done` · `decided` · `implemented` · `cancelled`) → `in-review` → `in-progress` → `to-do` 차례다. `in-progress` 안에서는 세션이 끝난 카드 → 세션이 live 인 카드 → 나머지 카드 차례라서, 막대가 `to-do` 에서 `done` 까지 진행 차례로 이어진다 |
 
 - milestone 의 소속은 작업 카드의 `collection` 이다. 여러 milestone 에 속한 카드는 행마다 칸이 있다.
 - `done` 으로 옮긴 milestone 은 행을 그리지 않는다. 그 소속 카드는 어느 행에도 들지 않고 맨 위 범례의 열별 카드 수에는 남는다.
@@ -261,7 +261,7 @@ pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열�
 
 pane 높이에 들어가지 않는 행은 스크롤한다. `uk board` 는 소속을 읽으려고 아카이브까지 모든 카드 파일을 연다. 카드 파일 1,277개인 보드에서 `uk board --json` 은 5회 실행에 회당 1.24–1.48초 걸렸다(SMB 공유 위의 저장소).
 
-![Claude Code 안의 uhd-kanban 보드 모니터 pane. 머리 줄에 카드 559개 · milestone 10개 · 60초마다가 있고, 그 아래 범례가 있다. 행은 차례대로 끝난 수 / 전체 수가 493/646, 222/233, 9/10, 12/13, 2/3, 118/152, 0/2, 126/184, 0/2, 3/41 이고 소속 없음 행은 없다. 첫 행의 막대는 여섯 줄이다. 그 막대 가운데에 in-progress 칸(회색 체크 표시 1개, 세션 없음 음영 5개, 초록 음영 블록 4개)이 있고 그 행의 머리 줄 기호는 초록 음영 글자로 바뀐다. 여섯째 행의 막대에는 세션 없음 음영 1개가 있다.](docs/images/board-monitor-559-cards.png)
+![Claude Code 안의 uhd-kanban 보드 모니터 pane. 머리 줄에 카드 559개 · milestone 10개 · 60초마다가 있고, 그 아래 범례가 있다. 행은 차례대로 끝난 수 / 전체 수가 493/646, 222/233, 9/10, 12/13, 2/3, 118/152, 0/2, 126/184, 0/2, 3/41 이고 소속 없음 행은 없다. 첫 행의 막대는 여섯 줄이다. 그 막대 가운데에 in-progress 칸(왼쪽부터 회색 체크 표시 1개, 초록 음영 블록 4개, 세션 없음 음영 5개)이 있고 그 행의 머리 줄 기호는 초록 음영 글자로 바뀐다. 여섯째 행의 막대에는 세션 없음 음영 1개가 있다.](docs/images/board-monitor-559-cards.png)
 
 *실제 프로젝트 보드(작업 카드 559장, 소속 카드는 아카이브 포함 수)의 `uk board --json` 출력을 캡처했다. milestone 제목은 가상의 값으로 바꿨다.*
 

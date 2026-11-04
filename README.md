@@ -244,7 +244,7 @@ The pane opens when `.uhd-kanban/config.json` exists above the session directory
 | Collapse symbol | `▾` for a row with its bar expanded, `▸` for a collapsed row |
 | Title | `k<id>` and the milestone title, dimmed for `planned`. Work card titles are not displayed |
 | Number on the right | Finished member cards / all member cards, counting archived cards. Finished means in a column of `dependencies.resolved` or `dependencies.abandoned` |
-| Bar | One cell per member work card, wrapping at the pane width. The cell color is the card's column, ordered from the left: finished columns (`done`, `decided`, `implemented`, `cancelled`), `in-review`, `in-progress`, `to-do`. Inside `in-progress`, cards whose session is live come first and the other cards follow, so the bar runs in order of progress from `to-do` to `done` |
+| Bar | One cell per member work card, wrapping at the pane width. The cell color is the card's column, ordered from the left: finished columns (`done`, `decided`, `implemented`, `cancelled`), `in-review`, `in-progress`, `to-do`. Inside `in-progress`, cards whose session has ended come first, then cards whose session is live, then the other cards, so the bar runs in order of progress from `to-do` to `done` |
 
 - A card's milestones are its `collection`. A card in several milestones has a cell in each row.
 - A milestone moved to `done` has no row. Its member cards appear in no row and still count in the per-column numbers of the legend.
@@ -264,7 +264,7 @@ The refresh interval is `monitor.interval_seconds` in `config.json` (an integer 
 
 Rows that do not fit in the pane height scroll. `uk board` opens every card file including the archive to read membership. On a board with 1,277 card files `uk board --json` took 1.24–1.48 s per run over 5 runs (repository on an SMB share).
 
-![The uhd-kanban board monitor pane in Claude Code. The header reads 559 cards, 10 milestones, every 60s, followed by the legend. The rows read, in order, 493/646, 222/233, 9/10, 12/13, 2/3, 118/152, 0/2, 126/184, 0/2 and 3/41 finished of total, and there is no `no milestone` row. The first bar has 6 lines. In the middle of that bar are in-progress cells (1 gray check mark, 5 no-session shades, 4 green shaded blocks), and the head symbol of that row is a green shade character. The sixth bar has 1 no-session shade.](docs/images/board-monitor-559-cards.en.png)
+![The uhd-kanban board monitor pane in Claude Code. The header reads 559 cards, 10 milestones, every 60s, followed by the legend. The rows read, in order, 493/646, 222/233, 9/10, 12/13, 2/3, 118/152, 0/2, 126/184, 0/2 and 3/41 finished of total, and there is no `no milestone` row. The first bar has 6 lines. In the middle of that bar are in-progress cells (from the left 1 gray check mark, 4 green shaded blocks, 5 no-session shades), and the head symbol of that row is a green shade character. The sixth bar has 1 no-session shade.](docs/images/board-monitor-559-cards.en.png)
 
 *Captured from the `uk board --json` output of a real project board (559 work cards; the member counts include archived cards). The milestone titles were replaced with fictional ones.*
 
