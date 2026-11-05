@@ -260,7 +260,7 @@ The pane opens when `.uhd-kanban/config.json` exists above the session directory
 | Red `↻`, foreground and background swap every frame | `restart` | `restart`: the restarted session is idle and the user had the last turn. `uk recover` stops it, then resumes it | 250 ms |
 | Red `▨` | `resume` | `resume`: the session stopped (including `state failed` after a reboot). `uk recover` resumes it | - |
 | Gray `✓` | `done` | `done`: finished | - |
-| Yellow `?` | `unknown` | `unknown`: no process and a `state` uhd-kanban does not know. `uk recover` prints the value and does not resume it | - |
+| Yellow `?` | `unknown` | `unknown`: no process and a `state` uhd-kanban does not know. `uk recover` prints the value and does not resume it. It still takes a `run.max_parallel` slot | - |
 | Column color `▒` | `none` | `none`: the card has no session | - |
 
 The refresh interval is `monitor.interval_seconds` in `config.json` (an integer of at least 10, default 60). Version 0.8.0 removed the `monitor.cell` key. If an existing `config.json` still has it, it is ignored without an error.

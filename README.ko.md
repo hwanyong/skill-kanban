@@ -257,7 +257,7 @@ pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열�
 | 빨강 `↻`. 글자색과 배경색이 프레임마다 바뀐다 | `재시작 대기` | `restart`: 다시 뜬 세션이 idle 이고 마지막 차례가 사용자다. `uk recover` 가 stop 한 뒤 이어 간다 | 250 ms |
 | 빨강 `▨` | `이어 가기 대기` | `resume`: 세션이 멈췄다(재부팅 뒤의 `state failed` 포함). `uk recover` 로 이어 간다 | - |
 | 회색 `✓` | `끝남` | `done`: 끝났다 | - |
-| 노랑 `?` | `모르는 state` | `unknown`: 프로세스가 없고 uhd-kanban 이 모르는 `state` 다. `uk recover` 가 그 값을 출력하고 이어 가지 않는다 | - |
+| 노랑 `?` | `모르는 state` | `unknown`: 프로세스가 없고 uhd-kanban 이 모르는 `state` 다. `uk recover` 가 그 값을 출력하고 이어 가지 않는다. `run.max_parallel` 자리는 차지한다 | - |
 | 열의 색 `▒` | `세션 없음` | `none`: 카드에 세션이 없다 | - |
 
 갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60). 0.8.0 에서 `monitor.cell` 키를 없앴다. 기존 `config.json` 에 남아 있으면 오류 없이 무시한다.

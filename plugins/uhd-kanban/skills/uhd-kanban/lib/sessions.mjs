@@ -98,8 +98,9 @@ export const cardSession = (card, sessions) => {
 }
 
 // 프로세스가 있거나 다시 뜨는 중인 판정. run.max_parallel 이 세는 것과 run 이 새로 띄우지 않는 것이 이 판정이다.
-// restart(멈춤)도 프로세스가 남아 있고 recover 가 같은 카드의 세션으로 바꿔 띄우므로 센다. unknown 은 프로세스가 없으므로 세지 않는다.
-export const RUNNING_VERDICTS = ['live', 'pending', 'restart']
+// restart(멈춤)도 프로세스가 남아 있고 recover 가 같은 카드의 세션으로 바꿔 띄우므로 센다.
+// unknown 도 센다(2026-11-05 사용자 결정 「보수적으로 자리 차지」). 그 state 가 아직 도는 세션인지 알 수 없으므로, 사람이 정하기 전에는 자리를 비우지 않고 같은 카드를 run 으로 다시 띄우지도 않는다.
+export const RUNNING_VERDICTS = ['live', 'pending', 'restart', 'unknown']
 
 // run.status 열에서 세션이 도는 카드. sessions 는 listSessions({ all: true }) 의 값이다.
 export const runningCards = (project, board, sessions) =>
