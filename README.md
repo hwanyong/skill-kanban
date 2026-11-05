@@ -451,7 +451,7 @@ You can edit the card body (the part before `## Comments`) and then run `uk chec
 
 ### What happens when a card session stops?
 
-`uk board` and the pane show it as stopped. `uk recover` resumes it with `claude --bg --resume`, writes the new session id to the card, and adds an `assign` comment. The same holds for a card whose session was left in `state failed` by a Mac reboot. A card that came back from review is resumed with `uk recover --force k<id>`.
+`uk board` and the pane show it as stopped. `uk recover` resumes it with `claude --bg --resume`, writes the new session id to the card, and adds an `assign` comment. The same holds for a card whose session was left in `state failed` by a Mac reboot. A session that worked in a worktree resumes in that worktree. A card that came back from review is resumed with `uk recover --force k<id>`.
 
 ### Why does a card not move to `done` when its session ends?
 

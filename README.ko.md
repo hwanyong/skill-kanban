@@ -448,7 +448,7 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 
 ### 카드 세션이 멈추면 어떻게 되는가?
 
-`uk board` 와 pane 이 멈춤으로 표시한다. `uk recover` 가 `claude --bg --resume` 으로 이어 가고, 새 session id 를 카드에 적고, `assign` 코멘트를 남긴다. Mac 을 재부팅해 세션이 `state failed` 로 남은 카드도 같다. 검토에서 돌아온 카드는 `uk recover --force k<id>` 로 이어 간다.
+`uk board` 와 pane 이 멈춤으로 표시한다. `uk recover` 가 `claude --bg --resume` 으로 이어 가고, 새 session id 를 카드에 적고, `assign` 코멘트를 남긴다. Mac 을 재부팅해 세션이 `state failed` 로 남은 카드도 같다. 세션이 worktree 에서 일했으면 그 worktree 에서 이어 간다. 검토에서 돌아온 카드는 `uk recover --force k<id>` 로 이어 간다.
 
 ### 세션이 끝났는데 카드가 왜 `done` 으로 옮겨지지 않는가?
 

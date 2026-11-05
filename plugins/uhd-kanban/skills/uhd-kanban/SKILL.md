@@ -187,7 +187,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | 이어 감 | 세션이 목록에 없거나 `state stopped`, 또는 `pid` 없이 `state failed` | `claude --bg --resume <session>` |
 | 멈춤 | 데몬이 다시 띄웠고(`startedAt` 이 `session_started_at` 과 다르다) `status idle` 이고 대화 기록의 마지막 줄이 user | `claude stop` 뒤 `claude --bg --resume <session>` |
 
-이어 간 세션은 새 session id 로 뜬다(2026-10-29 실측). `recover` 는 카드의 `session` · `session_started_at` 을 새 값으로 고치고 `[assign]` 코멘트를 남긴다. 이어 간 세션은 카드의 마지막 `[progress]` 코멘트와 그 뒤의 코멘트부터 이어 간다.
+이어 간 세션은 새 session id 로 뜬다(2026-10-29 실측, 2026-11-05 에 2.1.318 로 다시 확인). `recover` 는 대화 기록의 마지막 줄에 적힌 `cwd` 에서 `claude --bg --resume` 을 실행한다. 세션이 worktree 에서 일했으면 그 worktree 에서 이어 간다. 그 디렉터리가 없으면 프로젝트 루트에서 이어 간다. 2.1.318 에서 프로젝트 루트에서 이어 간 세션은 worktree 가 아니라 루트를 cwd 로 떴고, 대화도 루트의 프로젝트 폴더로 복사됐다. `recover` 는 카드의 `session` · `session_started_at` 을 새 값으로 고치고 `[assign]` 코멘트를 남긴다. 이어 간 세션은 카드의 마지막 `[progress]` 코멘트와 그 뒤의 코멘트부터 이어 간다.
 
 Mac 을 재부팅하면 카드 세션이 `pid` 없이 `state failed` 로 남는다(2026-11-05, Claude Code 2.1.318). 마지막 갱신이 48시간보다 오래된 세션은 `state stopped` 로 남는다. 둘 다 `--force` 없이 이어 간다.
 

@@ -222,7 +222,7 @@ export default {
   'recover.unknown': 'uhd-kanban 이 모르는 state 다(pid 없음). 이어 가지 않는다. claude agents --json --all 로 그 세션을 보고 정한다. 그 state 를 lib/sessions.mjs 의 EXITED_VERDICTS 에 더할 일이다',
   'recover.done': '세션이 끝났는데(state done) 카드가 열에 남았다. 결과 코멘트를 보고 run.finish 의 열(없으면 검토 뒤의 열)로 옮기거나, 작업이 남았으면 --force 로 이어 간다',
   'recover.noSession': ({ id }) => `k${id} 이어 갈 수 없다: session 이 비었다. uhd-kanban run 으로 새로 띄운다`,
-  'recover.noTranscript': ({ id, sessionId }) => `k${id} 이어 갈 수 없다: 대화 기록 ${sessionId}.jsonl 이 ~/.claude/projects 에 없다`,
+  'recover.noTranscript': ({ id, sessionId, base }) => `k${id} 이어 갈 수 없다: 대화 기록 ${sessionId}.jsonl 이 ${base} 에 없다`,
   'recover.waiting': ({ id, max }) => `k${id} 기다린다: 동시에 도는 카드 세션이 run.max_parallel(${max})개에 찼다`,
   'recover.cannotMove': ({ id, status, problem }) => `k${id} 이어 갈 수 없다: ${status} 열로 옮길 수 없다. ${problem}`,
   'recover.whyRestart': ({ startedAt }) => `데몬이 다시 띄웠지만(startedAt ${startedAt}) 마지막 user 줄에 답하지 않고 idle 이다`,

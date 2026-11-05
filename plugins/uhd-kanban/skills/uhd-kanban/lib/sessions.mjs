@@ -46,11 +46,15 @@ export const stopSession = (shortId) => {
 // 세션 항목의 startedAt(밀리초)을 카드에 적는 ISO 8601 문자열로 바꾼다.
 export const startedAt = (session) => new Date(session.startedAt).toISOString().replace(/\.\d{3}Z$/, 'Z')
 
-// 대화 기록에서 마지막 user · assistant 줄의 type. 기록이 없으면 null.
-export const lastTurnRole = (path) => {
-  if (path == null) return null
+// 대화 기록의 마지막 user · assistant 줄. role 은 그 줄의 type, cwd 는 그 줄의 cwd(세션이 그때 일하던 디렉터리)다. 기록이 없으면 둘 다 null.
+// 2026-11-05 실측(2.1.318): `claude -w` 로 worktree 에서 돈 세션이 pid 없이 state failed 가 되면 claude agents --json 의 cwd 는 저장소 root 였다.
+// worktree 경로는 대화 기록 줄의 cwd 에만 남았다. 그래서 recover 는 이 cwd 에서 `claude --bg --resume` 을 실행한다.
+export const lastTurn = (path) => {
+  if (path == null) return { role: null, cwd: null }
   const line = readFileSync(path, 'utf8').trim().split('\n').findLast((text) => /^\{"[^"]+":/.test(text) && /"type":"(user|assistant)"/.test(text))
-  return line ? JSON.parse(line).type : null
+  if (!line) return { role: null, cwd: null }
+  const { type, cwd } = JSON.parse(line)
+  return { role: type, cwd: cwd ?? null }
 }
 
 // 2026-10-29 실측(2.1.312, `kill -9` 시험 두 번): 데몬이 강제 종료된 백그라운드 세션을 새 pid · 새 startedAt 으로 다시 띄웠다.
@@ -65,6 +69,8 @@ export const lastTurnRole = (path) => {
 // 실행 파일에는 데몬이 세션을 다시 띄우는 동안 state failed 를 적는 분기(detail 끝의 "; respawning")도 있다. 그 동안 recover 가 띄우면 같은 대화의 세션이 둘이 된다. 이 분기의 길이는 재지 않았다.
 // 같은 날 k91 은 `claude --bg --resume` 으로 새 세션 e831a4dd 를 16:09:50Z 에 띄운 뒤, 16:35:42Z 에 원래 세션 c5fe7506 이 새 pid 로 다시 떴다.
 // 두 세션이 같은 worktree 를 cwd 로 함께 돌았다. 무엇이 c5fe7506 을 다시 띄웠는지는 확인하지 못했다.
+// 재부팅 재현(2.1.318): CLAUDE_CONFIG_DIR 를 따로 준 데몬에서 도구 실행 중인 세션과 데몬을 함께 SIGKILL 하고 데몬을 다시 띄우자 k91 과 같이 state failed · reapedMidWorkAt 이 됐다.
+// `claude respawn <짧은 id>` 는 같은 session id · 같은 worktree 로 띄웠지만, 끊긴 도구 호출을 다시 하지 않고 status idle 로 3분 넘게 남았다. 프롬프트를 줄 수 없어 recover 는 쓰지 않는다.
 // 반환: live(돈다) · resume(이어 간다) · restart(stop 한 뒤 이어 간다) · pending(다시 뜨는 중) · done(끝났다) · unknown(아래 표에 없는 state).
 // pid 가 없고 stopped · done 이 아닌 세션의 state 마다 판정. 표에 없는 값은 unknown 이다. Claude Code 가 새 state 를 쓰기 시작하면 pending 처럼 기다리지 않고 그 값을 그대로 보이게 한다.
 const EXITED_VERDICTS = { failed: 'resume', working: 'pending' }
@@ -79,13 +85,16 @@ export const classify = (session, recordedStart, lastRole) => {
 }
 
 // 카드의 session 을 sessions 목록과 대화 기록으로 판정한다. recover 와 board 가 같은 판정을 쓴다.
-// 반환: { verdict, session, transcript }. verdict 는 classify 의 값이거나, 카드에 session 이 없으면 none.
+// 반환: { verdict, session, transcript, cwd }. verdict 는 classify 의 값이거나, 카드에 session 이 없으면 none.
+// cwd 는 대화 기록의 마지막 cwd 이고, 그 디렉터리가 없으면(worktree 를 지웠다) null 이다.
 export const cardSession = (card, sessions) => {
   const sessionId = card.data.session
-  if (!sessionId) return { verdict: 'none', session: null, transcript: null }
+  if (!sessionId) return { verdict: 'none', session: null, transcript: null, cwd: null }
   const session = sessions.find((item) => item.sessionId == sessionId) ?? null
   const transcript = transcriptPath(sessionId)
-  return { verdict: classify(session, card.data.session_started_at, lastTurnRole(transcript)), session, transcript }
+  const turn = lastTurn(transcript)
+  const cwd = turn.cwd != null && existsSync(turn.cwd) ? turn.cwd : null
+  return { verdict: classify(session, card.data.session_started_at, turn.role), session, transcript, cwd }
 }
 
 // 프로세스가 있거나 다시 뜨는 중인 판정. run.max_parallel 이 세는 것과 run 이 새로 띄우지 않는 것이 이 판정이다.
@@ -102,9 +111,12 @@ export const hasRoom = (project, running) => maxParallel(project.config) == UNLI
 // 짧은 id 로 세션 항목을 찾는다. 항목의 id 와 같거나 sessionId 가 그것으로 시작하면 같은 세션으로 본다.
 export const findSession = (sessions, shortId) => sessions.find((session) => session.id == shortId || session.sessionId?.startsWith(shortId)) ?? null
 
-// 대화 기록(jsonl)의 경로. ~/.claude/projects/<프로젝트>/<sessionId>.jsonl 을 한 단계만 찾는다. 없으면 null.
+// Claude Code 의 설정 디렉터리. CLAUDE_CONFIG_DIR 가 있으면 그 값이고 없으면 ~/.claude 다. 대화 기록 · jobs 가 그 아래에 있다.
+export const claudeConfigDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+
+// 대화 기록(jsonl)의 경로. <설정 디렉터리>/projects/<프로젝트>/<sessionId>.jsonl 을 한 단계만 찾는다. 없으면 null.
 export const transcriptPath = (sessionId) => {
-  const base = join(homedir(), '.claude', 'projects')
+  const base = join(claudeConfigDir(), 'projects')
   if (!existsSync(base)) return null
   const dir = readdirSync(base, { withFileTypes: true }).find((entry) => entry.isDirectory() && existsSync(join(base, entry.name, `${sessionId}.jsonl`)))
   return dir ? join(base, dir.name, `${sessionId}.jsonl`) : null

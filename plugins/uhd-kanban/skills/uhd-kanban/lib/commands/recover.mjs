@@ -6,6 +6,7 @@
 // --force 는 끝난(state done) 세션도 이어 간다. 세션이 끝났는데 카드에 작업이 남은 때다. 이어 감 판정과 같이 run.max_parallel 에 센다.
 // 재부팅으로 pid 없이 state failed 가 된 세션은 --force 없이 이어 간다(sessions.mjs 의 classify).
 
+import { join, relative } from 'node:path'
 import { cardId } from '../args.mjs'
 import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
 import { readBoard } from '../board.mjs'
@@ -16,7 +17,7 @@ import { claimMain, reportName } from '../main.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError, maxParallel } from '../project.mjs'
 import { resumePrompt, sessionName } from '../prompt.mjs'
-import { BACKGROUND_ARGS, cardSession, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
+import { BACKGROUND_ARGS, cardSession, claudeConfigDir, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
 
 // 이어 가지 않는 판정. 메시지는 recover.<판정> 키에 있다.
 const SKIPPED = ['live', 'pending', 'done', 'unknown']
@@ -51,6 +52,8 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       const sessionId = card.data.session
       const found = cardSession(card, sessions)
       const { session, transcript } = found
+      // 세션이 일하던 디렉터리(worktree)에서 이어 간다. root 에서 이어 가면 대화가 root 로 복사되고 세션이 root 에서 파일을 고친다(sessions.mjs 의 lastTurn).
+      const cwd = found.cwd ?? project.root
       const verdict = force && found.verdict == 'done' ? 'resume' : found.verdict
       if (verdict == 'none') {
         counts.failed += 1
@@ -64,7 +67,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       }
       if (!transcript) {
         counts.failed += 1
-        console.log(t('recover.noTranscript', { id: card.id, sessionId }))
+        console.log(t('recover.noTranscript', { id: card.id, sessionId, base: join(claudeConfigDir(), 'projects') }))
         continue
       }
       const counted = verdict == 'restart' && card.status == status
@@ -86,11 +89,11 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       const why = verdict == 'restart' ? tr('recover.whyRestart', { startedAt: startedAt(session) }) : session ? `state ${session.state}${found.verdict == 'done' ? ', --force' : ''}` : tr('recover.whyMissing')
       counts.resumed += 1
       if (dryRun) {
-        console.log(`(dry-run) k${card.id} ${why} → ${verdict == 'restart' ? `claude stop ${session.id}; ` : ''}claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <${t('run.prompt')}>${card.status == status ? '' : ` · ${card.status} → ${status}`}`)
+        console.log(`(dry-run) k${card.id} ${why} → ${cwd == project.root ? '' : `cd ${relative(project.root, cwd)}; `}${verdict == 'restart' ? `claude stop ${session.id}; ` : ''}claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <${t('run.prompt')}>${card.status == status ? '' : ` · ${card.status} → ${status}`}`)
         continue
       }
       if (verdict == 'restart') stopSession(session.id)
-      const shortId = launchBackground(args, resumePrompt(project, card, { skillRoot }), project.root)
+      const shortId = launchBackground(args, resumePrompt(project, card, { skillRoot }), cwd)
       claimMain(project, sessions)
       const resumed = findSession(listSessions({ all: true }), shortId)
       const changes = resumed ? { session: resumed.sessionId, session_started_at: startedAt(resumed) } : {}

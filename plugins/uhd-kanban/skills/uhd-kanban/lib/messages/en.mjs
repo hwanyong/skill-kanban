@@ -224,7 +224,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'recover.unknown': 'a state uhd-kanban does not know (no pid). Not resuming. Check the session with claude agents --json --all and decide; the state belongs in EXITED_VERDICTS of lib/sessions.mjs',
   'recover.done': 'the session finished (state done) but the card is still in the column. Read the result comment and move it to its run.finish column (or the column after review), or continue it with --force if work remains',
   'recover.noSession': ({ id }) => `k${id} cannot be resumed: session is empty. Start a new one with uhd-kanban run`,
-  'recover.noTranscript': ({ id, sessionId }) => `k${id} cannot be resumed: transcript ${sessionId}.jsonl is not in ~/.claude/projects`,
+  'recover.noTranscript': ({ id, sessionId, base }) => `k${id} cannot be resumed: transcript ${sessionId}.jsonl is not in ${base}`,
   'recover.waiting': ({ id, max }) => `k${id} waits: card sessions running at once reached run.max_parallel (${max})`,
   'recover.cannotMove': ({ id, status, problem }) => `k${id} cannot be resumed: it cannot move to the ${status} column. ${problem}`,
   'recover.whyRestart': ({ startedAt }) => `the daemon restarted it (startedAt ${startedAt}) but it is idle without answering the last user line`,
