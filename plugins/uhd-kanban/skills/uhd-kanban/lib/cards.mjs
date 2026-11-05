@@ -10,6 +10,7 @@ import { activeName } from './filename.mjs'
 import { t } from './i18n.mjs'
 import { COLLECTION_TYPE, ProjectError, milestoneStatuses } from './project.mjs'
 import { parseComments } from './comments.mjs'
+import { HISTORY_KEY, appendStatus } from './history.mjs'
 import { tagProblems } from './profiles.mjs'
 
 export const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -157,7 +158,7 @@ const unresolved = (project, board, card) => {
 
 // card 를 status 열로 옮긴다. move 와 run 이 함께 쓴다. changes 는 함께 바꿀 frontmatter 값이다.
 // dependencies.gate 의 열로 옮길 때 depends_on 카드가 모두 끝나야 한다. force 는 이 검사를 건너뛴다.
-// archive.columns 의 열로 들어가면 completed_at 을 적고, 그 열에서 나가면 지운다.
+// archive.columns 의 열로 들어가면 completed_at 을 적고, 그 열에서 나가면 지운다. 열이 바뀌면 status_history 에 항목을 덧붙인다(history.mjs).
 // run.status 로 옮기면 waiting 열에 있는 소속 milestone 을 running 열로 함께 옮긴다. 작업 카드가 이미 옮겨졌으므로 의존 검사로 막지 않는다.
 // 반환: { path, renumbered, blocking, started }. blocking 은 force 로 건너뛴 카드 id, started 는 함께 옮긴 milestone id 다.
 // 파일을 바꾸지 않고 옮길 수 있는지만 본다. 반환: force 로 건너뛸 카드 id.
@@ -178,7 +179,8 @@ export const moveCard = (project, board, card, status, { position = { bottom: tr
   const at = now()
   const entering = archiveColumns.includes(status) && !archiveColumns.includes(card.status)
   const leaving = !archiveColumns.includes(status)
-  const data = { ...card.data, ...changes, updated_at: at, completed_at: entering ? at : leaving ? undefined : card.data.completed_at }
+  const history = status == card.status ? card.data[HISTORY_KEY] : appendStatus(card.data, status, at)
+  const data = { ...card.data, ...changes, updated_at: at, completed_at: entering ? at : leaving ? undefined : card.data.completed_at, [HISTORY_KEY]: history }
   writeCard(card.path, data, card.body)
   const placed = place(project, board, { ...card, data }, status, position)
   return { ...placed, blocking, started: startMilestones(project, board, data, status) }

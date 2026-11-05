@@ -43,7 +43,7 @@ Nothing is installed besides the plugin: no Docker, no server, no database, no n
 | Edit guard | A hook asks the user before the main session edits a project file with Edit, Write or NotebookEdit. The question appears in every permission mode, including `bypassPermissions`. |
 | Dependencies and a parallel limit | `depends_on` keeps a card from starting before the cards it waits for are finished. `run.max_parallel` (default 3) caps the number of card sessions that run at once. |
 | Recovery | `uk recover` resumes card sessions that stopped or were respawned by the daemon, and records the new session id on the card. |
-| Board monitor | A pane draws one row per milestone with one cell per member card, animates the in-progress cells by session state, and plays a rearrangement when cards are created, deleted or moved. Rows collapse by click or keyboard. It rereads the board every 60 seconds by default. |
+| Board monitor | A pane draws one row per milestone with one cell per member card, animates the in-progress cells by session state, and plays a rearrangement when cards are created, deleted or moved. Rows collapse by click or keyboard. Below the legend it charts cards finished and created per day, activity comments per hour and the last activity of each in-progress card, and each milestone shows an estimated number of days. It rereads the board every 60 seconds by default. |
 
 ## What is in the plugin
 
@@ -117,6 +117,7 @@ depends_on: [455]
 collection: [450]
 created_at: 2026-10-29T08:00:00Z
 updated_at: 2026-10-29T09:10:00Z
+status_history: [2026-10-29T08:00:00Z to-do, 2026-10-29T09:00:00Z in-progress]
 ---
 
 Goal, files to change, what not to do, and how to verify the result.
@@ -143,6 +144,7 @@ The format is fixed, so `uk check` alone verifies every card file. Commands that
 | Card id | One card id appears in one place on the board |
 | Frontmatter values | `title` has no control characters, `priority` is a known value, `tags` is a list of strings, `depends_on` and `collection` are lists of card ids |
 | Comments | Each `### c<n> [kind]` kind is in `comments.kinds` of `config.json` |
+| `status_history` | Each entry has the form `<ISO 8601 UTC> <status>`, entries are in time order, and the last entry is the current column (for an archived card, a column of `archive.columns`). A different last entry means the file was moved without a command |
 
 ### Default columns
 
@@ -243,7 +245,7 @@ The pane opens when `.uhd-kanban/config.json` exists above the session directory
 | Head symbol | `●` for `active`, `○` for `planned`. When a member card has the session state `restart`, `pending`, `live` or `resume`, the symbol becomes the character of the first one in that order |
 | Collapse symbol | `▾` for a row with its bar expanded, `▸` for a collapsed row |
 | Title | `k<id>` and the milestone title, dimmed for `planned`. Work card titles are not displayed |
-| Number on the right | Finished member cards / all member cards, counting archived cards. Finished means in a column of `dependencies.resolved` or `dependencies.abandoned` |
+| Number on the right | Finished member cards / all member cards, counting archived cards. Finished means in a column of `dependencies.resolved` or `dependencies.abandoned`. The `~nd` after it is the estimated number of days ([Chart rows](#chart-rows)) |
 | Bar | One cell per member work card, wrapping at the pane width. The cell color is the card's column, ordered from the left: finished columns (`done`, `decided`, `implemented`, `cancelled`), `in-review`, `in-progress`, `to-do`. Inside `in-progress`, cards whose session has ended come first, then cards whose session is live, then the other cards, so the bar runs in order of progress from `to-do` to `done` |
 
 - A card's milestones are its `collection`. A card in several milestones has a cell in each row.
@@ -262,11 +264,26 @@ The pane opens when `.uhd-kanban/config.json` exists above the session directory
 
 The refresh interval is `monitor.interval_seconds` in `config.json` (an integer of at least 10, default 60). Version 0.8.0 removed the `monitor.cell` key. If an existing `config.json` still has it, it is ignored without an error.
 
-Rows that do not fit in the pane height scroll. `uk board` opens every card file including the archive to read membership. On a board with 1,277 card files `uk board --json` took 1.24–1.48 s per run over 5 runs (repository on an SMB share).
+Rows that do not fit in the pane height scroll. `uk board` opens every card file including the archive to read membership. On a board with 1,372 card files `uk board --json` took 1.00–1.46 s per run over 5 runs (0.10.0, repository on an SMB share).
 
-![The uhd-kanban board monitor pane in Claude Code. The header reads 559 cards, 10 milestones, every 60s, followed by the legend. The rows read, in order, 493/646, 222/233, 9/10, 12/13, 2/3, 118/152, 0/2, 126/184, 0/2 and 3/41 finished of total, and there is no `no milestone` row. The first bar has 6 lines. In the middle of that bar are in-progress cells (from the left 1 gray check mark, 4 green shaded blocks, 5 no-session shades), and the head symbol of that row is a green shade character. The sixth bar has 1 no-session shade.](docs/images/board-monitor-559-cards.en.png)
+![The uhd-kanban board monitor pane in Claude Code. The header reads 383 cards, 10 milestones, every 60s, followed by the legend. Below the legend are 4 chart rows. After its sparkline the finished row reads today 36, 7d 154, the created row reads today 46, 7d 181, net +27, and the activity row reads 1h 25, last 6m ago. The fourth row reads in-progress last activity: k677 20d, k1147 11d, k1117 7d, and the rest is cut off by an ellipsis. The rows read, in order, 548/694 ~8d, 222/233, 9/10, 12/13, 2/3, 122/154 ~18d, 0/2, 126/184, 0/2 and 3/43, and the rows without ~Nd show 0 finished in 7d. The last row is no milestone 19/41 ~10d. The first bar has 3 lines, and in its middle 5 in-progress cells are no-session shades. The bar of the no milestone row has 4 green cells whose shade changes from frame to frame, and the head symbol of that row is a green shade character.](docs/images/board-monitor-383-cards.en.png)
 
-*Captured from the `uk board --json` output of a real project board (559 work cards; the member counts include archived cards). The milestone titles were replaced with fictional ones.*
+*Captured from the `uk board --json` output of a real project board (383 work cards; the member counts include archived cards). The milestone titles were replaced with fictional ones.*
+
+### Chart rows
+
+Four chart rows sit below the legend and above the rows. A sparkline (a small chart that draws one value per character cell as the height of `▁▂▃▄▅▆▇█`) has the oldest value on the left and draws the most recent values in as many cells as the pane width leaves after the name and the summary. A cell with the value 0 is a dimmed `▁`. `finished` and `created` share one height scale.
+
+| Row | One cell | What it counts | Summary on the right |
+|---|---|---|---|
+| `finished` | One day (time zone of this Mac) | Work cards whose `completed_at` is that day. `completed_at` is written only when a card enters a column of `archive.columns` (`done`), so cards that end in `decided`, `implemented` or `cancelled` are not counted | Today · sum of the last 7 days |
+| `created` | One day | Work cards whose `created_at` is that day | Today · sum of the last 7 days · net (7-day created minus 7-day finished) |
+| `activity` | One hour (last 24 hours) | `progress`, `result` and `done-evidence` comments on work cards in the board columns | Last hour · time since the last activity comment |
+| `in-progress last activity` | One card | For each card in the `run.status` column, the time since the later of its last activity comment and `session_started_at`, oldest first | - |
+
+The `~nd` on a milestone head line is the remaining member cards × 7 ÷ the member cards whose `completed_at` falls in the last 7 days, rounded up. When no member card finished in those 7 days it shows `0 finished in 7d`. The remaining count uses every finished column while the rate counts only `completed_at`, so a milestone where many cards end in `cancelled` gets a longer estimate than the real one. Cards added later are not part of the estimate.
+
+The values are `metrics` and the per-row `recent_finished` of `uk board --json`. `lib/metrics.mjs` holds the counting rules and `hooks/charts.ts` turns the values into characters.
 
 ### Rearrangement
 

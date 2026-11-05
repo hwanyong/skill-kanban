@@ -1,5 +1,6 @@
 // 작업 열마다 카드 수와, milestone 마다 소속 카드(swimlane)를 낸다. run.status 열 카드에는 세션 판정을 붙인다. 보드 모니터 mod 가 monitor.interval_seconds 마다 --json 으로 부른다.
 // swimlane 은 카드마다 collection 이 있어야 하고 끝낸 수는 아카이브까지 세므로 readBoard 로 모든 카드를 읽는다.
+// metrics 는 pane 의 그래프(처리량 · 유입 · 활동)에 쓰는 값이고, lane 의 recent_finished 는 metrics.window_days 안에 끝난 소속 카드 수다. 세는 규칙은 metrics.mjs 가 갖는다.
 // 규칙 검사는 하지 않는다. 위반은 uhd-kanban check 가 알린다.
 // uhd-kanban board [--json]
 
@@ -7,6 +8,7 @@ import { readBoard } from '../board.mjs'
 import { stripControl } from '../control.mjs'
 import { t } from '../i18n.mjs'
 import { boardLanes, isWork } from '../lanes.mjs'
+import { boardMetrics, recentFinished } from '../metrics.mjs'
 import { COLLECTION_TYPE, loadProject, milestoneStatuses } from '../project.mjs'
 import { cardSession, listSessions } from '../sessions.mjs'
 
@@ -22,6 +24,7 @@ export const run = async ({ flags }) => {
   const sessions = running.length > 0 ? listSessions({ all: true }) : []
   const verdicts = new Map(running.map((card) => [card.id, cardSession(card, sessions).verdict]))
   const cardView = ({ id, status }) => (verdicts.has(id) ? { id, status, session: verdicts.get(id) } : { id, status })
+  const nowMs = Date.now()
   const result = {
     root: project.root,
     interval_seconds: config.monitor.interval_seconds,
@@ -30,7 +33,8 @@ export const run = async ({ flags }) => {
     columns: config.columns.flatMap((column, index) => (column.types.some((type) => type != COLLECTION_TYPE)
       ? [{ status: column.status, dir: column.dir, index, count: board.cards.filter((card) => card.status == column.status && isWork(card)).length }]
       : [])),
-    lanes: boardLanes(project, board, verdicts).map(({ milestone, cards, finished, total }) => ({
+    metrics: boardMetrics(project, board, nowMs),
+    lanes: boardLanes(project, board, verdicts).map(({ milestone, cards, members, finished, total }) => ({
       key: milestone ? `k${milestone.id}` : 'none',
       id: milestone?.id ?? null,
       title: laneTitle(milestone?.data.title),
@@ -38,6 +42,7 @@ export const run = async ({ flags }) => {
       is_running: milestone?.status == milestoneStatuses(config).running,
       finished,
       total,
+      recent_finished: recentFinished(members, nowMs),
       cards: cards.map(cardView),
     })),
   }

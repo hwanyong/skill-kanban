@@ -8,6 +8,7 @@ import { PRIORITIES } from '../board.mjs'
 import { UsageError, cardId, listFrom, positionFrom } from '../args.mjs'
 import { assertRefs, assertTags, checkPosition, nextId, now, place, writeCard } from '../cards.mjs'
 import { hasControl } from '../control.mjs'
+import { HISTORY_KEY, appendStatus } from '../history.mjs'
 import { editBoard } from '../edit.mjs'
 import { renumberNote, t } from '../i18n.mjs'
 import { COLLECTION_TYPE, ProjectError, initialStatus } from '../project.mjs'
@@ -44,6 +45,7 @@ export const run = async ({ flags }) => {
       created_at: at,
       updated_at: at,
       completed_at: project.config.archive.columns.includes(status) ? at : undefined,
+      [HISTORY_KEY]: appendStatus({}, status, at),
     }
     assertTags(project, data, body)
     const temp = join(project.boardPath, column.dir, `.new-k${id}.md`)

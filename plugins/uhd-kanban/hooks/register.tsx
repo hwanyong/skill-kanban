@@ -1,12 +1,15 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
+import { ageOf, etaDays, sparkRuns, sparkline, sum } from './charts'
+import type { Age } from './charts'
 import { DEFAULT_COLOR, cellProps, colorRuns, columnColor, hasMovingCards, laneFrames, packCells, planTransition, sessionCell } from './frames'
 import type { Cell, LaneFrame, Transition, Verdict } from './frames'
-import type { Board, BoardView, Locale } from '../types'
+import type { Board, BoardLane, BoardView, Locale } from '../types'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, milestone 마다 한 행(swimlane)을 그린다.
-// 행은 머리 줄(상태 기호 · 제목 · 끝낸 수/전체 수)과, 소속 카드 하나를 한 칸으로 그린 누적 막대다. 행이 본문에 들어가지 않으면 pane 을 스크롤한다.
+// 범례 아래에 그래프 4줄(일별 처리량 · 일별 유입 · 시간별 활동 · run.status 카드의 마지막 활동)을 둔다. 값은 board 가 낸 metrics 이고 글자로 바꾸는 것은 charts.ts 가 갖는다.
+// 행은 머리 줄(상태 기호 · 제목 · 끝낸 수/전체 수 · 예상 일수)과, 소속 카드 하나를 한 칸으로 그린 누적 막대다. 행이 본문에 들어가지 않으면 pane 을 스크롤한다.
 // 머리 줄의 접기 기호와 id 는 Button 이고 누르면 그 행의 막대를 접거나 편다. 접은 행의 목록은 세션 디렉터리마다 $.store 에 둔다.
 // 2.1.312 의 Button 은 자식 Text 의 wrap="truncate-end" 를 따르지 않고 줄을 바꾸므로, 길이가 정해지지 않은 milestone 제목은 Button 밖의 Text 로 둔다.
 // 격자의 계산은 frames.ts 가 갖고, 이 모듈은 그 격자를 그리고 프레임의 차례를 정한다.
@@ -54,6 +57,16 @@ const TEXT = {
     reload: (command: string) => `/${command} 로 다시 읽는다`,
     header: (clock: string, cards: number, milestones: number, seconds: number) => `${clock} · 카드 ${cards}개 · milestone ${milestones}개 · ${seconds}초마다`,
     noMilestone: '소속 없음',
+    finishedLabel: '처리량',
+    createdLabel: '유입',
+    activityLabel: '활동',
+    finishedSummary: (today: number, week: number, days: number) => `오늘 ${today} · ${days}일 ${week}`,
+    createdSummary: (today: number, week: number, days: number, net: string) => `오늘 ${today} · ${days}일 ${week} · 순증 ${net}`,
+    activitySummary: (hour: number, last: string | null) => `1시간 ${hour} · ${last == null ? '활동 없음' : `마지막 ${last} 전`}`,
+    age: ({ value, unit }: Age) => `${value}${{ minute: '분', hour: '시간', day: '일' }[unit]}`,
+    runningPrefix: (status: string) => `${status} 마지막 활동: `,
+    eta: (days: number) => ` · 약 ${days}일`,
+    etaStalled: (days: number) => ` · ${days}일 처리 0`,
   },
   en: {
     // uk board 가 출력하는 판정 id 와 같은 낱말이다.
@@ -74,6 +87,16 @@ const TEXT = {
     reload: (command: string) => `Reread with /${command}`,
     header: (clock: string, cards: number, milestones: number, seconds: number) => `${clock} · ${cards} cards · ${milestones} milestones · every ${seconds}s`,
     noMilestone: 'no milestone',
+    finishedLabel: 'finished',
+    createdLabel: 'created',
+    activityLabel: 'activity',
+    finishedSummary: (today: number, week: number, days: number) => `today ${today} · ${days}d ${week}`,
+    createdSummary: (today: number, week: number, days: number, net: string) => `today ${today} · ${days}d ${week} · net ${net}`,
+    activitySummary: (hour: number, last: string | null) => `1h ${hour} · ${last == null ? 'no activity' : `last ${last} ago`}`,
+    age: ({ value, unit }: Age) => `${value}${{ minute: 'm', hour: 'h', day: 'd' }[unit]}`,
+    runningPrefix: (status: string) => `${status} last activity: `,
+    eta: (days: number) => ` · ~${days}d`,
+    etaStalled: (days: number) => ` · 0 finished in ${days}d`,
   },
 } satisfies Record<Locale, unknown>
 
@@ -319,6 +342,39 @@ export const register: Register = (on) => {
     const columnItems: LegendItem[] = board.columns.map((column) => ({ cell: { glyph: '█', color: columnColor(column.index), background: DEFAULT_COLOR }, label: `${column.status} ${column.count}` }))
     const verdictItems: LegendItem[] = VERDICTS.map((verdict) => ({ cell: sessionCell(verdict, 0, 0, columnColor(runIndex)), label: text[verdict] }))
     const legendItem = (item: LegendItem) => <Text><Text {...cellProps(item.cell)}>{item.cell.glyph}</Text><Text dimColor>{item.label} </Text></Text>
+    // 그래프 줄: 이름(같은 폭으로 맞춤) · sparkline · 요약. sparkline 은 pane 폭에서 이름과 요약을 뺀 만큼 최근 값부터 그린다.
+    const { metrics } = board
+    const labelWidth = Math.max(...[text.finishedLabel, text.createdLabel, text.activityLabel].map(displayWidth))
+    const label = (name: string) => `${name}${' '.repeat(labelWidth - displayWidth(name))} `
+    const week = metrics.days.slice(-metrics.window_days)
+    const finishedWeek = sum(week.map((day) => day.finished))
+    const createdWeek = sum(week.map((day) => day.created))
+    const net = createdWeek - finishedWeek
+    const finishedSummary = text.finishedSummary(metrics.days.at(-1)?.finished ?? 0, finishedWeek, metrics.window_days)
+    const createdSummary = text.createdSummary(metrics.days.at(-1)?.created ?? 0, createdWeek, metrics.window_days, `${net > 0 ? '+' : ''}${net}`)
+    const lastActivity = metrics.last_activity_at == null ? null : text.age(ageOf(current.refreshedAt - Date.parse(metrics.last_activity_at)))
+    const activitySummary = text.activitySummary(metrics.hours.at(-1) ?? 0, lastActivity)
+    const sparkWidth = (summary: string) => Math.max(0, motion.columns - labelWidth - 1 - displayWidth(summary) - 1)
+    const dayCount = Math.min(metrics.days.length, sparkWidth(finishedSummary), sparkWidth(createdSummary))
+    const shownDays = metrics.days.slice(metrics.days.length - dayCount)
+    const dayMax = Math.max(...shownDays.map((day) => Math.max(day.finished, day.created)), 0)
+    const shownHours = metrics.hours.slice(Math.max(0, metrics.hours.length - sparkWidth(activitySummary)))
+    const chartRow = (name: string, values: number[], max: number, color: string | undefined, summary: string) => (
+      <Text wrap="truncate-end">
+        <Text dimColor>{label(name)}</Text>
+        {sparkRuns(sparkline(values, max)).map((run) => <Text color={run.isZero ? undefined : color} dimColor={run.isZero}>{run.text}</Text>)}
+        <Text dimColor> {summary}</Text>
+      </Text>
+    )
+    const runColor = cellProps({ glyph: ' ', color: columnColor(runIndex), background: DEFAULT_COLOR }).color
+    // 마지막 활동이 오래된 카드부터 적는다. 활동 코멘트도 session_started_at 도 없는 카드가 맨 앞이다.
+    const running = metrics.running.toSorted((a, b) => (a.last_activity_at == null ? -1 : b.last_activity_at == null ? 1 : Date.parse(a.last_activity_at) - Date.parse(b.last_activity_at)))
+    const runningText = running.map((card) => `k${card.id} ${card.last_activity_at == null ? '-' : text.age(ageOf(current.refreshedAt - Date.parse(card.last_activity_at)))}`).join(' · ')
+    const laneEta = (lane: BoardLane) => {
+      if (lane.total - lane.finished <= 0) return ''
+      const days = etaDays(lane, metrics.window_days)
+      return days == null ? text.etaStalled(metrics.window_days) : text.eta(days)
+    }
     const textRows = (rows: Cell[][]) => rows.map((row) => <Text wrap="truncate-end">{colorRuns(row).map((run) => <Text color={run.color} backgroundColor={run.backgroundColor}>{run.text}</Text>)}</Text>)
     const laneBlock = (item: LaneFrame) => {
       const { lane, head, rows, isFlashing } = item
@@ -334,7 +390,7 @@ export const register: Register = (on) => {
             <Box width={0} flexGrow={1}>
               <Text wrap="truncate-end" inverse={isFlashing} dimColor={!lane.is_running}>{lane.id == null ? '' : ` ${lane.title}`}</Text>
             </Box>
-            <Text dimColor> {lane.finished}/{lane.total}</Text>
+            <Text dimColor> {lane.finished}/{lane.total}{laneEta(lane)}</Text>
           </Box>
           {rows.length == 0 ? null : Raster && motion.layout != null ? <Raster key={barKey(item)} columns={motion.columns} rows={rows.length} cells={packCells(rows)} /> : textRows(rows)}
         </Box>
@@ -350,6 +406,11 @@ export const register: Register = (on) => {
             {items.map(legendItem)}
           </Text>
         ))}
+        <Text> </Text>
+        {chartRow(text.finishedLabel, shownDays.map((day) => day.finished), dayMax, 'success', finishedSummary)}
+        {chartRow(text.createdLabel, shownDays.map((day) => day.created), dayMax, undefined, createdSummary)}
+        {chartRow(text.activityLabel, shownHours, Math.max(...shownHours, 0), runColor, activitySummary)}
+        {running.length == 0 ? null : <Text wrap="truncate-end"><Text dimColor>{text.runningPrefix(board.run_status)}</Text>{runningText}</Text>}
         <Text> </Text>
         {lanes.map(laneBlock)}
       </Box>

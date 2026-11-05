@@ -14,8 +14,8 @@ const finishOrder = (config) => {
 }
 
 // verdicts: 카드 id → 세션 판정. board 명령이 넘기고, 넘기지 않으면 열 안의 차례는 보드 차례 그대로다.
-// 반환: [{ milestone, cards, finished, total }]. 차례는 진행이 앞선 열의 milestone → 소속이 없는 카드이고, 소속이 없는 묶음의 milestone 은 null 이다.
-// cards 는 열 안의 작업 카드이고 finished · total 은 아카이브한 소속 카드를 포함해 센다. 여러 milestone 에 속한 카드는 묶음마다 든다.
+// 반환: [{ milestone, cards, members, finished, total }]. 차례는 진행이 앞선 열의 milestone → 소속이 없는 카드이고, 소속이 없는 묶음의 milestone 은 null 이다.
+// cards 는 열 안의 작업 카드이고 members 는 거기에 아카이브한 소속 카드를 더한 것이다. finished · total 은 members 를 센다. 여러 milestone 에 속한 카드는 묶음마다 든다.
 // 소속이 없는 묶음은 collection 이 빈 카드다. 끝난 milestone 은 묶지 않으므로 그 소속 카드는 어느 묶음에도 들지 않는다.
 export const boardLanes = (project, { cards, archived }, verdicts = new Map()) => {
   const { config } = project
@@ -33,8 +33,8 @@ export const boardLanes = (project, { cards, archived }, verdicts = new Map()) =
   const collection = (card) => card.data.collection ?? []
   const lane = (milestone, isMember) => {
     const inLane = work.filter(isMember)
-    const pastCount = past.filter(isMember).length
-    return { milestone, cards: inLane, finished: pastCount + inLane.filter((card) => ended.includes(card.status)).length, total: pastCount + inLane.length }
+    const pastMembers = past.filter(isMember)
+    return { milestone, cards: inLane, members: [...pastMembers, ...inLane], finished: pastMembers.length + inLane.filter((card) => ended.includes(card.status)).length, total: pastMembers.length + inLane.length }
   }
   const lanes = milestones.map((milestone) => lane(milestone, (card) => collection(card).includes(milestone.id)))
   const rest = lane(null, (card) => collection(card).length == 0)

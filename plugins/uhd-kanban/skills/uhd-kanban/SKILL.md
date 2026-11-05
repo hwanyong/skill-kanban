@@ -95,6 +95,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | `depends_on` | 기다리는 카드 id 목록. `dependencies.gate` 의 열(`in-progress` · `in-review` · `done`)로 옮길 때 그 카드가 모두 `dependencies.resolved` 의 열(`done` · `decided` · `implemented`)이나 아카이브에 있어야 한다. `--force` 로 건너뛴다. `dependencies.abandoned` 의 열(`cancelled`)에 있는 카드는 끝나지 않으므로, 그 카드를 기다리는 카드는 `uk set --remove-depends` 로 의존을 지우거나 함께 그만둔다 |
 | `collection` | 이 카드가 속한 milestone 카드의 id 목록. `uk new --collection` · `uk set --add-collection` 은 milestone 카드만 받는다. 비면 키를 쓰지 않는다. `uk board` 와 보드 모니터 pane 은 이 값으로 카드를 milestone 행에 묶는다 |
 | `completed_at` | `archive.columns` 의 열(`done`)에 들어갈 때 적히고 그 열에서 나가면 지워진다 |
+| `status_history` | 카드가 열에 들어간 시각과 그 열의 status 목록. 항목 하나가 `<ISO 8601 UTC> <status>` 문자열이다. `uk new` 가 첫 항목을, 열을 바꾸는 `uk move` · `uk run` · `uk recover` 가 다음 항목을 적는다(`lib/history.mjs`). 0.10.0 보다 먼저 만든 카드에는 키가 없고 다음 이동부터 쌓인다. `uk check` 는 마지막 항목이 지금 열(아카이브한 카드는 `archive.columns` 의 열)과 다르면 위반으로 알린다 |
 | `session` · `session_started_at` | `uk run` · `uk recover` 가 적는 세션 id 와 그 세션의 시작 시각 |
 
 상태와 순서는 frontmatter 에 적지 않는다.
@@ -121,7 +122,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | `uk run <k id> [--dry-run] [--force]` | 카드 본문으로 `claude --bg` 세션을 띄운다. 도는 카드 세션이 `run.max_parallel` 개에 찼으면 띄우지 않는다 |
 | `uk recover [<k id>…] [--dry-run] [--force]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다. `run.max_parallel` 을 넘는 카드는 띄우지 않는다. `--force` 는 끝난(state done) 세션도 이어 간다. 다른 열(`in-review` 등)의 카드를 id 로 주면 이어 갈 때 `run.status` 열로 옮긴다 |
 | `uk guard <경로> [--session <session id>]` | 그 세션이 그 파일을 고쳐도 되는지 판정한다. 0: 카드 세션(이름 `k<id>`) · 프로젝트 밖 · `kanban/` · `.uhd-kanban/` 안. 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). `--session` 이 없으면 `CLAUDE_CODE_SESSION_ID` 를 쓴다. 규칙은 `../delegate/SKILL.md` |
-| `uk board [--json]` | 열마다 카드 수, `run.status` 열 카드의 세션 판정, 끝나지 않은 milestone 과 소속 없는 카드의 끝난 수 / 전체 수를 낸다. 소속을 읽으려고 아카이브까지 모든 카드 파일을 연다. milestone 은 열 수에 세지 않는다. 규칙 검사는 하지 않는다 |
+| `uk board [--json]` | 열마다 카드 수, `run.status` 열 카드의 세션 판정, 끝나지 않은 milestone 과 소속 없는 카드의 끝난 수 / 전체 수를 낸다. `--json` 에는 pane 그래프의 값(`metrics`: 날짜별 끝난 수 · 만든 수, 시간별 활동 코멘트 수, `run.status` 카드의 마지막 활동 시각)과 행마다 최근 7일에 끝난 수(`recent_finished`)가 더 들어간다. 세는 규칙은 `lib/metrics.mjs` 가 갖는다. 소속을 읽으려고 아카이브까지 모든 카드 파일을 연다. milestone 은 열 수에 세지 않는다. 규칙 검사는 하지 않는다 |
 
 순서 번호 사이에 빈 번호가 없으면 명령이 그 열 전체를 다시 매긴다.
 
@@ -200,4 +201,5 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 - 막대는 pane 폭에서 줄을 바꾼다. 칸의 차례는 끝난 열 → 나머지 열의 역순이고(`lib/lanes.mjs` 의 `finishOrder`), 행의 차례는 `active` milestone → `planned` milestone → 소속 없음이다. 머리 줄의 기호는 `active` 면 `●`, `planned` 면 `○` 이고, 소속 카드의 세션 판정이 `restart` · `pending` · `live` · `resume` 중 하나이면 이 차례로 앞선 판정의 기호로 바뀐다. `planned` 행의 제목은 흐리게 그린다. 격자를 계산하는 규칙은 `hooks/frames.ts` 의 `laneFrames` 가 갖는다.
 - 터미널에서는 `live` · `pending` · `restart` 칸을 250 ms 간격으로 다시 그리고, 카드가 생성 · 삭제 · 이동되면 재배치를 100 ms 간격으로 재생한다. milestone 의 열이 바뀌면 머리 줄을 8프레임 반전한다. 재배치 계획은 `hooks/frames.ts` 의 `planTransition`, 재생 차례는 `hooks/register.tsx` 의 `advance` 가 갖는다. 터미널 밖의 surface 와 256행이 넘는 막대는 `Text` 로 고정한다.
 - 같은 모듈이 Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행하고, 종료 코드 1 이면 사용자에게 확인 창을 띄운다(`../delegate/SKILL.md`).
+- 범례 아래 그래프 4줄: 날짜별 끝난 작업 카드 수(`completed_at`, 그래서 `done` 만 센다) · 날짜별 만든 작업 카드 수(`created_at`) · 최근 24시간의 시간별 활동 코멘트(`progress` · `result` · `done-evidence`) 수 · `run.status` 카드마다 마지막 활동 뒤로 지난 시간(오래된 카드부터). 머리 줄 오른쪽의 `약 n일` 은 남은 소속 카드 수를 최근 7일 처리 속도로 나눈 값이다. 글자로 바꾸는 규칙은 `hooks/charts.ts` 가 갖는다.
 - pane 은 `uk board --json` 의 stdout 을 그리기만 한다. 보드가 없는 디렉터리(종료 코드 3)에서는 열지 않는다. 닫힌 pane 은 `/kanban-board` 로 다시 연다.

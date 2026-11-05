@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { hasControl } from './control.mjs'
 import { FrontmatterError, parse } from './frontmatter.mjs'
 import { parseName, titleSlug } from './filename.mjs'
+import { HISTORY_KEY, parseHistory } from './history.mjs'
 import { parseComments } from './comments.mjs'
 import { kindText, t } from './i18n.mjs'
 import { tagProblems } from './profiles.mjs'
@@ -15,11 +16,25 @@ export const PRIORITIES = ['critical', 'high', 'medium', 'low']
 // frontmatter 를 쓸 때 이 순서로 키를 적는다. 없는 키는 이름순으로 뒤에 붙는다.
 export const KEY_ORDER = [
   'id', 'type', 'title', 'priority', 'tags', 'depends_on', 'owner', 'collection',
-  'created_at', 'updated_at', 'completed_at', 'session', 'session_started_at', 'commits', 'agent_reason',
+  'created_at', 'updated_at', 'completed_at', HISTORY_KEY, 'session', 'session_started_at', 'commits', 'agent_reason',
   'nimbalyst_id', 'nimbalyst_status', 'nimbalyst_sessions',
 ]
 
 const listDir = (path) => (existsSync(path) ? readdirSync(path, { withFileTypes: true }) : [])
+
+// status_history 의 형식 · 차례와 마지막 항목. 마지막 항목이 지금 열과 다르면 moveCard 를 거치지 않고 파일을 옮긴 것이다.
+// 아카이브한 카드(column 이 null)는 archive.columns 의 열에서 옮겨졌으므로 마지막 항목이 그 열 중 하나다.
+const historyProblems = (project, data, column) => {
+  const { entries, problems } = parseHistory(data)
+  const statuses = project.config.columns.map((item) => item.status)
+  const last = entries.at(-1)
+  return [
+    ...problems.map(({ index, value }) => t('card.historyEntry', { index, value: JSON.stringify(value) })),
+    ...entries.filter((entry) => !statuses.includes(entry.status)).map((entry) => t('card.historyStatus', { status: entry.status })),
+    ...entries.filter((entry, index) => index > 0 && Date.parse(entry.at) < Date.parse(entries[index - 1].at)).map((entry) => t('card.historyOrder', { at: entry.at })),
+    ...(last == null || (column ? last.status == column.status : project.config.archive.columns.includes(last.status)) ? [] : [t('card.historyLast', { last: last.status, status: column?.status ?? project.config.archive.dir })]),
+  ]
+}
 
 const checkData = (project, data, card, column, problems) => {
   const at = card.relPath
@@ -33,6 +48,7 @@ const checkData = (project, data, card, column, problems) => {
   if (data.tags != null && (!Array.isArray(data.tags) || data.tags.some((tag) => typeof tag != 'string'))) add(t('card.tags'))
   if (data.depends_on != null && (!Array.isArray(data.depends_on) || data.depends_on.some((id) => !Number.isInteger(id)))) add(t('card.dependsOn'))
   if (data.collection != null && (!Array.isArray(data.collection) || data.collection.some((id) => !Number.isInteger(id)))) add(t('card.collection'))
+  historyProblems(project, data, column).forEach(add)
   const comments = parseComments(card.body)
   comments.problems.forEach(add)
   const kinds = project.config.comments.kinds
