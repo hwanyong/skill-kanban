@@ -239,7 +239,7 @@ pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열�
 
 | 행의 부분 | 보이는 것 |
 |---|---|
-| 머리 줄 기호 | `active` 는 `●`, `planned` 는 `○`. 소속 카드의 세션 상태가 `restart` · `pending` · `live` · `resume` 중 하나이면 이 차례로 앞선 상태의 글자로 바뀐다 |
+| 머리 줄 기호 | `active` 는 `●`, `planned` 는 `○`. 소속 카드의 세션 상태가 `restart` · `unknown` · `pending` · `live` · `resume` 중 하나이면 이 차례로 앞선 상태의 글자로 바뀐다 |
 | 접기 기호 | `▾` 는 막대를 펼친 행, `▸` 는 접은 행이다 |
 | 제목 | `k<id>` 와 milestone 제목. `planned` 는 흐리게 그린다. 작업 카드의 제목은 보이지 않는다 |
 | 오른쪽 수 | 끝난 카드 수 / 소속 카드 수. 아카이브한 카드를 포함해 센다. 끝난 카드는 `dependencies.resolved` 와 `dependencies.abandoned` 의 열에 있는 카드다. 그 뒤의 `약 n일` 은 예상 일수다([그래프 줄](#그래프-줄)) |
@@ -255,8 +255,9 @@ pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열�
 | 초록 `░▒▓█▓▒`. 카드마다 한 글자씩 어긋난다 | `돈다` | `live`: 실행 중이다 | 250 ms |
 | 노랑 `⠋⠙⠸⠴⠦⠇` | `다시 뜨는 중` | `pending`: 데몬이 세션을 다시 띄우는 중이다 | 250 ms |
 | 빨강 `↻`. 글자색과 배경색이 프레임마다 바뀐다 | `재시작 대기` | `restart`: 다시 뜬 세션이 idle 이고 마지막 차례가 사용자다. `uk recover` 가 stop 한 뒤 이어 간다 | 250 ms |
-| 빨강 `▨` | `이어 가기 대기` | `resume`: 세션이 멈췄다. `uk recover` 로 이어 간다 | - |
+| 빨강 `▨` | `이어 가기 대기` | `resume`: 세션이 멈췄다(재부팅 뒤의 `state failed` 포함). `uk recover` 로 이어 간다 | - |
 | 회색 `✓` | `끝남` | `done`: 끝났다 | - |
+| 노랑 `?` | `모르는 state` | `unknown`: 프로세스가 없고 uhd-kanban 이 모르는 `state` 다. `uk recover` 가 그 값을 출력하고 이어 가지 않는다 | - |
 | 열의 색 `▒` | `세션 없음` | `none`: 카드에 세션이 없다 | - |
 
 갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60). 0.8.0 에서 `monitor.cell` 키를 없앴다. 기존 `config.json` 에 남아 있으면 오류 없이 무시한다.
@@ -447,7 +448,7 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 
 ### 카드 세션이 멈추면 어떻게 되는가?
 
-`uk board` 와 pane 이 멈춤으로 표시한다. `uk recover` 가 `claude --bg --resume` 으로 이어 가고, 새 session id 를 카드에 적고, `assign` 코멘트를 남긴다. 검토에서 돌아온 카드는 `uk recover --force k<id>` 로 이어 간다.
+`uk board` 와 pane 이 멈춤으로 표시한다. `uk recover` 가 `claude --bg --resume` 으로 이어 가고, 새 session id 를 카드에 적고, `assign` 코멘트를 남긴다. Mac 을 재부팅해 세션이 `state failed` 로 남은 카드도 같다. 검토에서 돌아온 카드는 `uk recover --force k<id>` 로 이어 간다.
 
 ### 세션이 끝났는데 카드가 왜 `done` 으로 옮겨지지 않는가?
 

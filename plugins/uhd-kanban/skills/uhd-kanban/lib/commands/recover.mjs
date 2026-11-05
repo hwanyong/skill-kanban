@@ -4,6 +4,7 @@
 // 체크포인트는 카드의 [progress] 코멘트다. 이어 간 세션에 그 코멘트를 읽으라고 프롬프트로 준다.
 // uhd-kanban recover [<k id>…] [--dry-run] [--force]   id 를 주지 않으면 run.status 열의 카드 전부.
 // --force 는 끝난(state done) 세션도 이어 간다. 세션이 끝났는데 카드에 작업이 남은 때다. 이어 감 판정과 같이 run.max_parallel 에 센다.
+// 재부팅으로 pid 없이 state failed 가 된 세션은 --force 없이 이어 간다(sessions.mjs 의 classify).
 
 import { cardId } from '../args.mjs'
 import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
@@ -18,7 +19,7 @@ import { resumePrompt, sessionName } from '../prompt.mjs'
 import { BACKGROUND_ARGS, cardSession, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
 
 // 이어 가지 않는 판정. 메시지는 recover.<판정> 키에 있다.
-const SKIPPED = ['live', 'pending', 'done']
+const SKIPPED = ['live', 'pending', 'done', 'unknown']
 
 // card 를 status 열로 옮길 수 없으면 그 이유. 세션을 띄우기 전에 보고, 옮길 수 없는 카드는 띄우지 않는다.
 const movable = (project, board, card, status) => {
@@ -40,7 +41,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
     const targets = ids.length > 0 ? ids.map((id) => findCard(board, id).id) : board.cards.filter((card) => card.status == status).map((card) => card.id)
     const sessions = listSessions({ all: true })
     const from = reportName(project, sessions) ?? USER
-    const counts = { live: 0, pending: 0, done: 0, resumed: 0, waiting: 0, failed: 0 }
+    const counts = { live: 0, pending: 0, done: 0, unknown: 0, resumed: 0, waiting: 0, failed: 0 }
     // run.status 열에서 멈춘(restart) 세션은 이미 센 것을 바꿔 띄우므로 수가 늘지 않는다. 그 밖의 이어 가는 세션은 하나씩 늘린다.
     let running = runningCards(project, board, sessions).length
     for (const id of targets) {
@@ -100,6 +101,6 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       console.log(`k${card.id} ${t('recover.resumed', { why })}: ${shortId} ${resumed?.sessionId ?? ''}${moved ? ` ${card.status} → ${status}: ${moved.path.slice(project.root.length + 1)}${startedNote(moved.started)}` : ''}`)
     }
     console.log(t(dryRun ? 'recover.summaryDry' : 'recover.summary', { total: targets.length, ...counts }))
-    return counts.failed + counts.waiting > 0 ? 1 : 0
+    return counts.failed + counts.waiting + counts.unknown > 0 ? 1 : 0
   })
 }

@@ -219,6 +219,7 @@ export default {
   'run.assigned': ({ session, label }) => `claude --bg 로 시작했다. session=${session} ${label}`,
   'recover.live': '돈다',
   'recover.pending': '다시 뜨는 중이다(pid 없이 state working). 잠시 뒤 recover 를 다시 실행한다',
+  'recover.unknown': 'uhd-kanban 이 모르는 state 다(pid 없음). 이어 가지 않는다. claude agents --json --all 로 그 세션을 보고 정한다. 그 state 를 lib/sessions.mjs 의 EXITED_VERDICTS 에 더할 일이다',
   'recover.done': '세션이 끝났는데(state done) 카드가 열에 남았다. 결과 코멘트를 보고 run.finish 의 열(없으면 검토 뒤의 열)로 옮기거나, 작업이 남았으면 --force 로 이어 간다',
   'recover.noSession': ({ id }) => `k${id} 이어 갈 수 없다: session 이 비었다. uhd-kanban run 으로 새로 띄운다`,
   'recover.noTranscript': ({ id, sessionId }) => `k${id} 이어 갈 수 없다: 대화 기록 ${sessionId}.jsonl 이 ~/.claude/projects 에 없다`,
@@ -229,8 +230,8 @@ export default {
   'recover.notFound': 'claude agents --json 에서 찾지 못했다',
   'recover.assigned': ({ why, sessionId, resumed }) => `recover 로 이어 갔다(${why}). claude --bg --resume ${sessionId} → session=${resumed}`,
   'recover.resumed': ({ why }) => `이어 갔다(${why})`,
-  'recover.summary': ({ total, live, pending, done, resumed, waiting, failed }) => `카드 ${total}개 · 돈다 ${live} · 다시 뜨는 중 ${pending} · 끝남 ${done} · 이어 간 것 ${resumed} · 자리를 기다린다 ${waiting} · 이어 갈 수 없다 ${failed}`,
-  'recover.summaryDry': ({ total, live, pending, done, resumed, waiting, failed }) => `카드 ${total}개 · 돈다 ${live} · 다시 뜨는 중 ${pending} · 끝남 ${done} · 이어 갈 것 ${resumed} · 자리를 기다린다 ${waiting} · 이어 갈 수 없다 ${failed}`,
+  'recover.summary': ({ total, live, pending, done, unknown, resumed, waiting, failed }) => `카드 ${total}개 · 돈다 ${live} · 다시 뜨는 중 ${pending} · 끝남 ${done} · 모르는 state ${unknown} · 이어 간 것 ${resumed} · 자리를 기다린다 ${waiting} · 이어 갈 수 없다 ${failed}`,
+  'recover.summaryDry': ({ total, live, pending, done, unknown, resumed, waiting, failed }) => `카드 ${total}개 · 돈다 ${live} · 다시 뜨는 중 ${pending} · 끝남 ${done} · 모르는 state ${unknown} · 이어 갈 것 ${resumed} · 자리를 기다린다 ${waiting} · 이어 갈 수 없다 ${failed}`,
   // bin/uhd-kanban.mjs
   'bin.unknown': ({ name }) => `알 수 없는 명령이다: ${name}`,
   'usage': `사용법: uhd-kanban <명령> [인자]

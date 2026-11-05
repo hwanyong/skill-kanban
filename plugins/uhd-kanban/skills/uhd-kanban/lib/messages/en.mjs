@@ -221,6 +221,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'run.assigned': ({ session, label }) => `Started with claude --bg. session=${session} ${label}`,
   'recover.live': 'running',
   'recover.pending': 'restarting (state working without pid). Run recover again shortly',
+  'recover.unknown': 'a state uhd-kanban does not know (no pid). Not resuming. Check the session with claude agents --json --all and decide; the state belongs in EXITED_VERDICTS of lib/sessions.mjs',
   'recover.done': 'the session finished (state done) but the card is still in the column. Read the result comment and move it to its run.finish column (or the column after review), or continue it with --force if work remains',
   'recover.noSession': ({ id }) => `k${id} cannot be resumed: session is empty. Start a new one with uhd-kanban run`,
   'recover.noTranscript': ({ id, sessionId }) => `k${id} cannot be resumed: transcript ${sessionId}.jsonl is not in ~/.claude/projects`,
@@ -231,8 +232,8 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'recover.notFound': 'not found in claude agents --json',
   'recover.assigned': ({ why, sessionId, resumed }) => `Resumed by recover (${why}). claude --bg --resume ${sessionId} → session=${resumed}`,
   'recover.resumed': ({ why }) => `resumed (${why})`,
-  'recover.summary': ({ total, live, pending, done, resumed, waiting, failed }) => `${count(total, 'card')} · running ${live} · restarting ${pending} · finished ${done} · resumed ${resumed} · waiting for a slot ${waiting} · cannot resume ${failed}`,
-  'recover.summaryDry': ({ total, live, pending, done, resumed, waiting, failed }) => `${count(total, 'card')} · running ${live} · restarting ${pending} · finished ${done} · would resume ${resumed} · waiting for a slot ${waiting} · cannot resume ${failed}`,
+  'recover.summary': ({ total, live, pending, done, unknown, resumed, waiting, failed }) => `${count(total, 'card')} · running ${live} · restarting ${pending} · finished ${done} · unknown state ${unknown} · resumed ${resumed} · waiting for a slot ${waiting} · cannot resume ${failed}`,
+  'recover.summaryDry': ({ total, live, pending, done, unknown, resumed, waiting, failed }) => `${count(total, 'card')} · running ${live} · restarting ${pending} · finished ${done} · unknown state ${unknown} · would resume ${resumed} · waiting for a slot ${waiting} · cannot resume ${failed}`,
   // bin/uhd-kanban.mjs
   'bin.unknown': ({ name }) => `Unknown command: ${name}`,
   'usage': `Usage: uhd-kanban <command> [arguments]

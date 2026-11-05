@@ -58,11 +58,21 @@ export const lastTurnRole = (path) => {
 // 그 작업이 stopped 됐다는 알림을 user 줄로 받고 답하지 않은 채 status idle 로 멈췄다. 다시 뜨기 전 2초 동안은 pid · status 없이 state working 이었다.
 // `claude stop` 뒤에는 pid 없이 state stopped 였다. 일을 마친 세션은 state done 이었다.
 // idle 은 질문을 남기고 답을 기다리는 세션과 같아 보이므로, 다시 떴고(startedAt 이 기록과 다르다) 마지막 줄이 user 일 때만 멈춘 것으로 본다.
-// 반환: live(돈다) · resume(이어 간다) · restart(stop 한 뒤 이어 간다) · pending(다시 뜨는 중) · done(끝났다).
+// 2026-11-05 Mac Studio 재부팅(2.1.318): 카드 세션 k91 이 pid 없이 state failed 로 남았다. 실행 파일에서 읽은 조건은 이렇다. 데몬이 다시 떴을 때
+// 세션 프로세스가 없으면 state failed(detail "process gone while supervisor was down")로 적고, ~/.claude/jobs/<짧은 id>/state.json 에 reapedMidWorkAt 을 적는다.
+// 마지막 갱신이 48시간(172800000 ms)보다 오래됐으면 failed 대신 stopped 로 적는다. 이 세션에 `claude stop` 을 실행해도 state 는 failed 그대로였다.
+// claude agents --json 은 detail · reapedMidWorkAt 을 내지 않으므로 pid 없는 state failed 를 모두 이어 갈 세션으로 본다.
+// 실행 파일에는 데몬이 세션을 다시 띄우는 동안 state failed 를 적는 분기(detail 끝의 "; respawning")도 있다. 그 동안 recover 가 띄우면 같은 대화의 세션이 둘이 된다. 이 분기의 길이는 재지 않았다.
+// 같은 날 k91 은 `claude --bg --resume` 으로 새 세션 e831a4dd 를 16:09:50Z 에 띄운 뒤, 16:35:42Z 에 원래 세션 c5fe7506 이 새 pid 로 다시 떴다.
+// 두 세션이 같은 worktree 를 cwd 로 함께 돌았다. 무엇이 c5fe7506 을 다시 띄웠는지는 확인하지 못했다.
+// 반환: live(돈다) · resume(이어 간다) · restart(stop 한 뒤 이어 간다) · pending(다시 뜨는 중) · done(끝났다) · unknown(아래 표에 없는 state).
+// pid 가 없고 stopped · done 이 아닌 세션의 state 마다 판정. 표에 없는 값은 unknown 이다. Claude Code 가 새 state 를 쓰기 시작하면 pending 처럼 기다리지 않고 그 값을 그대로 보이게 한다.
+const EXITED_VERDICTS = { failed: 'resume', working: 'pending' }
+
 export const classify = (session, recordedStart, lastRole) => {
   if (session == null || session.state == 'stopped') return 'resume'
   if (session.state == 'done') return 'done'
-  if (session.pid == null) return 'pending'
+  if (session.pid == null) return EXITED_VERDICTS[session.state] ?? 'unknown'
   const respawned = recordedStart != null && startedAt(session) != recordedStart
   if (respawned && session.status == 'idle' && lastRole == 'user') return 'restart'
   return 'live'
@@ -79,7 +89,7 @@ export const cardSession = (card, sessions) => {
 }
 
 // 프로세스가 있거나 다시 뜨는 중인 판정. run.max_parallel 이 세는 것과 run 이 새로 띄우지 않는 것이 이 판정이다.
-// restart(멈춤)도 프로세스가 남아 있고 recover 가 같은 카드의 세션으로 바꿔 띄우므로 센다.
+// restart(멈춤)도 프로세스가 남아 있고 recover 가 같은 카드의 세션으로 바꿔 띄우므로 센다. unknown 은 프로세스가 없으므로 세지 않는다.
 export const RUNNING_VERDICTS = ['live', 'pending', 'restart']
 
 // run.status 열에서 세션이 도는 카드. sessions 는 listSessions({ all: true }) 의 값이다.

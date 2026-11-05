@@ -182,11 +182,14 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 |---|---|---|
 | 돈다 | 프로세스가 있고 아래 「멈춤」이 아니다 | 없음 |
 | 다시 뜨는 중 | `pid` 없이 `state working` | 없음. 잠시 뒤 다시 실행한다 |
+| 모르는 state | `pid` 없이 위 · 아래 표에 없는 `state`(예: `blocked`, state 없음) | 없음. 그 `state` 값을 출력하고 종료 코드 1 로 끝난다. `run.max_parallel` 에 세지 않는다 |
 | 끝남 | `state done` | 없음. 카드 세션이 `run.finish` 의 열로 옮기지 않고 끝났으면 결과 코멘트를 보고 메인 세션이 옮긴다. 작업이 남았으면 `uk recover --force k<id>` 가 이어 감과 같이 `claude --bg --resume <session>` 으로 이어 간다 |
-| 이어 감 | 세션이 목록에 없거나 `state stopped` | `claude --bg --resume <session>` |
+| 이어 감 | 세션이 목록에 없거나 `state stopped`, 또는 `pid` 없이 `state failed` | `claude --bg --resume <session>` |
 | 멈춤 | 데몬이 다시 띄웠고(`startedAt` 이 `session_started_at` 과 다르다) `status idle` 이고 대화 기록의 마지막 줄이 user | `claude stop` 뒤 `claude --bg --resume <session>` |
 
 이어 간 세션은 새 session id 로 뜬다(2026-10-29 실측). `recover` 는 카드의 `session` · `session_started_at` 을 새 값으로 고치고 `[assign]` 코멘트를 남긴다. 이어 간 세션은 카드의 마지막 `[progress]` 코멘트와 그 뒤의 코멘트부터 이어 간다.
+
+Mac 을 재부팅하면 카드 세션이 `pid` 없이 `state failed` 로 남는다(2026-11-05, Claude Code 2.1.318). 마지막 갱신이 48시간보다 오래된 세션은 `state stopped` 로 남는다. 둘 다 `--force` 없이 이어 간다.
 
 검토에서 돌아온 카드(`in-review` 에 있고 세션은 state done)는 `uk recover --force k<id>` 로 이어 간다. `recover` 는 그 카드를 `run.status` 열로 옮긴 뒤 `session` 을 고친다. 그래야 `run.max_parallel` 이 그 세션을 센다. 옮길 수 없는 카드(type 이 그 열에 맞지 않거나 의존 카드가 끝나지 않았다)는 띄우지 않고 종료 코드 1 로 알린다.
 
@@ -198,7 +201,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 - 머리 줄의 `▾ k<id>` 는 Button 이다. 누르면 그 행의 막대를 접고 기호가 `▸` 로 바뀌며, 머리 줄 기호의 애니메이션과 끝난 수 / 전체 수는 그대로다. 접은 행의 목록은 `$.store` 에 세션 디렉터리마다 저장한다.
 - 갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60). 값을 바꾸면 다음 갱신부터 그 주기로 다시 읽는다.
-- 막대는 pane 폭에서 줄을 바꾼다. 칸의 차례는 끝난 열 → 나머지 열의 역순이고(`lib/lanes.mjs` 의 `finishOrder`), 행의 차례는 `active` milestone → `planned` milestone → 소속 없음이다. 머리 줄의 기호는 `active` 면 `●`, `planned` 면 `○` 이고, 소속 카드의 세션 판정이 `restart` · `pending` · `live` · `resume` 중 하나이면 이 차례로 앞선 판정의 기호로 바뀐다. `planned` 행의 제목은 흐리게 그린다. 격자를 계산하는 규칙은 `hooks/frames.ts` 의 `laneFrames` 가 갖는다.
+- 막대는 pane 폭에서 줄을 바꾼다. 칸의 차례는 끝난 열 → 나머지 열의 역순이고(`lib/lanes.mjs` 의 `finishOrder`), 행의 차례는 `active` milestone → `planned` milestone → 소속 없음이다. 머리 줄의 기호는 `active` 면 `●`, `planned` 면 `○` 이고, 소속 카드의 세션 판정이 `restart` · `unknown` · `pending` · `live` · `resume` 중 하나이면 이 차례로 앞선 판정의 기호로 바뀐다. `planned` 행의 제목은 흐리게 그린다. 격자를 계산하는 규칙은 `hooks/frames.ts` 의 `laneFrames` 가 갖는다.
 - 터미널에서는 `live` · `pending` · `restart` 칸을 250 ms 간격으로 다시 그리고, 카드가 생성 · 삭제 · 이동되면 재배치를 100 ms 간격으로 재생한다. milestone 의 열이 바뀌면 머리 줄을 8프레임 반전한다. 재배치 계획은 `hooks/frames.ts` 의 `planTransition`, 재생 차례는 `hooks/register.tsx` 의 `advance` 가 갖는다. 터미널 밖의 surface 와 256행이 넘는 막대는 `Text` 로 고정한다.
 - 같은 모듈이 Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행하고, 종료 코드 1 이면 사용자에게 확인 창을 띄운다(`../delegate/SKILL.md`).
 - 범례 아래 그래프 4줄: 날짜별 끝난 작업 카드 수(`completed_at`, 그래서 `done` 만 센다) · 날짜별 만든 작업 카드 수(`created_at`) · 최근 24시간의 시간별 활동 코멘트(`progress` · `result` · `done-evidence`) 수 · `run.status` 카드마다 마지막 활동 뒤로 지난 시간(오래된 카드부터). 머리 줄 오른쪽의 `약 n일` 은 남은 소속 카드 수를 최근 7일 처리 속도로 나눈 값이다. 글자로 바꾸는 규칙은 `hooks/charts.ts` 가 갖는다.

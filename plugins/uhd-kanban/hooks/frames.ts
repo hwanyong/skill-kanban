@@ -33,7 +33,7 @@ const RING = ['⠋', '⠙', '⠸', '⠴', '⠦', '⠇']
 const FADE = ['▓', '▒', '░', '⠿', '⠶', '⠒', '⠂']
 const MOVING_VERDICTS: Verdict[] = ['live', 'pending', 'restart']
 // 머리 줄의 기호가 보이는 판정. 소속 카드의 판정이 여럿이면 앞의 것이다.
-const HEAD_VERDICTS: Verdict[] = ['restart', 'pending', 'live', 'resume']
+const HEAD_VERDICTS: Verdict[] = ['restart', 'unknown', 'pending', 'live', 'resume']
 const HEAD_RUNNING = '●'
 const HEAD_WAITING = '○'
 // 카드가 밀리는 데 쓰는 프레임의 최대값. 움직이는 카드가 이보다 적으면 그 수만큼 쓴다.
@@ -57,6 +57,7 @@ export const sessionCell = (verdict: Verdict, frame: number, position: number, c
   if (verdict == 'restart') return frame % 2 == 0 ? { glyph: '↻', color: ERROR, background: ERROR_DIM } : { glyph: '↻', color: ERROR_DIM, background: ERROR }
   if (verdict == 'resume') return { glyph: '▨', color: ERROR, background: ERROR_DIM }
   if (verdict == 'done') return { glyph: '✓', color: DONE, background: DONE_DIM }
+  if (verdict == 'unknown') return { glyph: '?', color: WARNING, background: WARNING_DIM }
   return { glyph: '▒', color, background: mix(color, 0, 0.65) }
 }
 

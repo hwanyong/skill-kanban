@@ -242,7 +242,7 @@ The pane opens when `.uhd-kanban/config.json` exists above the session directory
 
 | Part of a row | What it shows |
 |---|---|
-| Head symbol | `●` for `active`, `○` for `planned`. When a member card has the session state `restart`, `pending`, `live` or `resume`, the symbol becomes the character of the first one in that order |
+| Head symbol | `●` for `active`, `○` for `planned`. When a member card has the session state `restart`, `unknown`, `pending`, `live` or `resume`, the symbol becomes the character of the first one in that order |
 | Collapse symbol | `▾` for a row with its bar expanded, `▸` for a collapsed row |
 | Title | `k<id>` and the milestone title, dimmed for `planned`. Work card titles are not displayed |
 | Number on the right | Finished member cards / all member cards, counting archived cards. Finished means in a column of `dependencies.resolved` or `dependencies.abandoned`. The `~nd` after it is the estimated number of days ([Chart rows](#chart-rows)) |
@@ -258,8 +258,9 @@ The pane opens when `.uhd-kanban/config.json` exists above the session directory
 | Green `░▒▓█▓▒`, offset one character per card | `live` | `live`: running | 250 ms |
 | Yellow `⠋⠙⠸⠴⠦⠇` | `pending` | `pending`: the daemon is restarting the session | 250 ms |
 | Red `↻`, foreground and background swap every frame | `restart` | `restart`: the restarted session is idle and the user had the last turn. `uk recover` stops it, then resumes it | 250 ms |
-| Red `▨` | `resume` | `resume`: the session stopped. `uk recover` resumes it | - |
+| Red `▨` | `resume` | `resume`: the session stopped (including `state failed` after a reboot). `uk recover` resumes it | - |
 | Gray `✓` | `done` | `done`: finished | - |
+| Yellow `?` | `unknown` | `unknown`: no process and a `state` uhd-kanban does not know. `uk recover` prints the value and does not resume it | - |
 | Column color `▒` | `none` | `none`: the card has no session | - |
 
 The refresh interval is `monitor.interval_seconds` in `config.json` (an integer of at least 10, default 60). Version 0.8.0 removed the `monitor.cell` key. If an existing `config.json` still has it, it is ignored without an error.
@@ -450,7 +451,7 @@ You can edit the card body (the part before `## Comments`) and then run `uk chec
 
 ### What happens when a card session stops?
 
-`uk board` and the pane show it as stopped. `uk recover` resumes it with `claude --bg --resume`, writes the new session id to the card, and adds an `assign` comment. A card that came back from review is resumed with `uk recover --force k<id>`.
+`uk board` and the pane show it as stopped. `uk recover` resumes it with `claude --bg --resume`, writes the new session id to the card, and adds an `assign` comment. The same holds for a card whose session was left in `state failed` by a Mac reboot. A card that came back from review is resumed with `uk recover --force k<id>`.
 
 ### Why does a card not move to `done` when its session ends?
 

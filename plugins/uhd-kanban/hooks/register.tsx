@@ -32,7 +32,7 @@ const HIDDEN_CHECK_MS = 1000
 const MAX_RASTER_COLUMNS = 512
 const MAX_RASTER_ROWS = 256
 // run.status 열의 칸과 그 칸이 속한 swimlane 의 머리 줄 기호만 세션 판정(sessions.mjs 의 cardSession)으로 글자 · 색을 바꾼다. 범례의 차례이고, 판정 이름은 TEXT 의 키다.
-const VERDICTS: Verdict[] = ['live', 'pending', 'restart', 'resume', 'done', 'none']
+const VERDICTS: Verdict[] = ['live', 'pending', 'restart', 'resume', 'done', 'unknown', 'none']
 // 머리 줄 제목 앞의 기호. 두 글자 모두 UAX #11 의 Neutral 이라 터미널에서 1칸이다.
 const EXPANDED_GLYPH = '▾'
 const COLLAPSED_GLYPH = '▸'
@@ -45,6 +45,7 @@ const TEXT = {
     restart: '재시작 대기',
     resume: '이어 가기 대기',
     done: '끝남',
+    unknown: '모르는 state',
     none: '세션 없음',
     description: 'uhd-kanban 보드의 milestone 마다 소속 카드를 pane 에 누적 막대로 그린다',
     noBoard: '이 세션의 디렉터리 위에 .uhd-kanban/config.json 이 없어 pane 을 열지 않았다',
@@ -75,6 +76,7 @@ const TEXT = {
     restart: 'restart',
     resume: 'resume',
     done: 'done',
+    unknown: 'unknown',
     none: 'none',
     description: 'Draws the cards of each uhd-kanban board milestone as a stacked bar in a pane',
     noBoard: 'No .uhd-kanban/config.json above this session directory, so the pane was not opened',

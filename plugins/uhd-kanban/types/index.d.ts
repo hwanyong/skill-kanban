@@ -1,5 +1,5 @@
 // `uhd-kanban board --json` 의 stdout 과 같은 모양이다. 그 명령이 이 값의 원본이다.
-export type BoardCard = { id: number; status: string; session?: 'live' | 'pending' | 'restart' | 'resume' | 'done' | 'none' }
+export type BoardCard = { id: number; status: string; session?: 'live' | 'pending' | 'restart' | 'resume' | 'done' | 'unknown' | 'none' }
 // 작업 카드를 받는 열. index: config.json 의 columns 안의 차례. count 는 milestone 을 세지 않는다.
 export type BoardColumn = { status: string; dir: string; index: number; count: number }
 // 끝나지 않은 milestone 하나, 또는 collection 이 빈 카드(key 'none', id · title · status 는 null). finished · total 은 아카이브한 소속 카드를 포함해 센다.
