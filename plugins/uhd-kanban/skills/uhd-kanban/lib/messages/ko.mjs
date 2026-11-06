@@ -225,7 +225,7 @@ export default {
   'recover.noTranscript': ({ id, sessionId, base }) => `k${id} 이어 갈 수 없다: 대화 기록 ${sessionId}.jsonl 이 ${base} 에 없다`,
   'recover.waiting': ({ id, max }) => `k${id} 기다린다: 동시에 도는 카드 세션이 run.max_parallel(${max})개에 찼다`,
   'recover.cannotMove': ({ id, status, problem }) => `k${id} 이어 갈 수 없다: ${status} 열로 옮길 수 없다. ${problem}`,
-  'recover.whyRestart': ({ startedAt }) => `데몬이 다시 띄웠지만(startedAt ${startedAt}) 마지막 user 줄에 답하지 않고 idle 이다`,
+  'recover.whyRestart': ({ startedAt, toolPending }) => `데몬이 다시 띄웠지만(startedAt ${startedAt}) ${toolPending ? '결과 없는 마지막 도구 호출을 다시 하지 않고' : '마지막 user 줄에 답하지 않고'} idle 이다`,
   'recover.whyMissing': 'claude agents --json --all 에 없다',
   'recover.notFound': 'claude agents --json 에서 찾지 못했다',
   'recover.assigned': ({ why, sessionId, resumed }) => `recover 로 이어 갔다(${why}). claude --bg --resume ${sessionId} → session=${resumed}`,

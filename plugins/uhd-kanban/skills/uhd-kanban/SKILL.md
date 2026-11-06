@@ -185,7 +185,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | 모르는 state | `pid` 없이 위 · 아래 표에 없는 `state`(예: `blocked`, state 없음) | 없음. 그 `state` 값을 출력하고 종료 코드 1 로 끝난다. 도는 세션인지 알 수 없으므로 `run.max_parallel` 에 세고, `uk run` 도 그 카드를 새로 띄우지 않는다 |
 | 끝남 | `state done` | 없음. 카드 세션이 `run.finish` 의 열로 옮기지 않고 끝났으면 결과 코멘트를 보고 메인 세션이 옮긴다. 작업이 남았으면 `uk recover --force k<id>` 가 이어 감과 같이 `claude --bg --resume <session>` 으로 이어 간다 |
 | 이어 감 | 세션이 목록에 없거나 `state stopped`, 또는 `pid` 없이 `state failed` | `claude --bg --resume <session>` |
-| 멈춤 | 데몬이 다시 띄웠고(`startedAt` 이 `session_started_at` 과 다르다) `status idle` 이고 대화 기록의 마지막 줄이 user | `claude stop` 뒤 `claude --bg --resume <session>` |
+| 멈춤 | 데몬이 다시 띄웠고(`startedAt` 이 `session_started_at` 과 다르다) `status idle` 이고 대화 기록의 마지막 줄이 user 이거나 결과 없는 도구 호출(assistant 줄의 `stop_reason` 이 `tool_use`) | `claude stop` 뒤 `claude --bg --resume <session>` |
 
 이어 간 세션은 새 session id 로 뜬다(2026-10-29 실측, 2026-11-05 에 2.1.318 로 다시 확인). `recover` 는 대화 기록의 마지막 줄에 적힌 `cwd` 에서 `claude --bg --resume` 을 실행한다. 세션이 worktree 에서 일했으면 그 worktree 에서 이어 간다. 그 디렉터리가 없으면 프로젝트 루트에서 이어 간다. 2.1.318 에서 프로젝트 루트에서 이어 간 세션은 worktree 가 아니라 루트를 cwd 로 떴고, 대화도 루트의 프로젝트 폴더로 복사됐다. `recover` 는 카드의 `session` · `session_started_at` 을 새 값으로 고치고 `[assign]` 코멘트를 남긴다. 이어 간 세션은 카드의 마지막 `[progress]` 코멘트와 그 뒤의 코멘트부터 이어 간다.
 

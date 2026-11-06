@@ -86,7 +86,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       const spec = runSpec(card, project.profiles)
       const args = ['--resume', sessionId, '-n', sessionName(card.id), ...spec.cliArgs]
       const tr = translator(project.locale)
-      const why = verdict == 'restart' ? tr('recover.whyRestart', { startedAt: startedAt(session) }) : session ? `state ${session.state}${found.verdict == 'done' ? ', --force' : ''}` : tr('recover.whyMissing')
+      const why = verdict == 'restart' ? tr('recover.whyRestart', { startedAt: startedAt(session), toolPending: found.toolPending }) : session ? `state ${session.state}${found.verdict == 'done' ? ', --force' : ''}` : tr('recover.whyMissing')
       counts.resumed += 1
       if (dryRun) {
         console.log(`(dry-run) k${card.id} ${why} → ${cwd == project.root ? '' : `cd ${relative(project.root, cwd)}; `}${verdict == 'restart' ? `claude stop ${session.id}; ` : ''}claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <${t('run.prompt')}>${card.status == status ? '' : ` · ${card.status} → ${status}`}`)

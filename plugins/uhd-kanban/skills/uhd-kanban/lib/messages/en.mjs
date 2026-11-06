@@ -227,7 +227,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'recover.noTranscript': ({ id, sessionId, base }) => `k${id} cannot be resumed: transcript ${sessionId}.jsonl is not in ${base}`,
   'recover.waiting': ({ id, max }) => `k${id} waits: card sessions running at once reached run.max_parallel (${max})`,
   'recover.cannotMove': ({ id, status, problem }) => `k${id} cannot be resumed: it cannot move to the ${status} column. ${problem}`,
-  'recover.whyRestart': ({ startedAt }) => `the daemon restarted it (startedAt ${startedAt}) but it is idle without answering the last user line`,
+  'recover.whyRestart': ({ startedAt, toolPending }) => `the daemon restarted it (startedAt ${startedAt}) but it is idle without ${toolPending ? 'redoing its last tool call, which has no result' : 'answering the last user line'}`,
   'recover.whyMissing': 'not in claude agents --json --all',
   'recover.notFound': 'not found in claude agents --json',
   'recover.assigned': ({ why, sessionId, resumed }) => `Resumed by recover (${why}). claude --bg --resume ${sessionId} → session=${resumed}`,
