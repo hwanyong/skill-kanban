@@ -1,0 +1,11 @@
+{
+  "name": "skill-kanban",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "node node_modules/typescript/bin/tsc -p plugins/uhd-kanban"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}
