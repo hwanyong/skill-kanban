@@ -6,7 +6,7 @@ import type { Age } from './charts'
 import { DEFAULT_COLOR, cellProps, colorRuns, columnColor, hasMovingCards, laneFrames, packCells, planTransition, sessionCell } from './frames'
 import type { Cell, LaneFrame, Transition, Verdict } from './frames'
 import type { Board, BoardLane, BoardView, Locale } from '../types'
-import { placementIn, readPlacement, readShownTab } from './pane-grid'
+import { fillSlot, offerChoice, placementIn, readPlacement, readShownTab } from './pane-grid'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, milestone 마다 한 행(swimlane)을 그린다.
 // 범례 아래에 그래프 4줄(일별 처리량 · 일별 유입 · 시간별 활동 · run.status 카드의 마지막 활동)을 둔다. 값은 board 가 낸 metrics 이고 글자로 바꾸는 것은 charts.ts 가 갖는다.
@@ -476,20 +476,20 @@ export const register: Register = (on) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawBoard($, e, polling, PANE, e.props.bodyColumns))
 
-  // pane-grid 의 grid pane 에 자기 칸이 있으면 `cell:<이름>` Box 를 덧붙인다(규약 §3.3).
+  // pane-grid 의 grid pane: 빈 칸의 선택지에 이 mod 의 Button 을 더하고, 자기 칸이 이 pane 에 있으면 그 칸을 그린다(규약 §3.3 · §3.5).
+  // pane-grid 보다 먼저 로드되면 fillSlot 이 pane-grid 가 그린 slot 을 채우고, 뒤에 로드되면 `cell:<이름>` Box 를 next(e) 뒤에 덧붙인다.
   on('ui.render', { component: 'Pane', requestId: /^grid-/ }, async ($, e, next) => {
     const placement = await readPlacement($, PLUGIN)
-    if (!placement || placement.requestId != e.requestId) return next(e)
     const below = await next(e)
-    const { Box } = $.ui.resolve(e)
-    return (
-      <Box flexDirection="column">
-        {below}
-        <Box key={`cell:${PLUGIN}`} flexDirection="column">
-          {await drawBoard($, e, polling, e.requestId, placement.columns)}
-        </Box>
+    const { Box, Button } = $.ui.resolve(e)
+    const offered = offerChoice(below, PLUGIN, placement, choice => <Button key={choice.key} plain label={choice.label} hotkey={choice.hotkey} onPress={() => {}} />)
+    if (!placement || placement.requestId != e.requestId) return offered
+    const cell = (
+      <Box key={`cell:${PLUGIN}`} flexDirection="column">
+        {await drawBoard($, e, polling, e.requestId, placement.columns)}
       </Box>
     )
+    return fillSlot(offered, PLUGIN, cell) ?? <Box flexDirection="column">{offered}{cell}</Box>
   })
 
   // matcher 의 참조는 hooks/pane-grid.ts 의 GRID_LAYOUT · GRID_SHOWN 과 같다. 엔진은 $.state.get 의 참조 상수를 export 하지 못하게 해서 여기 다시 적는다.
