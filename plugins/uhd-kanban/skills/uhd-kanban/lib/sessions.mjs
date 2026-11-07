@@ -80,7 +80,10 @@ export const lastTurn = (path) => {
 // 그래서 다시 뜬 세션이 idle 이고 마지막 줄이 결과 없는 도구 호출이면 restart 다(2026-11-05 사용자 결정).
 // 반환: live(돈다) · resume(이어 간다) · restart(stop 한 뒤 이어 간다) · pending(다시 뜨는 중) · done(끝났다) · unknown(아래 표에 없는 state).
 // pid 가 없고 stopped · done 이 아닌 세션의 state 마다 판정. 표에 없는 값은 unknown 이다. Claude Code 가 새 state 를 쓰기 시작하면 pending 처럼 기다리지 않고 그 값을 그대로 보이게 한다.
-const EXITED_VERDICTS = { failed: 'resume', working: 'pending' }
+// 2026-11-06 실측(2.1.318): 카드 세션 k100 이 [결과] · [질문] 을 남기고 턴을 끝낸 뒤 pid 없이 state blocked 였다. ~/.claude/jobs/<짧은 id>/state.json 은
+// tempo blocked, detail · needs 에 사람이 할 확인, output.result 에 결과 요약을 적었다. 사람의 답을 기다리며 끝난 세션이므로 done 과 같이 판정한다.
+// recover 는 --force 일 때만 이어 간다(답을 남긴 뒤 메인 세션이 이어 가게 한다). run.max_parallel 에 세지 않는다.
+const EXITED_VERDICTS = { failed: 'resume', working: 'pending', blocked: 'done' }
 
 // turn 은 lastTurn 의 값이다.
 export const classify = (session, recordedStart, turn) => {

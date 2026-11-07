@@ -259,7 +259,7 @@ The pane opens when `.uhd-kanban/config.json` exists above the session directory
 | Yellow `⠋⠙⠸⠴⠦⠇` | `pending` | `pending`: the daemon is restarting the session | 250 ms |
 | Red `↻`, foreground and background swap every frame | `restart` | `restart`: the restarted session is idle and its transcript ends with a user line or with a tool call that has no result. `uk recover` stops it, then resumes it | 250 ms |
 | Red `▨` | `resume` | `resume`: the session stopped (including `state failed` after a reboot). `uk recover` resumes it | - |
-| Gray `✓` | `done` | `done`: finished | - |
+| Gray `✓` | `done` | `done`: finished. A session with no process and `state blocked` (it ended its turn waiting for a human check) is here too | - |
 | Yellow `?` | `unknown` | `unknown`: no process and a `state` uhd-kanban does not know. `uk recover` prints the value and does not resume it. It still takes a `run.max_parallel` slot | - |
 | Column color `▒` | `none` | `none`: the card has no session | - |
 

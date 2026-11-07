@@ -182,8 +182,8 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 |---|---|---|
 | 돈다 | 프로세스가 있고 아래 「멈춤」이 아니다 | 없음 |
 | 다시 뜨는 중 | `pid` 없이 `state working` | 없음. 잠시 뒤 다시 실행한다 |
-| 모르는 state | `pid` 없이 위 · 아래 표에 없는 `state`(예: `blocked`, state 없음) | 없음. 그 `state` 값을 출력하고 종료 코드 1 로 끝난다. 도는 세션인지 알 수 없으므로 `run.max_parallel` 에 세고, `uk run` 도 그 카드를 새로 띄우지 않는다 |
-| 끝남 | `state done` | 없음. 카드 세션이 `run.finish` 의 열로 옮기지 않고 끝났으면 결과 코멘트를 보고 메인 세션이 옮긴다. 작업이 남았으면 `uk recover --force k<id>` 가 이어 감과 같이 `claude --bg --resume <session>` 으로 이어 간다 |
+| 모르는 state | `pid` 없이 위 · 아래 표에 없는 `state`(예: state 없음) | 없음. 그 `state` 값을 출력하고 종료 코드 1 로 끝난다. 도는 세션인지 알 수 없으므로 `run.max_parallel` 에 세고, `uk run` 도 그 카드를 새로 띄우지 않는다 |
+| 끝남 | `state done`, 또는 `pid` 없이 `state blocked`(세션이 사람의 확인을 기다린다고 적고 턴을 끝냈다. 2026-11-06, Claude Code 2.1.318) | 없음. 카드 세션이 `run.finish` 의 열로 옮기지 않고 끝났으면 결과 코멘트를 보고 메인 세션이 옮긴다. 작업이 남았으면 `uk recover --force k<id>` 가 이어 감과 같이 `claude --bg --resume <session>` 으로 이어 간다 |
 | 이어 감 | 세션이 목록에 없거나 `state stopped`, 또는 `pid` 없이 `state failed` | `claude --bg --resume <session>` |
 | 멈춤 | 데몬이 다시 띄웠고(`startedAt` 이 `session_started_at` 과 다르다) `status idle` 이고 대화 기록의 마지막 줄이 user 이거나 결과 없는 도구 호출(assistant 줄의 `stop_reason` 이 `tool_use`) | `claude stop` 뒤 `claude --bg --resume <session>` |
 
