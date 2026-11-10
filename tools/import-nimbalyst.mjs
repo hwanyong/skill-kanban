@@ -30,8 +30,9 @@ import { ProjectError } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/projec
 const DEFAULT_DB = join(homedir(), 'Library', 'Application Support', '@nimbalyst', 'electron', 'sqlite-db', 'nimbalyst.sqlite')
 
 // 2026-10-29 에 poieve 에서 잰 agentModel 값 전부. 표에 없는 값이 나오면 가져오지 않는다.
+// opus-1m 도 deep 으로 옮긴다. 2026-11-10 Claude Code 2.1.322 에서 opus 와 opus[1m] 이 같은 claude-opus-5-5(contextWindow 1000000)로 떠서 템플릿에서 deep-1m 을 뺐다.
 const MODEL_PROFILES = {
-  'claude-code:opus-1m': 'deep-1m',
+  'claude-code:opus-1m': 'deep',
   'claude-code:opus': 'deep',
   'opus': 'deep',
   'claude-opus-5-5': 'deep',

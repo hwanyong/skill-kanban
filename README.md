@@ -180,7 +180,6 @@ Card sessions run without permission prompts because nobody is present to answer
 | Tag | `--model` |
 |---|---|
 | `model:top` | `fable` |
-| `model:deep-1m` | `opus[1m]` |
 | `model:deep` | `opus` |
 | `model:standard` | `sonnet` |
 | `model:fast` | `haiku` |

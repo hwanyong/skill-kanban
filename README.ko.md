@@ -177,7 +177,6 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | 태그 | `--model` |
 |---|---|
 | `model:top` | `fable` |
-| `model:deep-1m` | `opus[1m]` |
 | `model:deep` | `opus` |
 | `model:standard` | `sonnet` |
 | `model:fast` | `haiku` |

@@ -47,12 +47,50 @@ description: 칸반 보드가 있는 프로젝트(루트에 `.uhd-kanban/`)의 �
 
    도구가 검사하는 것은 `depends_on` 과 동시 실행 수(`run.max_parallel`)뿐이다. 작업 충돌은 카드가 무엇을 고칠지 도구가 모르므로 여기서 판정한다(`../uhd-kanban/SKILL.md` 「동시 실행」).
 2. **본문을 쓴다.** 본문이 카드 세션의 프롬프트 전부다. 메인 세션의 대화를 카드 세션은 읽지 못하므로 본문에 다음 다섯 가지를 적는다: 목표 · 고칠 파일이나 범위 · 하지 않을 것 · 끝난 판정(실행으로 확인할 것) · 참고할 카드 id. 본문은 scratchpad 의 파일에 쓰고 `--body-file` 로 넘긴다. 낱말 `ultracode` 는 `../uhd-kanban/SKILL.md` 「지킬 것」 5 대로 감싼다.
-3. **태그를 단다.** `model:<프로필>` · `effort:<값>` 을 작업 크기에 맞춰 단다. 없으면 claude 기본값으로 뜬다. 사람이 할 일은 `model:user` 를 단다(`uk run` 이 띄우지 않는다).
-4. **만든다.** `uk new --type task --title <제목> --tags model:deep,effort:high --depends k455 --body-file <경로>` 뒤 `uk check` 가 종료 코드 0 인지 본다. type 은 아래 「열 옮기기」의 첫 표로 고른다.
+3. **태그를 단다.** `model:<프로필>` · `effort:<값>` · `ultracode` 는 아래 「모델 · effort · `ultracode` 고르기」 대로 단다. `model:` · `effort:` 태그가 없으면 claude 기본값으로 뜬다. 사람이 할 일은 `model:user` 를 단다(`uk run` 이 띄우지 않는다).
+4. **만든다.** `uk new --type task --title <제목> --tags model:deep,effort:medium --depends k455 --body-file <경로>` 뒤 `uk check` 가 종료 코드 0 인지 본다. type 은 아래 「열 옮기기」의 첫 표로 고른다.
 5. **맡긴다.** 의존 카드가 모두 끝난 카드부터 `uk run k<id>` 로 띄운다. 나머지는 앞 카드가 끝난 뒤 띄운다. 도는 카드 세션이 `run.max_parallel` 개에 차면 `uk run` 이 종료 코드 1 로 거절하므로, 우선순위가 높은 카드부터 띄우고 남은 카드는 하나가 끝난 뒤 띄운다.
 6. **지켜본다.** 카드 세션의 `progress` · `question` · `result` 코멘트는 이 세션 앞으로 온다. `uk inbox` 로 읽는다. `question` 은 아래 「결정 모으기」 대로 처리한다. 멈춘 세션은 `uk board` 로 보고 `uk recover` 로 이어 간다. 세션이 끝났는데(state done) 작업이 남은 카드는 `uk recover --force k<id>` 로 이어 간다.
 7. **검토한다.** 카드 세션은 `[result]` 를 남긴 뒤 카드를 `run.finish` 의 열(task · bug 는 `in-review`, decision 은 `decided`)로 옮긴다. `[result]` 코멘트와 `git diff` 를 읽고 끝난 판정을 만족하는지 본다. 판정에 따라 옮기는 열은 아래 「열 옮기기」가 갖는다. 고칠 것이 있으면 그 카드에 `--kind answer` 코멘트로 고칠 것과 끝난 판정을 남기고 `uk recover --force k<id>` 로 이어 가게 하거나(`[result]` 를 남긴 세션은 대개 state done 이라 `--force` 가 없으면 건너뛴다. `recover` 가 카드를 `in-progress` 로 되돌린다) 고칠 일을 새 카드로 만든다. 검토하다 고칠 자리를 찾아도 메인 세션이 고치지 않는다.
 8. **보고한다.** 사용자에게 카드 id · 판정 · 남은 결정을 알린다.
+
+## 모델 · effort · `ultracode` 고르기
+
+기준의 출처는 Addy Osmani 의 「Which Claude model should you build with?」(https://claude.dev/blog/which-claude-model-should-you-build-with/, 2026-11-09)다. 2026-11-10 사용자 승인으로 이 절에 옮겼다. 마지막 행인 「되돌리기 어려운 일」은 poieve 의 Nimbalyst tracker 기준(2026-10-12)에서 가져왔다. 프로필이 가리키는 모델은 2026-11-10 에 Claude Code 2.1.322 의 `claude -p --model <값> --output-format json` 출력 `modelUsage` 로 확인했다: `fable` 은 `claude-fable-5-2`, `opus` 는 `claude-opus-5-5`, `sonnet` 은 `claude-sonnet-5-5`, `haiku` 는 `claude-haiku-5-5` 다.
+
+### 모델과 처음 effort
+
+| 작업 | 프로필 | 처음 effort |
+|---|---|---|
+| 무엇인지 아직 모르는 작업, 일상 구현 · 디버깅, 여러 파일에 걸친 기능 | `model:deep` | `medium` |
+| 범위가 정해진 코딩(버그 수정, 스펙이 있는 작업) | `model:standard` | `medium` |
+| 정해진 절차의 조사 · 리뷰 · 초안 | `model:standard` | `medium` |
+| 분류 · 태깅 · 대량 추출 | `model:fast` | `medium` |
+| 컴퓨터 사용, 스크린샷이 많은 작업(VM · 앱 화면 조작) | `model:deep` | `medium` |
+| 마이그레이션 · 성능 최적화 | `model:deep`, 규모가 크면 `model:top` | `medium` |
+| 대규모 리팩터링, 아키텍처 설계 | `model:top` | `medium` |
+| 보안 · 결제 · 인증 · 법적 문구처럼 틀리면 되돌리기 어려운 일 | 위 행 중 그 작업의 프로필 | `high` |
+
+스펙이 명확해도 마이그레이션 · 성능 최적화는 `model:standard` 로 내리지 않는다. 출처는 스펙의 명확함이 아니라 작업의 어려움으로 모델을 고른다.
+
+### 결과가 모자랄 때
+
+검토에서 끝난 판정을 만족하지 못한 카드는 아래 차례로 한 가지씩 바꾸고 `uk recover --force k<id>` 로 다시 돌린다. 태그는 `uk set k<id> --remove-tag effort:medium --add-tag effort:high` 처럼 바꾼다.
+
+1. 본문의 끝난 판정에 카드 세션이 직접 실행할 검증 수단(시험 명령 · 빌드 · 스크립트)이 있는지 본다. 없으면 먼저 본문에 넣는다. 출처는 이것이 effort 를 올리는 것보다 비용과 지연이 적다고 적었다.
+2. effort 를 한 단계 올린다(`low` 에서 `medium`, `medium` 에서 `high`).
+3. `high` 에서도 모자라면 `xhigh` 로 올리지 않는다. 한 단계 위 프로필(`standard` 에서 `deep`, `deep` 에서 `top`)로 바꾸고 effort 를 `medium` 으로 되돌린다.
+
+`xhigh` · `max` 는 같은 카드를 두 effort 로 돌려 결과 차이를 잰 뒤에만 단다. 출처의 SWE-bench Pro 측정(Opus 5.5)에서 `xhigh` 는 `high` 보다 약 1.4점 높았고 비용은 `high` 의 약 2.5배였다. 같은 측정에서 `medium` 은 `high` 보다 약 2.5점 낮았고 비용은 약 70% 였다.
+
+### `ultracode`
+
+카드 하나의 작업이 아래 두 가지를 모두 만족할 때만 `ultracode` 를 켠다.
+
+1. 한 세션의 컨텍스트 창(2.1.322 에서 `modelUsage.contextWindow` 1000000 토큰)에 들어가지 않는다. 예: 파일 수백 개를 하나씩 읽어야 하는 결함 검색.
+2. 서로 독립이고 모양이 같은 하위 작업(파일마다 · 레코드마다)으로 나뉜다.
+
+앞 단계의 결과를 뒤 단계가 쓰는 작업과 한 컨텍스트 창에 들어가는 작업에는 켜지 않는다. 출처는 그런 작업에서 계획하고 결과를 합치는 비용이 아끼는 비용보다 크다고 적었다. 하위 작업마다 따로 검토할 결과가 나오면 `ultracode` 대신 카드를 나눈다(위 「차례」 1). 켜는 방법은 `../uhd-kanban/SKILL.md` 「지킬 것」 5 이고, `ultracode` 카드에는 `model:` 태그가 있어야 한다(없으면 `uk run` 이 띄우지 않는다). 그 세션이 Workflow 도구를 실제로 부르는지는 아직 확인하지 않았다(`../uhd-kanban/SKILL.md` 「실행」).
 
 ## 메인 세션 바꾸기
 

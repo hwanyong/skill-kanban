@@ -150,13 +150,16 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | 프로필 | `--model` | ultracode 확인 |
 |---|---|---|
 | `model:top` | `fable` | 확인함 |
-| `model:deep-1m` | `opus[1m]` | 확인함 |
 | `model:deep` | `opus` | 확인함 |
 | `model:standard` | `sonnet` | 확인함 |
 | `model:fast` | `haiku` | 확인함 |
 | `model:user` | 없음 | 사람이 하는 카드다. `run` 이 띄우지 않는다 |
 
 「확인함」은 2026-10-29(2.1.312)에 그 모델의 대화 기록에 `workflow_keyword_request` 가 생긴 것까지다. Workflow 도구를 실제로 부르는지는 확인하지 않았다. `profiles.json` 의 `ultracode` 가 `true` 가 아닌 프로필과 `model:` 태그가 없는 카드(기본 모델이 무엇인지 표에 없다)에는 `run` 이 ultracode 카드를 띄우지 않는다.
+
+어느 작업에 어느 프로필 · effort 를 다는지는 `../delegate/SKILL.md` 「모델 · effort · `ultracode` 고르기」가 갖는다.
+
+`model:deep-1m`(`opus[1m]`)은 0.13.0 에서 템플릿 `templates/profiles.json` 에서 뺐다. 2026-11-10 에 Claude Code 2.1.322 에서 `claude -p --model opus` 와 `--model 'opus[1m]'` 이 모두 `claude-opus-5-5` 로 떴고 출력 `modelUsage.contextWindow` 가 둘 다 1000000 이었다(같은 필드가 `claude-haiku-4-5` 에서는 200000 이었다). 그 전에 `uk init` 으로 만든 보드는 자기 `.uhd-kanban/profiles.json` 에 `deep-1m` 이 남아 있으므로, 그 태그를 단 카드도 `check` · `run` 을 그대로 통과한다.
 
 **`run` · `recover` 는 신뢰된 workspace 에서만 된다.** `claude --bg` 는 workspace trust 를 상위 디렉터리에서 물려받지 않는다. 프로젝트 루트에서 `claude` 를 한 번 열어 trust 대화 상자를 수락해야 한다. 수락하지 않았으면 `Workspace not trusted` 로 실패하고 카드는 바뀌지 않는다. trust 설정은 사용자가 바꾼다.
 
