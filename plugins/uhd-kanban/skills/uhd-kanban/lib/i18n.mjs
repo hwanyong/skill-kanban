@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import en from './messages/en.mjs'
 import ko from './messages/ko.mjs'
-import { SETTINGS_DIR, findRootOrNull } from './root.mjs'
+import { SETTINGS_DIR, findCallerRootOrNull } from './root.mjs'
 
 const TABLES = { en, ko }
 export const LOCALES = Object.keys(TABLES)
@@ -23,9 +23,9 @@ export const envLocale = (env = process.env) => ((env.LC_ALL || env.LC_MESSAGES 
 // config 의 locale 이 표에 있으면 그것, 아니면 환경 변수의 값. 표에 없는 locale 은 validateConfig 가 위반으로 알린다.
 export const configLocale = (config) => (LOCALES.includes(config?.locale) ? config.locale : envLocale())
 
-// 이 프로세스를 부른 디렉터리의 보드. config.json 을 읽지 못하면 환경 변수로 정하고, 읽지 못한 이유는 loadProject 가 알린다.
+// 이 프로세스를 부른 자리의 보드(findRoot 와 같은 보드). config.json 을 읽지 못하면 환경 변수로 정하고, 읽지 못한 이유는 loadProject 가 알린다.
 const callerLocale = () => {
-  const root = findRootOrNull(process.cwd())
+  const root = findCallerRootOrNull(process.cwd())
   if (root == null) return envLocale()
   try {
     return configLocale(JSON.parse(readFileSync(join(root, SETTINGS_DIR, 'config.json'), 'utf8')))

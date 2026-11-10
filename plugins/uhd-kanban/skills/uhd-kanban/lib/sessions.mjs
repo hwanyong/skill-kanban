@@ -1,17 +1,17 @@
 // `claude agents --json` 으로 이 Mac 에서 도는 Claude Code 세션 목록을 읽는다.
 // 2026-10-29 실측(2.1.312): 항목마다 pid · id(짧은 id) · cwd · kind · startedAt · sessionId · name · status · state 가 있다. pid · status 는 프로세스가 있을 때만 있다.
 
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { readAgents } from './agents.mjs'
 import { t } from './i18n.mjs'
 import { ProjectError, UNLIMITED, maxParallel } from './project.mjs'
 
 // all 이면 끝난 백그라운드 세션까지 낸다(`--all`).
 export const listSessions = ({ all = false } = {}) => {
-  const text = execFileSync('claude', ['agents', '--json', ...(all ? ['--all'] : [])], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-  const sessions = JSON.parse(text)
+  const sessions = readAgents({ all })
   if (!Array.isArray(sessions)) throw new ProjectError(t('sessions.notArray'))
   return sessions
 }

@@ -7,7 +7,7 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 
 보드는 프로젝트마다 한 벌이다. 카드 하나가 `.md` 파일 하나이고, 열(상태)은 디렉터리 이름이, 열 안의 순서는 파일 이름의 순서 번호가 갖는다. 파일 이름순으로 정렬하면 보드의 차례가 된다.
 
-명령은 모두 이 파일이 있는 디렉터리의 `bin/uhd-kanban.mjs` 다. 아래에서 `uk` 는 `node <이 스킬의 base directory>/bin/uhd-kanban.mjs` 를 줄여 적은 것이다. 프로젝트 안 어느 디렉터리에서 불러도 된다. 루트는 `.uhd-kanban/config.json` 이 있는 디렉터리이고, git worktree 안에서 부르면 주 worktree 의 루트를 쓴다.
+명령은 모두 이 파일이 있는 디렉터리의 `bin/uhd-kanban.mjs` 다. 아래에서 `uk` 는 `node <이 스킬의 base directory>/bin/uhd-kanban.mjs` 를 줄여 적은 것이다. 프로젝트 안 어느 디렉터리에서 불러도 된다. 루트는 `.uhd-kanban/config.json` 이 있는 디렉터리이고, git worktree 안에서 부르면 주 worktree 의 루트를 쓴다. cwd 위에 보드가 없으면 `uk` 를 부른 Claude Code 세션을 띄운 디렉터리(`claude agents --json` 의 `cwd`)에서 다시 찾는다. 그래서 Bash 에서 `$CLAUDE_JOB_DIR/tmp` 처럼 프로젝트 밖으로 `cd` 한 뒤에 불러도 그 세션의 보드를 쓴다.
 
 종료 코드는 0 성공 · 1 규칙 위반이나 실행 실패 · 2 사용법 오류 · 3 부른 디렉터리 위에 보드가 없음이다. 1 이면 stderr 의 문제 목록을 읽고 고친다.
 
@@ -106,7 +106,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 | 명령 | 하는 일 |
 |---|---|
-| `uk init [--dir <경로>] [--locale ko\|en]` | `.uhd-kanban/`(config.json · profiles.json)과 `kanban/` 을 만든다. `--locale` 이 없으면 그때의 `LANG` 으로 정해 config.json 에 적는다. 이미 있으면 바꾸지 않고 종료 코드 1 |
+| `uk init [--dir <경로>] [--locale ko\|en]` | `.uhd-kanban/`(config.json · profiles.json)과 `kanban/` 을 만든다. `--locale` 이 없으면 그때의 `LANG` 으로 정해 config.json 에 적는다. 이미 있거나, 다른 보드 안이거나, 바로 아래 디렉터리에 보드가 있거나, 홈 디렉터리면 바꾸지 않고 종료 코드 1 |
 | `uk migrate [--dry-run]` | 0.4.0 까지 만든 보드의 코멘트 kind 를 영어 id 로 바꾸고 config.json 에 `"locale": "ko"` 를 넣는다. 다시 실행해도 바꿀 것이 없으면 아무것도 쓰지 않는다 |
 | `uk locale` | 이 디렉터리에서 쓸 출력 언어(`ko` · `en`)를 낸다 |
 | `uk check` | config.json · profiles.json 과 모든 카드를 검증한다. 파일은 바꾸지 않는다. `planned` 인데 `run.status` 열의 소속 카드가 있는 milestone 과, `active` 인데 소속 카드가 모두 끝난 milestone 을 stderr 로 알린다. 이 알림은 종료 코드를 바꾸지 않는다 |

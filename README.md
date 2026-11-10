@@ -195,7 +195,7 @@ In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`
 
 | Command | What it does |
 |---|---|
-| `uk init` | Creates `.uhd-kanban/` and `kanban/`. `--locale en\|ko` sets the board language |
+| `uk init` | Creates `.uhd-kanban/` and `kanban/`. `--locale en\|ko` sets the board language. Refuses when the board would overlap another |
 | `uk check` | Validates the configuration and every card without changing files |
 | `uk new` | Creates a card |
 | `uk move` | Moves a card to another column, with dependency checks |
@@ -463,6 +463,12 @@ To the new session, once `uk main --set` has run in it. Card prompts and comment
 ### Does it work with git worktrees?
 
 Yes. When a command runs inside a git worktree, it uses the board of the main worktree, so card ids and order numbers stay in one place.
+
+### Which board does a command use from a subdirectory or from outside the project?
+
+`uk` walks up from the cwd and uses the first directory that has `.uhd-kanban/config.json`, so it uses the same board from any subdirectory of the project. If there is no board above the cwd, it searches again from the directory the calling Claude Code session was started in (`cwd` in `claude agents --json`). A session that runs `cd $CLAUDE_JOB_DIR/tmp` in Bash and then calls `uk` still uses its own board. A session started above any board (for example, in a directory that holds several projects) finds no board and exits with code 3.
+
+Boards must not overlap. `uk init` refuses inside another board, in a directory whose immediate subdirectories have a board, and in the home directory. `uk check` reports boards that already overlap on stderr.
 
 ### Can the main session still edit files when I ask it to?
 

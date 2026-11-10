@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { LOCALES, configLocale, kindText, t } from './i18n.mjs'
 import { KIND_ID, LEGACY_KINDS, RUN_KINDS, kindId } from './kinds.mjs'
 import { validateProfiles } from './profiles.mjs'
-import { BOARD_DIR, SETTINGS_DIR, findRootOrNull } from './root.mjs'
+import { BOARD_DIR, SETTINGS_DIR, findCallerRootOrNull } from './root.mjs'
 
 export { BOARD_DIR, SETTINGS_DIR }
 
@@ -62,8 +62,9 @@ export const milestoneStatuses = (config) => {
 // columns 의 차례로 정하지 않는다. done 이 milestone 을 받으면 planned 보다 앞에 있다.
 export const initialStatus = (config, type) => (config.initial ?? validDefaults(config, DEFAULT_INITIAL))[type] ?? null
 
+// cwd 위에 보드가 없으면 부른 세션을 띄운 디렉터리에서 다시 찾는다(root.mjs 의 findCallerRootOrNull).
 export const findRoot = (cwd = process.cwd()) => {
-  const root = findRootOrNull(cwd)
+  const root = findCallerRootOrNull(cwd)
   if (root == null) throw new NoProjectError(t('project.noRoot', { cwd, settings: SETTINGS_DIR }))
   return root
 }
