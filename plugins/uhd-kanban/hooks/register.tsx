@@ -487,7 +487,7 @@ export const register: Register = (on) => {
   on('classic.PreToolUse', { tool: GUARDED_TOOLS }, async ($, e, next) => {
     const path = e.tool == 'NotebookEdit' ? e.notebook_path : e.tool == 'Edit' || e.tool == 'Write' ? e.file_path : null
     if (path == null) return next(e)
-    const ran = await runSkill($, skillArgv($, ['guard', path]), 30000)
+    const ran = await runSkill($, skillArgv($, ['guard', path, '--session', await $.session.id()]), 30000)
     if (ran.exitCode != 1) return next(e)
     return { ask: ran.stderr.trim() }
   })
