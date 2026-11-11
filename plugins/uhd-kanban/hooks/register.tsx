@@ -52,7 +52,8 @@ const TEXT = {
     unknown: '모르는 state',
     none: '세션 없음',
     description: 'uhd-kanban 보드의 milestone 마다 소속 카드를 pane 에 누적 막대로 그린다',
-    noBoard: '이 세션의 디렉터리 위에 .uhd-kanban/config.json 이 없어 pane 을 열지 않았다',
+    noBoard: '이 세션의 project root 위에 .uhd-kanban/config.json 이 없고 이 세션을 메인 세션으로 등록한 보드도 없어 pane 을 열지 않았다',
+    noBoardHere: '이 세션의 project root 위에 .uhd-kanban/config.json 이 없고 이 세션을 메인 세션으로 등록한 보드도 없다. 다음 turn 에 다시 찾는다',
     opened: (root: string, seconds: number) => `${root} 의 보드를 열었다. ${seconds}초마다 다시 읽는다`,
     inGrid: (tab: string) => `보드를 pane-grid 의 배치 ${tab} 칸에 그린다. 자기 pane 은 열지 않았다`,
     failed: (message: string) => `board 명령이 실패했다: ${message}`,
@@ -84,7 +85,8 @@ const TEXT = {
     unknown: 'unknown',
     none: 'none',
     description: 'Draws the cards of each uhd-kanban board milestone as a stacked bar in a pane',
-    noBoard: 'No .uhd-kanban/config.json above this session directory, so the pane was not opened',
+    noBoard: 'No .uhd-kanban/config.json above this session\'s project root and no board registers this session as its main session, so the pane was not opened',
+    noBoardHere: 'No .uhd-kanban/config.json above this session\'s project root and no board registers this session as its main session. Searches again on the next turn',
     opened: (root: string, seconds: number) => `Opened the board of ${root}. Rereads every ${seconds}s`,
     inGrid: (tab: string) => `The board is drawn in a cell of the pane-grid layout ${tab}, so its own pane was not opened`,
     failed: (message: string) => `The board command failed: ${message}`,
@@ -108,7 +110,7 @@ const TEXT = {
   },
 } satisfies Record<Locale, unknown>
 
-const view = atom({ plugin: 'uhd-kanban', key: 'view' } as const, { kind: 'none' } as BoardView, { shape: 'view-2' })
+const view = atom({ plugin: 'uhd-kanban', key: 'view' } as const, { kind: 'reading' } as BoardView, { shape: 'view-2' })
 // 접은 swimlane 의 key. 값을 쓰면 엔진이 pane 을 다시 그린다.
 const collapsedLanes = atom({ plugin: 'uhd-kanban', key: 'collapsedLanes' } as const, [] as string[])
 
@@ -250,13 +252,22 @@ const beginTransition = async ($: EngineInterface, motion: Motion, board: Board)
 // locale 은 session.start 에서 locale 명령으로 정한다. 정하기 전에 쓰는 값은 en 이다.
 type Polling = { timer: Timer | null; periodMs: number; locale: Locale; motion: Motion }
 
-const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardView> => {
+const skillArgv = ($: EngineInterface, args: string[]) => ['node', `${$.plugin.root}/${SKILL_BIN}`, ...args]
+
+// 스킬 명령은 세션의 project root 에서 실행하고 CLAUDE_CODE_SESSION_ID 에 이 세션의 id 를 넣는다.
+// 그 디렉터리 위에 보드가 없으면 명령이 그 id 로 이 세션을 메인 세션으로 등록한 보드를 찾는다(lib/root.mjs 의 findCallerRootOrNull).
+const runSkill = async ($: EngineInterface, argv: string[], timeoutMs: number) =>
+  $.process.run(argv, { cwd: await $.session.root(), env: { CLAUDE_CODE_SESSION_ID: await $.session.id() }, timeoutMs })
+
+// board 를 한 번 실행한 결과. reading 은 실행하기 전의 값이라 여기서 나오지 않는다.
+type BoardRun = Exclude<BoardView, { kind: 'reading' }>
+
+const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardRun> => {
   const text = TEXT[polling.locale]
-  const cwd = await $.session.root()
   const refreshedAt = await $.clock.now()
-  const argv = ['node', `${$.plugin.root}/${SKILL_BIN}`, 'board', '--json']
-  const ran = await $.process.run(argv, { cwd, timeoutMs: 60000 }).catch((error) => ({ exitCode: -1, stdout: '', stderr: text.notRun(argv.join(' '), String(error?.message ?? error)) }))
-  const result: BoardView = ran.exitCode == 3
+  const argv = skillArgv($, ['board', '--json'])
+  const ran = await runSkill($, argv, 60000).catch((error) => ({ exitCode: -1, stdout: '', stderr: text.notRun(argv.join(' '), String(error?.message ?? error)) }))
+  const result: BoardRun = ran.exitCode == 3
     ? { kind: 'none' }
     : ran.exitCode == 0
       ? { kind: 'ok', board: JSON.parse(ran.stdout), refreshedAt }
@@ -266,7 +277,7 @@ const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardView>
   return result
 }
 
-// 주기는 board 가 낸 interval_seconds 다. 보드가 없으면 멈추고, board 가 실패하면 마지막 주기를 그대로 둔다.
+// 주기는 board 가 낸 interval_seconds 다. 보드가 없으면 멈추고(다시 찾는 것은 turn.start 가 한다), board 가 실패하면 마지막 주기를 그대로 둔다.
 const schedule = ($: EngineInterface, polling: Polling, result: BoardView) => {
   if (result.kind == 'error') return
   const ms = result.kind == 'ok' ? result.board.interval_seconds * 1000 : 0
@@ -285,8 +296,7 @@ const tick = async ($: EngineInterface, polling: Polling) => {
 
 // locale 명령이 실패하면(node 가 없는 등) en 으로 둔다. 실패한 이유는 다음 board 실행이 pane 에 낸다.
 const resolveLocale = async ($: EngineInterface): Promise<Locale> => {
-  const argv = ['node', `${$.plugin.root}/${SKILL_BIN}`, 'locale']
-  const ran = await $.process.run(argv, { cwd: await $.session.root(), timeoutMs: 30000 }).catch(() => null)
+  const ran = await runSkill($, skillArgv($, ['locale']), 30000).catch(() => null)
   const value = ran?.exitCode == 0 ? ran.stdout.trim() : ''
   return value in TEXT ? (value as Locale) : 'en'
 }
@@ -305,7 +315,8 @@ const placeOwnPane = async ($: EngineInterface, layout: unknown, previous: unkno
   const isOpen = (await $.ui.panes()).some((pane) => pane.id == PANE)
   if (isPlaced && isOpen) return $.ui.close({ id: PANE })
   if (isPlaced || isOpen || placementIn(previous, PLUGIN) == undefined) return
-  if ((await read($, view)).kind == 'none') return
+  const { kind } = await read($, view)
+  if (kind == 'none' || kind == 'reading') return
   await $.ui.open({ id: PANE, title: TITLE })
 }
 
@@ -339,7 +350,8 @@ const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']
     motion.layout = null
     stopTimer(motion)
   }
-  if (current.kind == 'none') return <Text dimColor>{text.reading}</Text>
+  if (current.kind == 'reading') return <Text dimColor>{text.reading}</Text>
+  if (current.kind == 'none') return <Text dimColor>{text.noBoardHere}</Text>
   if (current.kind == 'error') {
     return (
       <Box flexDirection="column">
@@ -452,6 +464,13 @@ export const register: Register = (on) => {
     return next(e)
   })
 
+  // 보드가 없던 세션은 turn 마다 다시 찾는다. `/cd` 로 보드가 있는 디렉터리에 옮겼거나, 그 사이 보드가 이 세션을 메인 세션으로 등록했을 수 있다.
+  // mod 에는 디렉터리를 옮긴 것을 알리는 이벤트가 없다(CwdChanged 는 settings 의 hook 이벤트다).
+  on('turn.start', async ($, e, next) => {
+    if ((await read($, view)).kind == 'none') void start($, polling)
+    return next(e)
+  })
+
   on('command.run', { command: COMMAND }, async ($) => {
     const text = TEXT[polling.locale]
     const result = await refresh($, polling)
@@ -468,8 +487,7 @@ export const register: Register = (on) => {
   on('classic.PreToolUse', { tool: GUARDED_TOOLS }, async ($, e, next) => {
     const path = e.tool == 'NotebookEdit' ? e.notebook_path : e.tool == 'Edit' || e.tool == 'Write' ? e.file_path : null
     if (path == null) return next(e)
-    const argv = ['node', `${$.plugin.root}/${SKILL_BIN}`, 'guard', path, '--session', await $.session.id()]
-    const ran = await $.process.run(argv, { cwd: await $.session.root(), timeoutMs: 30000 })
+    const ran = await runSkill($, skillArgv($, ['guard', path]), 30000)
     if (ran.exitCode != 1) return next(e)
     return { ask: ran.stderr.trim() }
   })

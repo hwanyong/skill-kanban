@@ -217,7 +217,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'archive.missing': ({ paths }) => `${count(paths.length, 'card')} not archived because completed_at is missing or not a date:${list(paths)}`,
   'board.column': ({ dir, count, verdicts }) => `${dir} ${count}${verdicts.length > 0 ? ` (sessions: ${verdicts.join(' · ')})` : ''}`,
   'board.lane': ({ id, title, status, finished, total }) => `${id == null ? 'no milestone' : `k${id} ${title} (${status})`} ${finished}/${total}`,
-  'guard.usage': 'Usage: guard <path> [--session <session id>]',
+  'guard.usage': 'Usage: guard <path>',
   'guard.denied': ({ name, path }) => `The main session${name ? ` ${name}` : ''} is about to edit the project file ${path}. Split the work into cards and hand them off with uhd-kanban run (delegate skill). Allow it only when the user asked for this work to be done directly`,
   'run.usage': 'Usage: run <k id> [--dry-run] [--force]',
   'run.stillRunning': ({ id, session, state }) => `The session ${session} of k${id} still exists (state ${state}). Not starting a new one. If it stalled, run uhd-kanban recover k${id}`,
@@ -257,7 +257,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   run <k id> [--dry-run] [--force]   starts a claude --bg session from the card body. Up to run.max_parallel (-1 means unlimited)
   recover [<k id>…] [--dry-run] [--force]   resumes stalled card sessions with claude --bg --resume. --force also resumes finished sessions
   board [--json]        prints card counts per column and the session state of cards in the run.status column
-  guard <path> [--session <id>]   decides whether the main session may edit that project file (1 means it may not)
+  guard <path>          decides whether the main session may edit that project file (1 means it may not)
   migrate [--dry-run]   converts comment kinds of a board made with 0.4.0 or earlier to English ids and adds locale to config.json
   locale                prints the output language (ko · en) used in this directory
   position: --top · --bottom · --before <k id> · --after <k id> (default --bottom)`,

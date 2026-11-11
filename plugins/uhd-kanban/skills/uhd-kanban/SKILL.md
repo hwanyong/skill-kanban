@@ -7,7 +7,7 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 
 보드는 프로젝트마다 한 벌이다. 카드 하나가 `.md` 파일 하나이고, 열(상태)은 디렉터리 이름이, 열 안의 순서는 파일 이름의 순서 번호가 갖는다. 파일 이름순으로 정렬하면 보드의 차례가 된다.
 
-명령은 모두 이 파일이 있는 디렉터리의 `bin/uhd-kanban.mjs` 다. 아래에서 `uk` 는 `node <이 스킬의 base directory>/bin/uhd-kanban.mjs` 를 줄여 적은 것이다. 프로젝트 안 어느 디렉터리에서 불러도 된다. 루트는 `.uhd-kanban/config.json` 이 있는 디렉터리이고, git worktree 안에서 부르면 주 worktree 의 루트를 쓴다. cwd 위에 보드가 없으면 `uk` 를 부른 Claude Code 세션을 띄운 디렉터리(`claude agents --json` 의 `cwd`)에서 다시 찾는다. 그래서 Bash 에서 `$CLAUDE_JOB_DIR/tmp` 처럼 프로젝트 밖으로 `cd` 한 뒤에 불러도 그 세션의 보드를 쓴다.
+명령은 모두 이 파일이 있는 디렉터리의 `bin/uhd-kanban.mjs` 다. 아래에서 `uk` 는 `node <이 스킬의 base directory>/bin/uhd-kanban.mjs` 를 줄여 적은 것이다. 프로젝트 안 어느 디렉터리에서 불러도 된다. 루트는 `.uhd-kanban/config.json` 이 있는 디렉터리이고, git worktree 안에서 부르면 주 worktree 의 루트를 쓴다. cwd 위에 보드가 없으면 `uk` 를 부른 세션(`CLAUDE_CODE_SESSION_ID`)을 메인 세션으로 등록한 보드(`.uhd-kanban/main.json`)를 쓰고, 그것도 없으면 그 세션을 띄운 디렉터리(`claude agents --json` 의 `cwd`)에서 다시 찾는다. 그래서 `/cd` 로 보드 밖에 옮긴 메인 세션이나, Bash 에서 `$CLAUDE_JOB_DIR/tmp` 처럼 프로젝트 밖으로 `cd` 한 뒤에 부른 세션도 자기 보드를 쓴다.
 
 종료 코드는 0 성공 · 1 규칙 위반이나 실행 실패 · 2 사용법 오류 · 3 부른 디렉터리 위에 보드가 없음이다. 1 이면 stderr 의 문제 목록을 읽고 고친다.
 
@@ -121,7 +121,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 | `uk main [--set [<이름>]]` | 등록된 메인 세션을 낸다. `--set` 은 그 이름(없으면 이 세션)을 `.uhd-kanban/main.json` 에 등록한다. 카드 세션 이름(`k<id>`) · `main` · `user`, `claude agents --json` 에 없는 이름, 같은 이름의 세션이 둘 이상인 이름은 거절한다 |
 | `uk run <k id> [--dry-run] [--force]` | 카드 본문으로 `claude --bg` 세션을 띄운다. 도는 카드 세션이 `run.max_parallel` 개에 찼으면 띄우지 않는다 |
 | `uk recover [<k id>…] [--dry-run] [--force]` | 멈춘 세션을 `claude --bg --resume` 으로 이어 간다. `run.max_parallel` 을 넘는 카드는 띄우지 않는다. `--force` 는 끝난(state done) 세션도 이어 간다. 다른 열(`in-review` 등)의 카드를 id 로 주면 이어 갈 때 `run.status` 열로 옮긴다 |
-| `uk guard <경로> [--session <session id>]` | 그 세션이 그 파일을 고쳐도 되는지 판정한다. 0: 카드 세션(이름 `k<id>`) · 프로젝트 밖 · `kanban/` · `.uhd-kanban/` 안. 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). `--session` 이 없으면 `CLAUDE_CODE_SESSION_ID` 를 쓴다. 규칙은 `../delegate/SKILL.md` |
+| `uk guard <경로>` | 그 세션이 그 파일을 고쳐도 되는지 판정한다. 0: 카드 세션(이름 `k<id>`) · 프로젝트 밖 · `kanban/` · `.uhd-kanban/` 안. 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). 판정할 세션은 `CLAUDE_CODE_SESSION_ID` 다(pane 은 `$.process.run` 의 env 로 넣는다). 규칙은 `../delegate/SKILL.md` |
 | `uk board [--json]` | 열마다 카드 수, `run.status` 열 카드의 세션 판정, 끝나지 않은 milestone 과 소속 없는 카드의 끝난 수 / 전체 수를 낸다. `--json` 에는 pane 그래프의 값(`metrics`: 날짜별 끝난 수 · 만든 수, 시간별 활동 코멘트 수, `run.status` 카드의 마지막 활동 시각)과 행마다 최근 7일에 끝난 수(`recent_finished`)가 더 들어간다. 세는 규칙은 `lib/metrics.mjs` 가 갖는다. 소속을 읽으려고 아카이브까지 모든 카드 파일을 연다. milestone 은 열 수에 세지 않는다. 규칙 검사는 하지 않는다 |
 
 순서 번호 사이에 빈 번호가 없으면 명령이 그 열 전체를 다시 매긴다.

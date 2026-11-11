@@ -25,7 +25,7 @@ description: 칸반 보드가 있는 프로젝트(루트에 `.uhd-kanban/`)의 �
 
 도구를 부르기 전에 그 호출이 위 세 가지 중 하나인지 본다. 하나라도 맞으면 부르지 않고 카드를 만든다.
 
-1 의 Edit · Write · NotebookEdit 는 도구가 막는다. 플러그인의 hooks 모듈(`hooks/register.tsx`)이 `classic.PreToolUse` 에서 `uk guard <경로> --session <session id>` 를 실행하고, 종료 코드 1 이면 권한 모드와 무관하게 사용자에게 확인 창을 띄운다(bypassPermissions 에서도 뜬다. 2026-10-29 실행 확인). 사용자가 거절하면 그 호출은 실행되지 않는다. Bash 로 파일을 쓰는 명령 · 2 · 3 은 도구가 막지 않으므로 이 스킬의 규칙으로만 지킨다.
+1 의 Edit · Write · NotebookEdit 는 도구가 막는다. 플러그인의 hooks 모듈(`hooks/register.tsx`)이 `classic.PreToolUse` 에서 `uk guard <경로>` 를 `CLAUDE_CODE_SESSION_ID` 에 그 세션의 id 를 넣어 실행하고, 종료 코드 1 이면 권한 모드와 무관하게 사용자에게 확인 창을 띄운다(bypassPermissions 에서도 뜬다. 2026-10-29 실행 확인). 사용자가 거절하면 그 호출은 실행되지 않는다. Bash 로 파일을 쓰는 명령 · 2 · 3 은 도구가 막지 않으므로 이 스킬의 규칙으로만 지킨다.
 
 ## 메인 세션이 하는 것
 

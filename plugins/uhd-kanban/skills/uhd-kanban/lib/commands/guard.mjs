@@ -1,6 +1,7 @@
 // 메인 세션이 프로젝트 파일을 직접 고치려는지 판정한다. 보드 모니터 mod 의 도구 호출 훅이 Edit · Write · NotebookEdit 앞에서 부른다.
 // 규칙은 delegate 스킬(skills/delegate/SKILL.md)의 「메인 세션이 하지 않는 것」 1 이다. 메인 세션은 작업을 카드로 맡기고 직접 고치지 않는다.
-// uhd-kanban guard <경로> [--session <session id>]
+// uhd-kanban guard <경로>
+// 판정할 세션은 CLAUDE_CODE_SESSION_ID 다. Claude Code 가 Bash 에 넣고, 보드 모니터 mod 는 $.process.run 의 env 로 넣는다.
 // 종료 코드 0: 고쳐도 된다(카드 세션 · 프로젝트 밖 · kanban/ · .uhd-kanban/). 1: 메인 세션이 프로젝트 파일을 고치려 한다(이유는 stderr). 3: 보드가 없다.
 
 import { existsSync } from 'node:fs'
@@ -22,10 +23,10 @@ const existingDir = (path) => {
 // 그 경로가 든 프로젝트의 루트. 보드가 없는 곳이면 null. git worktree 안이면 주 worktree 의 루트다(root.mjs).
 const rootOf = (path) => findRootOrNull(existingDir(path))
 
-export const run = async ({ positional, flags }) => {
+export const run = async ({ positional }) => {
   if (positional[0] == null) throw new UsageError(t('guard.usage'))
   const root = findRoot()
-  const sessionId = typeof flags.session == 'string' ? flags.session : process.env.CLAUDE_CODE_SESSION_ID
+  const sessionId = process.env.CLAUDE_CODE_SESSION_ID
   const name = sessionId ? listSessions().find((session) => session.sessionId == sessionId)?.name : null
   if (isCardSessionName(name)) return 0
   const path = resolve(positional[0])

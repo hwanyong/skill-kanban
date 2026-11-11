@@ -466,7 +466,12 @@ Yes. When a command runs inside a git worktree, it uses the board of the main wo
 
 ### Which board does a command use from a subdirectory or from outside the project?
 
-`uk` walks up from the cwd and uses the first directory that has `.uhd-kanban/config.json`, so it uses the same board from any subdirectory of the project. If there is no board above the cwd, it searches again from the directory the calling Claude Code session was started in (`cwd` in `claude agents --json`). A session that runs `cd $CLAUDE_JOB_DIR/tmp` in Bash and then calls `uk` still uses its own board. A session started above any board (for example, in a directory that holds several projects) finds no board and exits with code 3.
+`uk` walks up from the cwd and uses the first directory that has `.uhd-kanban/config.json`, so it uses the same board from any subdirectory of the project. If there is no board above the cwd, it uses the calling Claude Code session (`CLAUDE_CODE_SESSION_ID`) to search two more places, in this order.
+
+1. The board that registers that session as its main session (`session` in `.uhd-kanban/main.json`). A main session that moved out of its board with `/cd` still uses its own board. The list of board roots used on this Mac is `~/.claude/uhd-kanban/boards.json` (under `CLAUDE_CONFIG_DIR` when set), filled each time a command runs on a board.
+2. The board above the directory the session was started in (`cwd` in `claude agents --json`). A session that runs `cd $CLAUDE_JOB_DIR/tmp` in Bash and then calls `uk` still uses its own board.
+
+If neither exists it exits with code 3, for example in a session started in a directory that holds several projects and registered as no board's main session. The board monitor pane searches in the same order; when it finds nothing it says so in its cell and searches again on the next turn.
 
 Boards must not overlap. `uk init` refuses inside another board, in a directory whose immediate subdirectories have a board, and in the home directory. `uk check` reports boards that already overlap on stderr.
 

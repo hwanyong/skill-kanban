@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { LOCALES, configLocale, kindText, t } from './i18n.mjs'
 import { KIND_ID, LEGACY_KINDS, RUN_KINDS, kindId } from './kinds.mjs'
 import { validateProfiles } from './profiles.mjs'
-import { BOARD_DIR, SETTINGS_DIR, findCallerRootOrNull } from './root.mjs'
+import { BOARD_DIR, SETTINGS_DIR, findCallerRootOrNull, rememberBoard } from './root.mjs'
 
 export { BOARD_DIR, SETTINGS_DIR }
 
@@ -178,6 +178,7 @@ export const validateConfig = (config) => {
 
 export const loadProject = (cwd = process.cwd()) => {
   const root = findRoot(cwd)
+  rememberBoard(root)
   const configPath = join(root, SETTINGS_DIR, 'config.json')
   const config = readJson(configPath)
   const problems = validateConfig(config)

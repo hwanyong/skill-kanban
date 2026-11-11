@@ -3,9 +3,8 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { readAgents } from './agents.mjs'
+import { claudeConfigDir, readAgents } from './agents.mjs'
 import { t } from './i18n.mjs'
 import { ProjectError, UNLIMITED, maxParallel } from './project.mjs'
 
@@ -123,8 +122,6 @@ export const hasRoom = (project, running) => maxParallel(project.config) == UNLI
 // 짧은 id 로 세션 항목을 찾는다. 항목의 id 와 같거나 sessionId 가 그것으로 시작하면 같은 세션으로 본다.
 export const findSession = (sessions, shortId) => sessions.find((session) => session.id == shortId || session.sessionId?.startsWith(shortId)) ?? null
 
-// Claude Code 의 설정 디렉터리. CLAUDE_CONFIG_DIR 가 있으면 그 값이고 없으면 ~/.claude 다. 대화 기록 · jobs 가 그 아래에 있다.
-export const claudeConfigDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
 
 // 대화 기록(jsonl)의 경로. <설정 디렉터리>/projects/<프로젝트>/<sessionId>.jsonl 을 한 단계만 찾는다. 없으면 null.
 export const transcriptPath = (sessionId) => {

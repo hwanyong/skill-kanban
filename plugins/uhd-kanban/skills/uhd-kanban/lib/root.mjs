@@ -3,10 +3,10 @@
 // 메시지를 내지 않는다. i18n.mjs 가 메시지 표를 고르기 전에 이 모듈로 config.json 을 찾기 때문이다.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { readAgents } from './agents.mjs'
+import { claudeConfigDir, readAgents } from './agents.mjs'
 
 export const SETTINGS_DIR = '.uhd-kanban'
 export const BOARD_DIR = 'kanban'
@@ -39,9 +39,7 @@ export const findRootOrNull = (cwd) => {
 // 2026-11-10 실측(2.1.322): background 세션의 Bash 에서 `cd /tmp` 를 한 뒤에도 CLAUDE_CODE_SESSION_ID 가 있었고,
 // `claude agents --json` 의 그 세션 항목 cwd 는 세션을 띄운 프로젝트 루트였다.
 // 같은 날 `claude --bg` 에 준 환경 변수는 세션의 Bash 에 전달되지 않았다(printenv 가 빈 값). 그래서 uk run 이 루트를 환경 변수로 넘기지 않는다.
-const sessionDir = () => {
-  const id = process.env.CLAUDE_CODE_SESSION_ID
-  if (!id) return null
+const sessionDir = (id) => {
   const sessions = readAgentsOrNull()
   if (!Array.isArray(sessions)) return null
   return sessions.find((session) => session.sessionId == id)?.cwd ?? null
@@ -56,14 +54,59 @@ const readAgentsOrNull = () => {
   }
 }
 
-// CLI 를 부른 자리의 보드. cwd 위에 보드가 없으면 부른 세션을 띄운 디렉터리에서 다시 찾는다.
-// 세션이 Bash 에서 프로젝트 밖(예: $CLAUDE_JOB_DIR/tmp)으로 cd 한 뒤 uk 를 불러도 그 세션의 보드를 쓴다.
-// 2026-11-10 poieve 세션 3건이 `cd ~/.claude/jobs/<id>/tmp` 뒤에 uk 를 불러 보드를 찾지 못했다.
+// 이 Mac 에서 쓴 보드의 루트 목록. 세션이 `/cd` 로 보드 밖에 있어도 그 세션을 메인 세션으로 등록한 보드를 찾으려고 둔다.
+// 목록에는 루트만 적는다. 어느 세션이 메인인지는 각 보드의 `.uhd-kanban/main.json` 한 곳이 갖는다.
+// 파일: <Claude Code 설정 디렉터리>/uhd-kanban/boards.json = { "roots": [<절대 경로>, ...] }
+const boardsPath = () => join(claudeConfigDir(), 'uhd-kanban', 'boards.json')
+
+const readJsonOrNull = (path) => {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+// 파일이 없거나 읽지 못하면 빈 목록이다. 다음 rememberBoard 가 새로 쓴다.
+const knownRoots = () => {
+  const roots = readJsonOrNull(boardsPath())?.roots
+  return Array.isArray(roots) ? roots.filter((root) => typeof root == 'string') : []
+}
+
+// loadProject 가 보드를 읽을 때마다 부른다. 이미 있으면 쓰지 않는다. 보드가 없어진 루트는 이때 뺀다.
+// 여러 프로세스가 함께 쓰면 한쪽의 추가가 빠질 수 있다. 그 보드에서 다음에 실행하는 명령이 다시 적는다.
+export const rememberBoard = (root) => {
+  const roots = knownRoots()
+  if (roots.includes(root)) return
+  const path = boardsPath()
+  mkdirSync(dirname(path), { recursive: true })
+  const temp = `${path}.${process.pid}.tmp`
+  writeFileSync(temp, `${JSON.stringify({ roots: [...roots.filter(hasBoard), root].sort() }, null, 2)}\n`)
+  renameSync(temp, path)
+}
+
+// main.json 의 session 이 id 인 보드의 루트. 없으면 null. 둘 이상이면 main.json 의 set_at 이 가장 늦은 보드다.
+const mainBoardOf = (id) => knownRoots()
+  .map((root) => ({ root, main: readJsonOrNull(join(root, SETTINGS_DIR, 'main.json')) }))
+  .filter(({ root, main }) => main?.session == id && hasBoard(root))
+  .sort((a, b) => String(b.main.set_at ?? '').localeCompare(String(a.main.set_at ?? '')))[0]?.root ?? null
+
+// CLI 를 부른 자리의 보드. 차례대로 찾는다.
+// 1. cwd 위의 보드.
+// 2. 부른 세션을 메인 세션으로 등록한 보드. 메인 세션이 `/cd` 로 보드 밖의 디렉터리로 옮겨도 자기 보드를 쓴다.
+//    2026-11-10 poieve-main 이 `/cd` 로 skill-kanban 에 옮긴 뒤 pane 이 보드를 찾지 못했다(pane 은 세션의 project root 에서 uk 를 실행한다).
+// 3. 부른 세션을 띄운 디렉터리 위의 보드. 세션이 Bash 에서 프로젝트 밖(예: $CLAUDE_JOB_DIR/tmp)으로 cd 한 뒤 uk 를 불러도 그 세션의 보드를 쓴다.
+//    2026-11-10 poieve 세션 3건이 `cd ~/.claude/jobs/<id>/tmp` 뒤에 uk 를 불러 보드를 찾지 못했다.
+// 부른 세션은 CLAUDE_CODE_SESSION_ID 로 안다. Claude Code 가 Bash 에 넣고, pane 은 $.process.run 의 env 로 넣는다.
 // 경로가 든 보드를 묻는 자리(guard 의 rootOf)는 findRootOrNull 을 쓴다. 그 경로와 무관한 세션의 보드를 돌려주면 판정이 틀린다.
 export const findCallerRootOrNull = (cwd) => {
   const root = findRootOrNull(cwd)
   if (root != null) return root
-  const dir = sessionDir()
+  const id = process.env.CLAUDE_CODE_SESSION_ID
+  if (!id) return null
+  const main = mainBoardOf(id)
+  if (main != null) return main
+  const dir = sessionDir(id)
   return dir == null ? null : findRootOrNull(dir)
 }
 

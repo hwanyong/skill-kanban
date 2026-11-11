@@ -7,6 +7,7 @@
 // 재부팅으로 pid 없이 state failed 가 된 세션은 --force 없이 이어 간다(sessions.mjs 의 classify).
 
 import { join, relative } from 'node:path'
+import { claudeConfigDir } from '../agents.mjs'
 import { cardId } from '../args.mjs'
 import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
 import { readBoard } from '../board.mjs'
@@ -17,7 +18,7 @@ import { claimMain, reportName } from '../main.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError, maxParallel } from '../project.mjs'
 import { resumePrompt, sessionName } from '../prompt.mjs'
-import { BACKGROUND_ARGS, cardSession, claudeConfigDir, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
+import { BACKGROUND_ARGS, cardSession, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
 
 // 이어 가지 않는 판정. 메시지는 recover.<판정> 키에 있다.
 const SKIPPED = ['live', 'pending', 'done', 'unknown']
