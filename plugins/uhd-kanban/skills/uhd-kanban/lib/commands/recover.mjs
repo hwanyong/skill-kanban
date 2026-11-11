@@ -110,7 +110,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
         continue
       }
       if (verdict == 'restart') stopSession(session.id)
-      const { shortId, session: resumed } = launchCard(project, sessions, args, resumePrompt(project, card, { skillRoot }), cwd)
+      const { shortId, session: resumed } = await launchCard(project, sessions, args, resumePrompt(project, card, { skillRoot }), cwd)
       const text = tr('recover.assigned', { why, sessionId, resumed: resumed?.sessionId ?? `${shortId}(${tr('recover.notFound')})` })
       const moved = assignCard(project, current, card, status, { from, text, session: resumed })
       console.log(`k${card.id} ${t('recover.resumed', { why })}: ${shortId} ${resumed?.sessionId ?? ''}${moved ? ` ${card.status} → ${status}: ${relative(project.root, moved.path)}${startedNote(moved.started)}` : ''}`)

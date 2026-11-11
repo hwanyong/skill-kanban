@@ -40,7 +40,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       console.log(`(dry-run) ${backgroundCommand(args)}${spec.ultracode ? ' (ultracode)' : ''}\n${prompt}`)
       return 0
     }
-    const { shortId, session } = launchCard(project, sessions, args, prompt, project.root)
+    const { shortId, session } = await launchCard(project, sessions, args, prompt, project.root)
     if (!session) throw new ProjectError(t('run.notFound', { shortId }))
     const text = translator(project.locale)('run.assigned', { session: session.sessionId, label: `${spec.label}${spec.ultracode ? ' ultracode' : ''}` })
     const moved = assignCard(project, board, card, status, { from, text, session, force })
