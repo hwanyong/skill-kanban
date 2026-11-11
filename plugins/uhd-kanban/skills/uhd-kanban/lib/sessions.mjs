@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { claudeConfigDir, readAgents } from './agents.mjs'
 import { t } from './i18n.mjs'
-import { ProjectError, UNLIMITED, maxParallel } from './project.mjs'
+import { ProjectError, UNLIMITED, maxParallel, runEnv } from './project.mjs'
 
 // all 이면 끝난 백그라운드 세션까지 낸다(`--all`).
 export const listSessions = ({ all = false } = {}) => {
@@ -25,6 +25,15 @@ export const currentSessionName = (sessions) => {
 // run · recover 가 띄우는 세션은 모두 권한 확인 없이 돈다(2026-10-29 사용자 지시). 카드 세션은 백그라운드라 확인 창에 답할 사람이 없다.
 // 2026-10-29 실측(2.1.312): `claude --bg --dangerously-skip-permissions` 로 띄운 세션의 대화 기록에 permissionMode bypassPermissions 가 적혔다.
 export const BACKGROUND_ARGS = ['--bg', '--dangerously-skip-permissions']
+
+// config.json 의 run.env 를 카드 세션에 넣는 인자. run.env 가 없거나 비었으면 넣지 않는다.
+// 2026-11-11 실측(2.1.322): `claude --bg` 를 실행한 프로세스의 환경 변수는 세션에 전달되지 않았다(세션은 데몬이 띄운다).
+// `--settings '{"env":{…}}'` 로 준 값은 세션의 Bash 도구 환경과 PreToolUse 훅 프로세스 환경에 모두 있었다.
+// 이 인자는 사용자 · 프로젝트 settings 를 대신하지 않고 그 위에 더해진다. 같은 세션에서 사용자 settings 의 훅도 함께 돌았다.
+export const envArgs = (config) => {
+  const env = runEnv(config)
+  return Object.keys(env).length == 0 ? [] : ['--settings', JSON.stringify({ env })]
+}
 
 // `claude --bg` 를 실행하고 세션의 짧은 id 를 돌려준다. 2026-10-29 실측: stdout 에 `claude stop <짧은 id>` 줄이 있다.
 // 띄우지 못하면(예: `Workspace not trusted`) stdout · stderr 를 오류 메시지에 그대로 넣는다.

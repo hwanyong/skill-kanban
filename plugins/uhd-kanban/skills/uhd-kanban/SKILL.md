@@ -23,7 +23,7 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 
 | 경로 | 내용 |
 |---|---|
-| `.uhd-kanban/config.json` | 출력 · 카드 세션 프롬프트의 언어(`locale`: `ko` · `en`. 없으면 `LC_ALL` → `LC_MESSAGES` → `LANG`) · 열 · 처음 열(`initial`) · 순서 번호 · 의존성(`gate` · `resolved` · `abandoned`) · 코멘트 kind · 아카이브 · `run`(`status` · `max_parallel` · `finish`) · `monitor` 설정 |
+| `.uhd-kanban/config.json` | 출력 · 카드 세션 프롬프트의 언어(`locale`: `ko` · `en`. 없으면 `LC_ALL` → `LC_MESSAGES` → `LANG`) · 열 · 처음 열(`initial`) · 순서 번호 · 의존성(`gate` · `resolved` · `abandoned`) · 코멘트 kind · 아카이브 · `run`(`status` · `max_parallel` · `finish` · `env`) · `monitor` 설정 |
 | `.uhd-kanban/profiles.json` | `model:` 태그의 프로필 이름을 `claude --model` 값으로 바꾸는 표 |
 | `.uhd-kanban/main.json` | 카드 세션이 보고하는 메인 세션의 이름 · session id · 등록 시각. `uk main --set` 이 쓰고, 없으면 `uk run` · `uk recover` 가 세션을 띄운 뒤 그 명령을 부른 세션으로 쓴다 |
 | `kanban/<n>-<status>/<순서 번호>-k<id>-<제목>.md` | 열 안의 카드. 예: `kanban/1-to-do/0010-k457-로그인-오류-재현.md` |
@@ -146,6 +146,8 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 2. 카드를 `run.status` 열(`in-progress`)로 옮긴다. 의존성 검사는 `move` 와 같다.
 3. `claude --bg --dangerously-skip-permissions -n k457 --model … <프롬프트>` 를 프로젝트 루트에서 실행한다. `run` · `recover` 가 띄우는 세션은 모두 권한 확인 없이 돈다(`lib/sessions.mjs` 의 `BACKGROUND_ARGS`). 백그라운드 세션에는 확인 창에 답할 사람이 없다. 프롬프트는 카드 본문 뒤에 `progress` · `question` · `result` 코멘트를 남기는 명령과, `run.finish` 에 그 type 이 있으면 `[result]` 뒤에 카드를 그 열로 옮기는 `uk move` 명령을 붙인 것이다. 카드 파일은 경로가 아니라 글로브 `kanban/*/*-k<id>-*.md` 로 알려 준다. 카드를 옮기면 경로가 바뀐다.
 4. 카드에 `session` · `session_started_at` 과 `[assign]` 코멘트를 적는다.
+
+`config.json` 의 `run.env` 에 환경 변수 이름 → 문자열 값 객체를 적으면 `run` 과 `recover`(이어 감 · 멈춤 · `--force` 모두)가 띄우는 카드 세션에 그 값을 넣는다. 예: `"run": { "status": "in-progress", "env": { "MY_TOOL_MODE": "off" } }`. 넣는 방법은 `claude --settings '{"env":{…}}'` 인자이고(`lib/sessions.mjs` 의 `envArgs`), 카드 세션의 Bash 도구와 훅 프로세스 환경에 들어간다. `uk run` 을 실행한 셸의 환경 변수는 `claude --bg` 세션에 전달되지 않으므로 이 키로 준다. 키가 없거나 비었으면 그 인자를 넘기지 않는다. 이름은 영문자 · 숫자 · 밑줄이고 숫자로 시작하지 않으며, 값은 문자열이다. 다르면 `check` 와 모든 명령이 위반으로 알린다. 이미 도는 카드 세션에는 적용되지 않고, 다음 `run` · `recover` 부터 적용된다.
 
 | 프로필 | `--model` | ultracode 확인 |
 |---|---|---|

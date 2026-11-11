@@ -18,7 +18,7 @@ import { claimMain, reportName } from '../main.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError, maxParallel } from '../project.mjs'
 import { resumePrompt, sessionName } from '../prompt.mjs'
-import { BACKGROUND_ARGS, cardSession, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
+import { BACKGROUND_ARGS, cardSession, hasRoom, runningCards, findSession, envArgs, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
 
 // 이어 가지 않는 판정. 메시지는 recover.<판정> 키에 있다.
 const SKIPPED = ['live', 'pending', 'done', 'unknown']
@@ -85,7 +85,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       }
       if (!counted) running += 1
       const spec = runSpec(card, project.profiles)
-      const args = ['--resume', sessionId, '-n', sessionName(card.id), ...spec.cliArgs]
+      const args = ['--resume', sessionId, '-n', sessionName(card.id), ...spec.cliArgs, ...envArgs(project.config)]
       const tr = translator(project.locale)
       const why = verdict == 'restart' ? tr('recover.whyRestart', { startedAt: startedAt(session), toolPending: found.toolPending }) : session ? `state ${session.state}${found.verdict == 'done' ? ', --force' : ''}` : tr('recover.whyMissing')
       counts.resumed += 1

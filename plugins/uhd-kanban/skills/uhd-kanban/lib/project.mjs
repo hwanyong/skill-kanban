@@ -24,6 +24,12 @@ export const UNLIMITED = -1
 // run · recover 가 동시에 돌리는 카드 세션의 최대 수. UNLIMITED 이면 제한이 없다.
 export const maxParallel = (config) => config.run.max_parallel ?? DEFAULT_MAX_PARALLEL
 
+// run · recover 가 카드 세션에 넣는 환경 변수(이름 → 값). 키가 없으면 넣지 않는다. 넣는 방법은 lib/sessions.mjs 의 envArgs 가 갖는다.
+export const runEnv = (config) => config.run.env ?? {}
+
+// 환경 변수 이름 규칙. POSIX 의 portable 이름(영문자 · 숫자 · 밑줄, 숫자로 시작하지 않음)이다.
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
+
 // initial · run.finish · dependencies.abandoned 가 없을 때의 값. 이 키보다 먼저 만든 보드에는 키가 없다.
 // columns 를 바꾼 보드에서 없는 status 를 가리키지 않도록, 쓰기 전에 그 보드의 columns 에 맞는 것만 남긴다.
 const DEFAULT_INITIAL = { task: 'to-do', bug: 'to-do', decision: 'to-do', milestone: 'planned' }
@@ -114,6 +120,16 @@ const typeStatusProblems = (columns, key, map) => {
     .map(([type, status]) => t('config.typeStatusBad', { key, type, status }))
 }
 
+// run.env 를 본다. 없으면(null) 넣지 않으므로 문제가 아니다.
+const envProblems = (env) => {
+  if (env == null) return []
+  if (typeof env != 'object' || Array.isArray(env)) return [t('config.runEnvObject', { value: JSON.stringify(env) })]
+  return Object.entries(env).flatMap(([name, value]) => [
+    ...(ENV_NAME.test(name) ? [] : [t('config.runEnvName', { name: JSON.stringify(name) })]),
+    ...(typeof value == 'string' ? [] : [t('config.runEnvValue', { name, value: JSON.stringify(value) })]),
+  ])
+}
+
 // 0.4.0 까지의 한국어 kind 가 남았으면 migrate 를 알린다. 그 밖의 형식 위반은 형식만 알린다.
 const kindProblems = (kinds) => {
   if (!Array.isArray(kinds) || kinds.length == 0 || kinds.some((kind) => typeof kind != 'string')) return [t('config.kinds')]
@@ -171,6 +187,7 @@ export const validateConfig = (config) => {
   if (parallel != null && (!Number.isInteger(parallel) || (parallel < 1 && parallel != UNLIMITED))) problems.push(t('config.maxParallel', { unlimited: UNLIMITED, fallback: DEFAULT_MAX_PARALLEL, value: JSON.stringify(parallel) }))
   typeStatusProblems(columns, 'initial', config?.initial).forEach((problem) => problems.push(problem))
   typeStatusProblems(columns, 'run.finish', config?.run?.finish).forEach((problem) => problems.push(problem))
+  envProblems(config?.run?.env).forEach((problem) => problems.push(problem))
   const interval = config?.monitor?.interval_seconds
   if (!Number.isInteger(interval) || interval < MIN_MONITOR_SECONDS) problems.push(t('config.interval', { min: MIN_MONITOR_SECONDS, value: interval }))
   return problems

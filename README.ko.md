@@ -441,6 +441,10 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 
 기본 3개다. `.uhd-kanban/config.json` 의 `run.max_parallel` 에 다른 양의 정수를 적거나, 제한을 없애려면 `-1` 을 적는다. 상한에 차면 `uk run` 이 카드를 띄우지 않고 종료 코드 1 로 끝난다.
 
+### 카드 세션에 환경 변수를 넣을 수 있는가?
+
+`.uhd-kanban/config.json` 의 `run.env` 에 이름 → 문자열 값 객체를 적는다(예: `"env": { "MY_TOOL_MODE": "off" }`). `uk run` 과 `uk recover` 가 띄우는 카드 세션의 Bash 도구와 훅에 그 값이 들어간다. `uk run` 을 실행한 셸의 환경 변수는 카드 세션에 전달되지 않는다.
+
 ### 카드를 직접 고쳐도 되는가?
 
 카드 본문(`## Comments` 앞)은 직접 고치고 `uk check` 를 실행한다. frontmatter · 파일 이름 · 열은 `uk new` · `uk set` · `uk move` · `uk order` 로 바꾸고, 코멘트는 `uk comment` 로 남긴다.

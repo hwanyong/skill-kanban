@@ -1,6 +1,7 @@
 // 카드 본문을 프롬프트로 `claude --bg` 세션을 띄우고, 카드를 run.status 열로 옮기고, session 에 세션 id 를 적는다.
 // 카드 세션이 보고할 이름은 lib/main.mjs 의 reportName 이다. 등록된 메인 세션이 부르면 역할 이름 main 이다.
 // 모델 · effort 는 카드의 model: · effort: 태그를 profiles.json 으로 바꾼 값이다. 태그가 없으면 claude 의 기본값이다. 세션 이름은 k<id> 다.
+// config.json 의 run.env 가 있으면 그 환경 변수를 세션에 넣는다(lib/sessions.mjs 의 envArgs).
 // uhd-kanban run <k id> [--dry-run] [--force]   --force 는 의존성 검사를 건너뛴다.
 
 import { UsageError, cardId } from '../args.mjs'
@@ -12,7 +13,7 @@ import { claimMain, reportName } from '../main.mjs'
 import { runSpec } from '../profiles.mjs'
 import { ProjectError, maxParallel } from '../project.mjs'
 import { sessionName, startPrompt } from '../prompt.mjs'
-import { BACKGROUND_ARGS, RUNNING_VERDICTS, cardSession, hasRoom, runningCards, findSession, launchBackground, listSessions, startedAt } from '../sessions.mjs'
+import { BACKGROUND_ARGS, RUNNING_VERDICTS, cardSession, hasRoom, runningCards, findSession, envArgs, launchBackground, listSessions, startedAt } from '../sessions.mjs'
 
 export const run = async ({ positional, flags }, { skillRoot }) => {
   if (positional[0] == null) throw new UsageError(t('run.usage'))
@@ -31,7 +32,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
     const from = reportName(project, sessions) ?? USER
     const name = sessionName(id)
     const prompt = startPrompt(project, card, { skillRoot, reportTo: from })
-    const args = ['-n', name, ...spec.cliArgs]
+    const args = ['-n', name, ...spec.cliArgs, ...envArgs(project.config)]
     if (flags['dry-run'] == true) {
       console.log(`(dry-run) claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <${t('run.prompt')}>${spec.ultracode ? ' (ultracode)' : ''}\n${prompt}`)
       return 0

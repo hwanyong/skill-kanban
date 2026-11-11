@@ -444,6 +444,10 @@ The board is part of the repository, so cards are versioned with the code and Cl
 
 Three by default. Set `run.max_parallel` in `.uhd-kanban/config.json` to another positive integer, or to `-1` for no limit. `uk run` refuses to start a card when the limit is reached and exits with code 1.
 
+### Can I set environment variables for card sessions?
+
+Put an object of name → string value in `run.env` of `.uhd-kanban/config.json` (for example `"env": { "MY_TOOL_MODE": "off" }`). The card sessions that `uk run` and `uk recover` start get those values in their Bash tool and hooks. Environment variables of the shell that runs `uk run` do not reach card sessions.
+
 ### Can I edit cards by hand?
 
 You can edit the card body (the part before `## Comments`) and then run `uk check`. Change frontmatter, file names and columns with `uk new`, `uk set`, `uk move` and `uk order`, and add comments with `uk comment`.
