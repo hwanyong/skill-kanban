@@ -5,20 +5,17 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { hasControl } from './control.mjs'
 import { FrontmatterError, parse } from './frontmatter.mjs'
-import { parseName, titleSlug } from './filename.mjs'
-import { HISTORY_KEY, parseHistory } from './history.mjs'
-import { parseComments } from './comments.mjs'
-import { kindText, t } from './i18n.mjs'
+import { ARCHIVE_MONTH, parseName, titleSlug } from './filename.mjs'
+import { parseHistory } from './history.mjs'
+import { commentProblems, parseComments } from './comments.mjs'
+import { t } from './i18n.mjs'
 import { tagProblems } from './profiles.mjs'
+import { BOARD_DIR } from './root.mjs'
 
 export const PRIORITIES = ['critical', 'high', 'medium', 'low']
 
-// frontmatter 를 쓸 때 이 순서로 키를 적는다. 없는 키는 이름순으로 뒤에 붙는다.
-export const KEY_ORDER = [
-  'id', 'type', 'title', 'priority', 'tags', 'depends_on', 'owner', 'collection',
-  'created_at', 'updated_at', 'completed_at', HISTORY_KEY, 'session', 'session_started_at', 'commits', 'agent_reason',
-  'nimbalyst_id', 'nimbalyst_status', 'nimbalyst_sessions',
-]
+// tags 는 문자열 목록이다. 형식 검사와 태그 규칙 검사(tagProblems)가 같은 판정을 쓴다.
+const isTagList = (tags) => Array.isArray(tags) && tags.every((tag) => typeof tag == 'string')
 
 const listDir = (path) => (existsSync(path) ? readdirSync(path, { withFileTypes: true }) : [])
 
@@ -45,18 +42,15 @@ const checkData = (project, data, card, column, problems) => {
   if (typeof data.title == 'string' && titleSlug(data.title) != card.slug) add(t('card.slugMismatch', { expected: titleSlug(data.title) }))
   if (column && !column.types.includes(data.type)) add(t('card.typeNotAllowed', { type: data.type, status: column.status, types: column.types }))
   if (data.priority != null && !PRIORITIES.includes(data.priority)) add(t('card.priority', { priorities: PRIORITIES, value: data.priority }))
-  if (data.tags != null && (!Array.isArray(data.tags) || data.tags.some((tag) => typeof tag != 'string'))) add(t('card.tags'))
+  if (data.tags != null && !isTagList(data.tags)) add(t('card.tags'))
   if (data.depends_on != null && (!Array.isArray(data.depends_on) || data.depends_on.some((id) => !Number.isInteger(id)))) add(t('card.dependsOn'))
   if (data.collection != null && (!Array.isArray(data.collection) || data.collection.some((id) => !Number.isInteger(id)))) add(t('card.collection'))
   historyProblems(project, data, column).forEach(add)
-  const comments = parseComments(card.body)
-  comments.problems.forEach(add)
-  const kinds = project.config.comments.kinds
-  comments.comments.filter((comment) => !kinds.includes(comment.kind)).forEach((comment) => add(t('card.unknownKind', { n: comment.n, kind: comment.kind, kinds: kinds.map((kind) => kindText(kind)) })))
-  if (Array.isArray(data.tags)) tagProblems(data, comments.main, project.profiles).forEach(add)
+  commentProblems(card.body, project.config.comments.kinds).forEach(add)
+  if (data.tags == null || isTagList(data.tags)) tagProblems(data, parseComments(card.body).main, project.profiles).forEach(add)
 }
 
-export const readCard = (project, path, relPath, name, column, problems) => {
+const readCard = (project, path, relPath, name, column, problems) => {
   const parsedName = parseName(name)
   if (!parsedName) {
     problems.push(`${relPath}: ${t('card.badName')}`)
@@ -64,7 +58,7 @@ export const readCard = (project, path, relPath, name, column, problems) => {
   }
   try {
     const { data, body } = parse(readFileSync(path, 'utf8'))
-    const card = { ...parsedName, path, relPath, name, status: column?.status ?? null, column: column?.dir ?? null, data, body }
+    const card = { ...parsedName, path, relPath, status: column?.status ?? null, data, body }
     checkData(project, data, card, column, problems)
     return card
   } catch (error) {
@@ -77,16 +71,19 @@ export const readCard = (project, path, relPath, name, column, problems) => {
 // 열 디렉터리에 있는 카드 파일(`.md`)의 디렉터리 항목.
 const cardFiles = (boardPath, column) => listDir(join(boardPath, column.dir)).filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
 
-// 파일 이름만 읽는다. 카드 파일을 열지 않으므로 규칙 검사를 하지 않는다. 규칙 검사는 readBoard 가 갖는다.
-// 반환: 열마다 { column, cards: [{ id, order, name }] }. cards 는 순서 번호 순이고, 이름이 규칙에 맞지 않는 파일은 뺀다.
-export const readColumnNames = (project) => project.config.columns.map((column) => ({
-  column,
-  cards: cardFiles(project.boardPath, column)
-    .map((entry) => ({ ...parseName(entry.name), name: entry.name }))
-    .filter((card) => card.kind == 'active')
-    .sort((a, b) => a.order - b.order)
-    .map(({ id, order, name }) => ({ id, order, name })),
-}))
+// archive.dir/<YYYY-MM>/ 에 있는 카드 파일(`.md`)의 디렉터리 항목과 그 월 디렉터리 이름.
+const archivedFiles = (boardPath, config) => listDir(join(boardPath, config.archive.dir))
+  .filter((entry) => entry.isDirectory() && ARCHIVE_MONTH.test(entry.name))
+  .flatMap((month) => listDir(join(boardPath, config.archive.dir, month.name))
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => ({ month: month.name, entry })))
+
+// 열 디렉터리와 archive.dir/<YYYY-MM>/ 의 카드 파일. readBoard 가 읽는 자리와 같다.
+// 반환: 절대 경로. 열 먼저, 그다음 아카이브 차례이고, 파일 이름은 NFC 로 바꾸지 않는다.
+export const cardPaths = (boardPath, config) => [
+  ...config.columns.flatMap((column) => cardFiles(boardPath, column).map((entry) => join(boardPath, column.dir, entry.name))),
+  ...archivedFiles(boardPath, config).map(({ month, entry }) => join(boardPath, config.archive.dir, month, entry.name)),
+]
 
 // 반환: { cards, archived, problems }. cards 는 열 순서 · 순서 번호 순, archived 는 날짜 순이다.
 export const readBoard = (project) => {
@@ -95,10 +92,10 @@ export const readBoard = (project) => {
   const known = new Set([...config.columns.map((column) => column.dir), config.archive.dir])
   listDir(boardPath)
     .filter((entry) => !known.has(entry.name) && !entry.name.startsWith('.'))
-    .forEach((entry) => problems.push(`kanban/${entry.name}: ${t(entry.isDirectory() ? 'board.unknownDir' : 'board.unknownFile')}`))
+    .forEach((entry) => problems.push(`${BOARD_DIR}/${entry.name}: ${t(entry.isDirectory() ? 'board.unknownDir' : 'board.unknownFile')}`))
   const cards = config.columns.flatMap((column) => {
     const inColumn = cardFiles(boardPath, column)
-      .map((entry) => readCard(project, join(boardPath, column.dir, entry.name), `kanban/${column.dir}/${entry.name.normalize('NFC')}`, entry.name, column, problems))
+      .map((entry) => readCard(project, join(boardPath, column.dir, entry.name), `${BOARD_DIR}/${column.dir}/${entry.name.normalize('NFC')}`, entry.name, column, problems))
       .filter((card) => card != null)
     inColumn.filter((card) => card.kind != 'active').forEach((card) => problems.push(`${card.relPath}: ${t('board.needsOrder')}`))
     inColumn.filter((card) => card.width != config.order.width).forEach((card) => problems.push(`${card.relPath}: ${t('board.orderWidth', { width: config.order.width })}`))
@@ -106,14 +103,11 @@ export const readBoard = (project) => {
     sorted.filter((card, index) => index > 0 && card.order == sorted[index - 1].order).forEach((card) => problems.push(`${card.relPath}: ${t('board.orderTwice', { order: card.order })}`))
     return sorted
   })
-  const archiveRoot = join(boardPath, config.archive.dir)
-  const archived = listDir(archiveRoot)
-    .filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}$/.test(entry.name))
-    .flatMap((month) => listDir(join(archiveRoot, month.name))
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-      .map((entry) => readCard(project, join(archiveRoot, month.name, entry.name), `kanban/${config.archive.dir}/${month.name}/${entry.name.normalize('NFC')}`, entry.name, null, problems)))
+  const archived = archivedFiles(boardPath, config)
+    .map(({ month, entry }) => readCard(project, join(boardPath, config.archive.dir, month, entry.name), `${BOARD_DIR}/${config.archive.dir}/${month}/${entry.name.normalize('NFC')}`, entry.name, null, problems))
     .filter((card) => card != null)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.id - b.id))
+  archived.filter((card) => card.kind != 'archived').forEach((card) => problems.push(`${card.relPath}: ${t('board.needsDate')}`))
   const seen = new Map()
   const everyCard = [...cards, ...archived]
   everyCard.forEach((card) => {

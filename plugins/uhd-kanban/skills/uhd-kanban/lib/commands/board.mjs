@@ -2,10 +2,11 @@
 // swimlane 은 카드마다 collection 이 있어야 하고 끝낸 수는 아카이브까지 세므로 readBoard 로 모든 카드를 읽는다.
 // metrics 는 pane 의 그래프(처리량 · 유입 · 활동)에 쓰는 값이고, lane 의 recent_finished 는 metrics.window_days 안에 끝난 소속 카드 수다. 세는 규칙은 metrics.mjs 가 갖는다.
 // 규칙 검사는 하지 않는다. 위반은 uhd-kanban check 가 알린다.
+// lock 안에서 읽는다. 남이 쓰는 중에 읽으면 renumber 의 임시 이름(.renumber-k<id>.md)과 반쯤 쓴 파일을 위반으로 보고 ENOENT 로 죽었다(2026-11-11 실측: renumber 반복 중 check 80번 중 66번 거짓 위반, board --json 100번 중 2번 ENOENT).
 // uhd-kanban board [--json]
 
-import { readBoard } from '../board.mjs'
 import { stripControl } from '../control.mjs'
+import { viewBoard } from '../edit.mjs'
 import { t } from '../i18n.mjs'
 import { boardLanes, isWork } from '../lanes.mjs'
 import { boardMetrics, recentFinished } from '../metrics.mjs'
@@ -19,12 +20,13 @@ export const run = async ({ flags }) => {
   const project = loadProject()
   const { config } = project
   const runStatus = config.run.status
-  const board = readBoard(project)
+  const board = await viewBoard(project)
   const running = board.cards.filter((card) => card.status == runStatus)
   const sessions = running.length > 0 ? listSessions({ all: true }) : []
   const verdicts = new Map(running.map((card) => [card.id, cardSession(card, sessions).verdict]))
   const cardView = ({ id, status }) => (verdicts.has(id) ? { id, status, session: verdicts.get(id) } : { id, status })
   const nowMs = Date.now()
+  const { running: runningMilestone } = milestoneStatuses(config)
   const result = {
     root: project.root,
     interval_seconds: config.monitor.interval_seconds,
@@ -39,7 +41,7 @@ export const run = async ({ flags }) => {
       id: milestone?.id ?? null,
       title: laneTitle(milestone?.data.title),
       status: milestone?.status ?? null,
-      is_running: milestone?.status == milestoneStatuses(config).running,
+      is_running: milestone != null && milestone.status == runningMilestone,
       finished,
       total,
       recent_finished: recentFinished(members, nowMs),

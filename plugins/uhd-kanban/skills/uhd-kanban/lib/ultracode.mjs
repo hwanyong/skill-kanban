@@ -3,10 +3,14 @@
 // 백틱 · [ ] · " " · ' ' 로 감싼 낱말은 걸리지 않았다. 대소문자 · 다른 낱말 안(ultracodeKeywordTrigger) · 코드 블록 안은 재지 않았으므로 감싸지 않은 것으로 센다.
 // 규칙: 트리거로 쓰는 낱말은 본문 첫 줄에 `ultracode` 한 줄로만 둔다. 다른 자리의 낱말은 감싼다.
 
-export const TRIGGER_LINE = 'ultracode'
+const TRIGGER_LINE = 'ultracode'
 
 const WORD = /ultracode/gi
 const PAIRS = [['[', ']'], ['"', '"'], ["'", "'"]]
+
+// 카드 본문의 줄. 앞의 빈 줄은 \n 만 지운다(공백만 있는 줄은 남는다).
+const bodyLines = (body) => body.replace(/^\n+/, '').split('\n')
+const isTriggerLine = (line) => line.trim() == TRIGGER_LINE
 
 const isWrapped = (line, start, end) => {
   const ticks = [...line.slice(0, start)].filter((ch) => ch == '`').length
@@ -14,11 +18,18 @@ const isWrapped = (line, start, end) => {
   return PAIRS.some(([open, close]) => line[start - 1] == open && line[end] == close)
 }
 
-// 반환: 감싸지 않은 낱말이 있는 줄 번호(1부터). firstLineAllowed 면 첫 줄이 정확히 TRIGGER_LINE 일 때 그 줄은 빼고 센다.
-export const bareKeywordLines = (text, { firstLineAllowed = false } = {}) => text.split('\n').flatMap((line, index) => {
-  if (firstLineAllowed && index == 0 && line.trim() == TRIGGER_LINE) return []
+// 반환: 감싸지 않은 낱말이 있는 줄 번호(1부터).
+const keywordLines = (lines) => lines.flatMap((line, index) => {
   const bare = [...line.matchAll(WORD)].some((match) => !isWrapped(line, match.index, match.index + match[0].length))
   return bare ? [index + 1] : []
 })
 
-export const hasTriggerLine = (body) => body.replace(/^\n+/, '').split('\n')[0].trim() == TRIGGER_LINE
+export const bareKeywordLines = (text) => keywordLines(text.split('\n'))
+
+// 카드 본문용. 줄 번호는 앞의 빈 줄을 지운 본문 기준으로 센다. 첫 줄이 정확히 TRIGGER_LINE 이면 그 줄은 빼고 센다.
+export const bareBodyKeywordLines = (body) => {
+  const lines = bodyLines(body)
+  return keywordLines(lines).filter((number) => number != 1 || !isTriggerLine(lines[0]))
+}
+
+export const hasTriggerLine = (body) => isTriggerLine(bodyLines(body)[0])

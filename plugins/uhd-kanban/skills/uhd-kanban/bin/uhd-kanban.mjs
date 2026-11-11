@@ -4,10 +4,11 @@
 
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { NoProjectError, ProjectError } from '../lib/project.mjs'
+import { NoProjectError, ProjectError } from '../lib/errors.mjs'
 import { UsageError, parseArgs } from '../lib/args.mjs'
 import { stripOutputControl } from '../lib/control.mjs'
 import { t } from '../lib/i18n.mjs'
+import { UNLIMITED } from '../lib/project.mjs'
 
 const COMMANDS = {
   init: 'init.mjs',
@@ -37,25 +38,30 @@ const guardWrite = (stream) => {
 guardWrite(process.stdout)
 guardWrite(process.stderr)
 
-const USAGE = t('usage')
+const USAGE = t('usage', { unlimited: UNLIMITED })
 
 const [name, ...rest] = process.argv.slice(2)
-const file = COMMANDS[name]
-if (!file) {
-  console.error(name ? `${t('bin.unknown', { name })}\n${USAGE}` : USAGE)
-  process.exit(2)
+const file = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : null
+
+// process.exit 는 pipe 로 받는 stderr 에 아직 쓰이지 않은 바이트를 버리므로(macOS 에서 65536 바이트를 넘는 오류 문구가 잘렸다) 종료 코드를 반환해 process.exitCode 에 둔다.
+const main = async () => {
+  if (!file) {
+    console.error(name ? `${t('bin.unknown', { name })}\n${USAGE}` : USAGE)
+    return 2
+  }
+  const skillRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+  const { run } = await import(join(skillRoot, 'lib', 'commands', file))
+  try {
+    return await run(parseArgs(rest), { skillRoot })
+  } catch (error) {
+    if (error instanceof UsageError) {
+      console.error(`${error.message}\n${USAGE}`)
+      return 2
+    }
+    if (!(error instanceof ProjectError)) throw error
+    console.error(error.message)
+    return error instanceof NoProjectError ? 3 : 1
+  }
 }
 
-const skillRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-const { run } = await import(join(skillRoot, 'lib', 'commands', file))
-try {
-  process.exitCode = await run(parseArgs(rest), { skillRoot })
-} catch (error) {
-  if (error instanceof UsageError) {
-    console.error(`${error.message}\n${USAGE}`)
-    process.exit(2)
-  }
-  if (!(error instanceof ProjectError)) throw error
-  console.error(error.message)
-  process.exit(error instanceof NoProjectError ? 3 : 1)
-}
+process.exitCode = await main()

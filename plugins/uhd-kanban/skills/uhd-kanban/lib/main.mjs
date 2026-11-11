@@ -4,24 +4,23 @@
 // main.json: { "name": <세션 이름>, "session": <session id>, "set_at": <ISO 8601 UTC> }
 
 import { existsSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { now } from './cards.mjs'
+import { callerSessionId } from './agents.mjs'
 import { USER, isName } from './comments.mjs'
 import { t } from './i18n.mjs'
-import { ProjectError, readJson } from './project.mjs'
-import { isCardSessionName } from './prompt.mjs'
-import { currentSessionName } from './sessions.mjs'
+import { ProjectError } from './errors.mjs'
+import { readJson } from './project.mjs'
+import { now } from './time.mjs'
+import { mainFile } from './root.mjs'
+import { currentSessionName, isCardSessionName } from './sessions.mjs'
 
-export const MAIN = 'main'
-
-const mainPath = (project) => join(project.settingsPath, 'main.json')
+const MAIN = 'main'
 
 // 메인 세션으로 등록할 수 있는 이름인가. 카드 세션 · 역할 이름 · user 는 등록하지 않는다.
 export const isMainName = (name) => isName(name ?? '') && !isCardSessionName(name) && name != MAIN && name != USER
 
 // 반환: main.json 의 값. 등록하지 않았으면 null.
 export const readMain = (project) => {
-  const path = mainPath(project)
+  const path = mainFile(project.root)
   if (!existsSync(path)) return null
   const entry = readJson(path)
   if (!isMainName(entry?.name)) throw new ProjectError(t('main.badFile', { path }))
@@ -29,7 +28,7 @@ export const readMain = (project) => {
 }
 
 export const writeMain = (project, { name, session }) => {
-  writeFileSync(mainPath(project), `${JSON.stringify({ name, session, set_at: now() }, null, 2)}\n`)
+  writeFileSync(mainFile(project.root), `${JSON.stringify({ name, session, set_at: now() }, null, 2)}\n`)
 }
 
 // 받는 이름을 SendMessage 가 받는 세션 이름으로 바꾼다. main 인데 등록하지 않았으면 null.
@@ -55,10 +54,10 @@ export const reportName = (project, sessions) => {
   return isMainName(name) ? MAIN : name
 }
 
-// 등록된 메인 세션이 없으면 이 세션을 등록한다. run · recover 가 카드 세션을 띄운 뒤 부른다. 띄우지 못했으면 부르지 않아 main.json 이 생기지 않는다.
+// 등록된 메인 세션이 없으면 이 세션을 등록한다. run · recover 가 쓰는 assign.mjs 의 launchCard 가 카드 세션을 띄운 뒤 부른다. 띄우지 못했으면 부르지 않아 main.json 이 생기지 않는다(launchCard 주석).
 export const claimMain = (project, sessions) => {
   const name = currentSessionName(sessions)
   if (!isMainName(name) || readMain(project) != null) return
-  writeMain(project, { name, session: process.env.CLAUDE_CODE_SESSION_ID })
+  writeMain(project, { name, session: callerSessionId() })
   console.error(t('main.registered', { name }))
 }

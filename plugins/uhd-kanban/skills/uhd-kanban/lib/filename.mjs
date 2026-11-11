@@ -5,7 +5,7 @@
 
 import { t } from './i18n.mjs'
 
-export const TITLE_LENGTH = 40
+const TITLE_LENGTH = 40
 
 const ACTIVE = /^(\d+)-k([1-9]\d*)-(.+)\.md$/
 const ARCHIVED = /^(\d{4}-\d{2}-\d{2})-k([1-9]\d*)-(.+)\.md$/
@@ -22,7 +22,7 @@ export const titleSlug = (title) => {
   return cut == '' ? 'untitled' : cut
 }
 
-export const formatOrder = (order, width) => {
+const formatOrder = (order, width) => {
   if (!Number.isInteger(order) || order < 0) throw new RangeError(t('filename.orderInteger', { order }))
   const text = String(order)
   if (text.length > width) throw new RangeError(t('filename.orderWidth', { order, width }))
@@ -33,6 +33,10 @@ export const activeName = ({ order, id, title }, width) => `${formatOrder(order,
 
 // 아카이브 파일 이름의 날짜는 이 Mac 의 시간대로 적는다. sv-SE 로캘은 날짜를 YYYY-MM-DD 로 쓴다.
 export const localDate = (date) => date.toLocaleDateString('sv-SE')
+
+// 아카이브 월 디렉터리는 아카이브 파일 이름의 날짜 앞 7글자(YYYY-MM)로 이름을 짓는다. 날짜 검사는 archivedName 이 갖는다.
+export const ARCHIVE_MONTH = /^\d{4}-\d{2}$/
+export const archiveMonth = (date) => date.slice(0, 7)
 
 export const archivedName = ({ date, id, title }) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new RangeError(t('filename.date', { date }))

@@ -2,11 +2,9 @@
 // 언어는 프로젝트마다 하나다. 보드의 config.json 의 locale 이 정하고, 키가 없거나 보드 밖이면 환경 변수(LC_ALL → LC_MESSAGES → LANG)로 정한다.
 // 카드 파일에 기록하는 값(코멘트 kind · status · type)은 언어와 무관하게 영어 id 다. 표시 이름만 표에 있다.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import en from './messages/en.mjs'
 import ko from './messages/ko.mjs'
-import { SETTINGS_DIR, findCallerRootOrNull } from './root.mjs'
+import { configFile, findCallerRootOrNull, readJsonOrNull } from './root.mjs'
 
 const TABLES = { en, ko }
 export const LOCALES = Object.keys(TABLES)
@@ -27,11 +25,7 @@ export const configLocale = (config) => (LOCALES.includes(config?.locale) ? conf
 const callerLocale = () => {
   const root = findCallerRootOrNull(process.cwd())
   if (root == null) return envLocale()
-  try {
-    return configLocale(JSON.parse(readFileSync(join(root, SETTINGS_DIR, 'config.json'), 'utf8')))
-  } catch {
-    return envLocale()
-  }
+  return configLocale(readJsonOrNull(configFile(root)))
 }
 
 export const translator = (locale) => (key, params = {}) => {

@@ -2,12 +2,13 @@
 // mkdir 은 이미 있으면 실패하므로 두 세션이 함께 잡지 못한다. lock 안의 owner.json 에 host · pid · 시각을 적는다.
 // 같은 host 에서 pid 가 죽었거나, 잡은 지 STALE_MS 가 지난 lock 은 지우고 다시 잡는다.
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { t } from './i18n.mjs'
-import { ProjectError } from './project.mjs'
+import { ProjectError } from './errors.mjs'
+import { readJsonOrNull } from './root.mjs'
 
 const STALE_MS = 10 * 60 * 1000
 const WAIT_MS = 30 * 1000
@@ -22,13 +23,7 @@ const isAlive = (pid) => {
   }
 }
 
-const readOwner = (dir) => {
-  try {
-    return JSON.parse(readFileSync(join(dir, 'owner.json'), 'utf8'))
-  } catch {
-    return null
-  }
-}
+const readOwner = (dir) => readJsonOrNull(join(dir, 'owner.json'))
 
 const isStale = (owner) => {
   if (owner == null) return false
@@ -48,8 +43,8 @@ const tryAcquire = (dir) => {
 }
 
 // work 를 lock 안에서 실행하고 반환값을 돌려준다. WAIT_MS 동안 잡지 못하면 ProjectError 로 끝난다.
-export const withLock = async (project, work) => {
-  const dir = join(project.settingsPath, 'lock')
+export const withLock = async (settingsPath, work) => {
+  const dir = join(settingsPath, 'lock')
   const deadline = Date.now() + WAIT_MS
   while (!tryAcquire(dir)) {
     const owner = readOwner(dir)

@@ -1,11 +1,11 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, StateWrite, Timer } from 'claude-code'
+import type { Elements, EngineInterface, Register, StateWrite, Timer } from 'claude-code'
 
-import { ageOf, etaDays, sparkRuns, sparkline, sum } from './charts'
+import { ageOf, etaDays, sharedDays, sparkRuns, sparkline, stalestFirst, sum, windowTotals } from './charts'
 import type { Age } from './charts'
-import { DEFAULT_COLOR, cellProps, colorRuns, columnColor, hasMovingCards, laneFrames, packCells, planTransition, sessionCell } from './frames'
+import { cellProps, colorRuns, columnColor, hasMovingCards, laneFrames, packCells, plainCell, planTransition, sessionCell, statusColor } from './frames'
 import type { Cell, LaneFrame, Transition, Verdict } from './frames'
-import type { Board, BoardLane, BoardView, Locale } from '../types'
+import type { Board, BoardView, Locale } from '../types'
 import { fillSlot, offerChoice, placementIn, readPlacement, readShownTab } from './pane-grid'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, milestone 마다 한 행(swimlane)을 그린다.
@@ -118,7 +118,7 @@ const collapsedStoreKey = async ($: EngineInterface) => `collapsedLanes:${await 
 
 const loadCollapsedLanes = async ($: EngineInterface) => {
   const stored = await $.store.get(await collapsedStoreKey($))
-  if (stored) await update($, collapsedLanes, () => stored as string[])
+  await update($, collapsedLanes, () => (stored ?? []) as string[])
 }
 
 const toggleLane = async ($: EngineInterface, key: string) => {
@@ -169,21 +169,30 @@ const rastersOf = (lanes: LaneFrame[]) => lanes.flatMap((item) => [
   ...(item.rows.length > 0 ? [{ key: barKey(item), cells: packCells(item.rows) }] : []),
 ])
 
+// 주기 타이머를 가진 상태(Motion · Polling). timer 는 periodMs 가 0 일 때만 null 이다.
+type Periodic = { timer: Timer | null; periodMs: number }
+
+const stopPeriod = (holder: Periodic) => {
+  holder.timer?.cancel()
+  holder.timer = null
+  holder.periodMs = 0
+}
+
+// 주기가 같으면 그대로 두고, 0 이면 끄고, 아니면 걸린 타이머를 끊고 새 주기로 건다.
+const setPeriod = ($: EngineInterface, holder: Periodic, ms: number, run: () => void) => {
+  if (ms == holder.periodMs) return
+  stopPeriod(holder)
+  if (ms == 0) return
+  holder.timer = $.clock.every(ms, run)
+  holder.periodMs = ms
+}
+
 // 재배치 중이면 짧은 간격, 움직이는 판정의 카드가 있으면 긴 간격이고, 둘 다 아니면 타이머를 끈다.
 // 가려진 grid 칸은 타이머를 끈다. 다시 보이는 것은 pane-grid 의 shown 을 받는 state.set hook 이 알린다(결정 8).
 const syncTimer = ($: EngineInterface, motion: Motion, board: Board) => {
   const hiddenMs = motion.requestId == PANE ? HIDDEN_CHECK_MS : 0
   const ms = motion.layout == null ? 0 : motion.isHidden ? hiddenMs : motion.transition ? TRANSITION_FRAME_MS : hasMovingCards(board) ? STATUS_FRAME_MS : 0
-  if (ms == motion.periodMs) return
-  motion.timer?.cancel()
-  motion.timer = ms == 0 ? null : $.clock.every(ms, () => void advance($, motion))
-  motion.periodMs = ms
-}
-
-const stopTimer = (motion: Motion) => {
-  motion.timer?.cancel()
-  motion.timer = null
-  motion.periodMs = 0
+  setPeriod($, motion, ms, () => void advance($, motion))
 }
 
 // 프레임에서 cells 가 바뀐 Raster 만 blit 한다. 구성이 그려진 것과 다르거나(재배치의 시작과 끝) blit 이 거절되면 다시 그린다.
@@ -211,6 +220,22 @@ const drawnAt = async ($: EngineInterface, motion: Motion) => {
   return { isOpen: true, isShown: (await readShownTab($)) == placement.tab }
 }
 
+// 가려지면 재배치를 끊고 타이머를 syncTimer 의 가려진 주기로 맞춘다(자기 pane 은 HIDDEN_CHECK_MS, grid 칸은 끈다).
+// 가려졌다가 다시 보이면 다시 그린다. 처리했으면 true 이고, 부른 쪽은 그때 프레임을 진행하지 않는다.
+const followVisibility = async ($: EngineInterface, motion: Motion, board: Board, isShown: boolean) => {
+  if (!isShown) {
+    motion.transition = null
+    motion.isHidden = true
+    syncTimer($, motion, board)
+    return true
+  }
+  if (!motion.isHidden) return false
+  motion.isHidden = false
+  syncTimer($, motion, board)
+  await $.ui.invalidate('ui.render')
+  return true
+}
+
 // 탭이 다시 보일 때 엔진은 ui.render 를 실행하지 않고 지난 결과를 쓰며 그 전환을 알리는 이벤트도 없다. 그래서 숨어 있는 동안 HIDDEN_CHECK_MS 마다 확인하고, 다시 보이면 다시 그린다.
 // pane 이 닫혔으면 타이머를 끈다. 다시 열면 엔진이 ui.render 를 실행하고 그 훅이 타이머를 켠다.
 const advance = async ($: EngineInterface, motion: Motion) => {
@@ -219,18 +244,9 @@ const advance = async ($: EngineInterface, motion: Motion) => {
   if (!drawn.isOpen || current.kind != 'ok') {
     motion.transition = null
     motion.isHidden = false
-    return stopTimer(motion)
+    return stopPeriod(motion)
   }
-  if (!drawn.isShown) {
-    motion.transition = null
-    motion.isHidden = true
-    return syncTimer($, motion, current.board)
-  }
-  if (motion.isHidden) {
-    motion.isHidden = false
-    syncTimer($, motion, current.board)
-    return $.ui.invalidate('ui.render')
-  }
+  if (await followVisibility($, motion, current.board, drawn.isShown)) return
   motion.elapsedMs += motion.periodMs
   motion.frame = Math.floor(motion.elapsedMs / STATUS_FRAME_MS)
   if (motion.transition) motion.step += 1
@@ -249,8 +265,10 @@ const beginTransition = async ($: EngineInterface, motion: Motion, board: Board)
   motion.step = 0
 }
 
-// locale 은 session.start 에서 locale 명령으로 정한다. 정하기 전에 쓰는 값은 en 이다.
-type Polling = { timer: Timer | null; periodMs: number; locale: Locale; motion: Motion }
+// locale 은 session.start 와, refresh 가 세션 root 나 찾은 보드가 바뀐 것을 본 때 locale 명령으로 정한다. 정하기 전에 쓰는 값은 en 이다.
+// synced: 마지막으로 syncSession 을 실행했을 때의 세션 root 와 찾은 보드의 root(보드가 없으면 null). 실행하기 전에는 null 이다.
+// boardRoot 가 undefined 이면 아직 board 를 읽지 않은 것이다. session.start 는 board 를 실행하기 전에 syncSession 을 실행하므로 보드를 모른다.
+type Polling = { timer: Timer | null; periodMs: number; locale: Locale; motion: Motion; synced: { root: string; boardRoot: string | null | undefined } | null }
 
 const skillArgv = ($: EngineInterface, args: string[]) => ['node', `${$.plugin.root}/${SKILL_BIN}`, ...args]
 
@@ -272,6 +290,13 @@ const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardRun> 
     : ran.exitCode == 0
       ? { kind: 'ok', board: JSON.parse(ran.stdout), refreshedAt }
       : { kind: 'error', message: ran.stderr.trim() || text.exitCode(ran.exitCode), refreshedAt }
+  const boardRoot = result.kind == 'ok' ? result.board.root : null
+  const root = await $.session.root()
+  const synced = polling.synced
+  // session.start 뒤 처음 board 를 읽었고 root 가 그대로면 syncSession 을 다시 실행하지 않고 boardRoot 만 적는다.
+  // 같은 root · 같은 세션 id 로 실행한 locale 명령은 board 와 같은 차례(lib/root.mjs 의 findCallerRootOrNull)로 보드를 찾아 locale 을 정했으므로 다시 실행해도 결과가 같다.
+  if (result.kind != 'error' && synced?.root == root && typeof synced.boardRoot == 'undefined') synced.boardRoot = boardRoot
+  else if (result.kind != 'error' && (synced?.root != root || synced?.boardRoot != boardRoot)) await syncSession($, polling, boardRoot)
   if (result.kind == 'ok') await beginTransition($, polling.motion, result.board)
   await update($, view, () => result)
   return result
@@ -281,10 +306,7 @@ const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardRun> 
 const schedule = ($: EngineInterface, polling: Polling, result: BoardView) => {
   if (result.kind == 'error') return
   const ms = result.kind == 'ok' ? result.board.interval_seconds * 1000 : 0
-  if (ms == polling.periodMs) return
-  polling.timer?.cancel()
-  polling.timer = ms == 0 ? null : $.clock.every(ms, () => void tick($, polling))
-  polling.periodMs = ms
+  setPeriod($, polling, ms, () => void tick($, polling))
 }
 
 // 자기 pane 이 닫혀 있고 grid 에 칸도 없으면 board 를 실행하지 않는다. 가려져 있어도 실행하고, 다시 보일 때 view 를 읽은 그림이 다시 그려진다.
@@ -301,11 +323,23 @@ const resolveLocale = async ($: EngineInterface): Promise<Locale> => {
   return value in TEXT ? (value as Locale) : 'en'
 }
 
+// 세션 root 와 찾은 보드에 따라 정하는 값(locale · 슬래시 명령 description · 접은 swimlane)을 다시 정한다.
+// mod 에는 세션 root 가 바뀐 것을 알리는 이벤트가 없으므로 그 바뀜은 refresh 가 polling.synced 와 비교해 잡는다.
+const syncSession = async ($: EngineInterface, polling: Polling, boardRoot: string | null | undefined) => {
+  polling.locale = await resolveLocale($)
+  await $.command.register({ name: COMMAND, description: TEXT[polling.locale].description })
+  await loadCollapsedLanes($)
+  polling.synced = { root: await $.session.root(), boardRoot }
+}
+
+// board 를 읽고 주기를 맞춘 뒤, 보드가 있고 grid 칸이 없으면 자기 pane 을 연다. 읽은 결과와 칸을 돌려주고 command.run 이 그 값으로 문구를 고른다.
 const start = async ($: EngineInterface, polling: Polling) => {
   const result = await refresh($, polling)
   schedule($, polling, result)
-  if (result.kind == 'none' || (await readPlacement($, PLUGIN))) return
-  await $.ui.open({ id: PANE, title: TITLE })
+  if (result.kind == 'none') return { result, placement: undefined }
+  const placement = await readPlacement($, PLUGIN)
+  if (!placement) await $.ui.open({ id: PANE, title: TITLE })
+  return { result, placement }
 }
 
 // pane-grid 가 layout 을 쓸 때마다 실행한다. 칸이 생겼으면 자기 pane 을 닫고, 칸이 없어진 그때만 다시 연다.
@@ -327,28 +361,119 @@ const followShown = async ($: EngineInterface, motion: Motion, shown: unknown) =
   if (current.kind != 'ok') return
   const placement = await readPlacement($, PLUGIN)
   const isShown = placement != undefined && placement.requestId == motion.requestId && shown == placement.tab
-  if (!isShown) {
-    motion.transition = null
-    motion.isHidden = true
-    return stopTimer(motion)
+  await followVisibility($, motion, current.board, isShown)
+}
+
+// $.ui.resolve(e) 가 주는 요소 표와 pane 의 글. 아래 그리기 함수들이 drawBoard 에서 받는다.
+type Ui = ReturnType<EngineInterface['ui']['resolve']>
+type PaneText = (typeof TEXT)[Locale]
+
+// 그릴 너비 · 접은 swimlane 으로 재생 상태를 맞추고 그릴 swimlane 을 돌려준다.
+// 차례를 바꾸면 프레임 · 타이머 상태가 바뀐다: columns · collapsed → currentLanes → layout → painted → 재배치 끊기 → syncTimer. legendRows · chartRows 가 쓰는 motion.columns 도 여기서 정한다.
+const stageMotion = async ($: EngineInterface, motion: Motion, board: Board, columns: number, hasRaster: boolean) => {
+  motion.columns = Math.max(1, columns)
+  motion.collapsed = await read($, collapsedLanes)
+  const lanes = currentLanes(board, motion)
+  const fits = motion.columns <= MAX_RASTER_COLUMNS && lanes.every((item) => item.rows.length <= MAX_RASTER_ROWS)
+  motion.layout = hasRaster && fits ? layoutOf(lanes) : null
+  motion.painted = new Map(rastersOf(lanes).map(({ key, cells }) => [key, cells]))
+  if (motion.layout == null) motion.transition = null
+  syncTimer($, motion, board)
+  return lanes
+}
+
+// 범례 줄: 열마다의 카드 수, 그 아래 run.status 칸의 판정 기호. runColorValue 는 run.status 열의 색이다.
+const legendRows = ({ Text }: Ui, board: Board, text: PaneText, columns: number, runColorValue: number) => {
+  const prefix = `${board.run_status}: `
+  const columnItems: LegendItem[] = board.columns.map((column) => ({ cell: plainCell(columnColor(column.index)), label: `${column.status} ${column.count}` }))
+  const verdictItems: LegendItem[] = VERDICTS.map((verdict) => ({ cell: sessionCell(verdict, 0, 0, runColorValue), label: text[verdict] }))
+  const legendItem = (item: LegendItem) => <Text><Text {...cellProps(item.cell)}>{item.cell.glyph}</Text><Text dimColor>{item.label} </Text></Text>
+  return [
+    legendLines('', columnItems, columns).map((items) => <Text wrap="truncate-end">{items.map(legendItem)}</Text>),
+    legendLines(prefix, verdictItems, columns).map((items, index) => (
+      <Text wrap="truncate-end">
+        {index == 0 ? <Text dimColor>{prefix}</Text> : null}
+        {items.map(legendItem)}
+      </Text>
+    )),
+  ]
+}
+
+// 그래프 줄: 이름(같은 폭으로 맞춤) · sparkline · 요약. sparkline 은 pane 폭에서 이름과 요약을 뺀 만큼 최근 값부터 그린다.
+// 그 아래 run.status 카드의 마지막 활동 줄을 둔다. 카드가 없으면 그 줄은 없다.
+const chartRows = ({ Text }: Ui, board: Board, text: PaneText, columns: number, refreshedAt: number, runColorValue: number) => {
+  const { metrics } = board
+  const labelWidth = Math.max(...[text.finishedLabel, text.createdLabel, text.activityLabel].map(displayWidth))
+  const label = (name: string) => `${name}${' '.repeat(labelWidth - displayWidth(name))} `
+  const totals = windowTotals(metrics)
+  const net = totals.created - totals.finished
+  const finishedSummary = text.finishedSummary(metrics.days.at(-1)?.finished ?? 0, totals.finished, metrics.window_days)
+  const createdSummary = text.createdSummary(metrics.days.at(-1)?.created ?? 0, totals.created, metrics.window_days, `${net > 0 ? '+' : ''}${net}`)
+  const lastActivity = metrics.last_activity_at == null ? null : text.age(ageOf(refreshedAt - Date.parse(metrics.last_activity_at)))
+  const activitySummary = text.activitySummary(metrics.hours.at(-1) ?? 0, lastActivity)
+  const sparkWidth = (summary: string) => Math.max(0, columns - labelWidth - 1 - displayWidth(summary) - 1)
+  const { shownDays, dayMax } = sharedDays(metrics.days, [sparkWidth(finishedSummary), sparkWidth(createdSummary)])
+  const shownHours = metrics.hours.slice(Math.max(0, metrics.hours.length - sparkWidth(activitySummary)))
+  const chartRow = (name: string, values: number[], max: number, color: string | undefined, summary: string) => (
+    <Text wrap="truncate-end">
+      <Text dimColor>{label(name)}</Text>
+      {sparkRuns(sparkline(values, max)).map((run) => <Text color={run.isZero ? undefined : color} dimColor={run.isZero}>{run.text}</Text>)}
+      <Text dimColor> {summary}</Text>
+    </Text>
+  )
+  const runColor = cellProps(plainCell(runColorValue)).color
+  const running = stalestFirst(metrics.running)
+  const runningText = running.map((card) => `k${card.id} ${card.last_activity_at == null ? '-' : text.age(ageOf(refreshedAt - Date.parse(card.last_activity_at)))}`).join(' · ')
+  return [
+    chartRow(text.finishedLabel, shownDays.map((day) => day.finished), dayMax, 'success', finishedSummary),
+    chartRow(text.createdLabel, shownDays.map((day) => day.created), dayMax, undefined, createdSummary),
+    chartRow(text.activityLabel, shownHours, Math.max(...shownHours, 0), runColor, activitySummary),
+    running.length == 0 ? null : <Text wrap="truncate-end"><Text dimColor>{text.runningPrefix(board.run_status)}</Text>{runningText}</Text>,
+  ]
+}
+
+// swimlane 하나: 머리 줄(상태 기호 · 접기 기호와 id · 제목 · 끝낸 수/전체 수 · 예상 일수)과 막대. Raster 는 터미널에서만 있고, 없거나 stageMotion 이 layout 을 null 로 정했으면 Text 로 그린다.
+const laneBlock = ($: EngineInterface, { Box, Button, Text }: Ui, item: LaneFrame, motion: Motion, text: PaneText, windowDays: number, Raster: Elements['terminal']['Raster'] | null) => {
+  const { lane, head, rows, isFlashing } = item
+  const laneEta = () => {
+    if (lane.total - lane.finished <= 0) return ''
+    const days = etaDays(lane, windowDays)
+    return days == null ? text.etaStalled(windowDays) : text.eta(days)
   }
-  if (!motion.isHidden) return
-  motion.isHidden = false
-  syncTimer($, motion, current.board)
-  await $.ui.invalidate('ui.render')
+  const textRows = () => rows.map((row) => <Text wrap="truncate-end">{colorRuns(row).map((run) => <Text color={run.color} backgroundColor={run.backgroundColor}>{run.text}</Text>)}</Text>)
+  return (
+    <Box flexDirection="column">
+      <Box flexDirection="row">
+        {Raster && motion.layout != null ? <Raster key={headKey(item)} columns={1} rows={1} cells={packCells([[head]])} /> : <Text {...cellProps(head)}>{head.glyph}</Text>}
+        <Text> </Text>
+        {/* width 0: 제목 길이가 flexbox 의 축소 비율에 들어가면 끝낸 수/전체 수의 폭이 소수점 아래로 줄어 그 글이 다음 줄로 넘어간다. */}
+        <Button key={`toggle:${lane.key}`} plain dimColor={!lane.is_running} onPress={() => void toggleLane($, lane.key)}>
+          <Text inverse={isFlashing}>{motion.collapsed.includes(lane.key) ? COLLAPSED_GLYPH : EXPANDED_GLYPH} {lane.id == null ? text.noMilestone : `k${lane.id}`}</Text>
+        </Button>
+        <Box width={0} flexGrow={1}>
+          <Text wrap="truncate-end" inverse={isFlashing} dimColor={!lane.is_running}>{lane.id == null ? '' : ` ${lane.title}`}</Text>
+        </Box>
+        <Text dimColor> {lane.finished}/{lane.total}{laneEta()}</Text>
+      </Box>
+      {rows.length == 0 ? null : Raster && motion.layout != null ? <Raster key={barKey(item)} columns={motion.columns} rows={rows.length} cells={packCells(rows)} /> : textRows()}
+    </Box>
+  )
 }
 
 // 자기 pane 과 grid 칸이 함께 쓰는 그리기 함수. requestId 는 그리는 pane 의 id, columns 는 그릴 너비다.
+// 그리는 pane 이 바뀌면 앞 pane 의 가려짐(isHidden)을 지운다. 새 pane 이 가려졌는지는 다음 advance 가 다시 정한다.
 const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], polling: Polling, requestId: string, columns: number) => {
-  const { Box, Button, Text } = $.ui.resolve(e)
+  const ui = $.ui.resolve(e)
+  const { Box, Text } = ui
   const Raster = e.surface == 'terminal' ? $.ui.resolve(e).Raster : null
   const { motion } = polling
+  if (motion.requestId != requestId) motion.isHidden = false
   motion.requestId = requestId
   const text = TEXT[polling.locale]
   const current = await read($, view)
   if (current.kind != 'ok') {
     motion.layout = null
-    stopTimer(motion)
+    stopPeriod(motion)
   }
   if (current.kind == 'reading') return <Text dimColor>{text.reading}</Text>
   if (current.kind == 'none') return <Text dimColor>{text.noBoardHere}</Text>
@@ -362,104 +487,28 @@ const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']
     )
   }
   const { board } = current
-  motion.columns = Math.max(1, columns)
-  motion.collapsed = await read($, collapsedLanes)
-  const lanes = currentLanes(board, motion)
-  const fits = motion.columns <= MAX_RASTER_COLUMNS && lanes.every((item) => item.rows.length <= MAX_RASTER_ROWS)
-  motion.layout = Raster && fits ? layoutOf(lanes) : null
-  motion.painted = new Map(rastersOf(lanes).map(({ key, cells }) => [key, cells]))
-  if (motion.layout == null) motion.transition = null
-  syncTimer($, motion, board)
-  const cards = board.columns.reduce((sum, column) => sum + column.count, 0)
+  const lanes = await stageMotion($, motion, board, columns, Raster != null)
+  const cards = sum(board.columns.map((column) => column.count))
   const milestones = board.lanes.filter((lane) => lane.id != null).length
-  const runIndex = board.columns.find((column) => column.status == board.run_status)?.index ?? 0
-  const prefix = `${board.run_status}: `
-  const columnItems: LegendItem[] = board.columns.map((column) => ({ cell: { glyph: '█', color: columnColor(column.index), background: DEFAULT_COLOR }, label: `${column.status} ${column.count}` }))
-  const verdictItems: LegendItem[] = VERDICTS.map((verdict) => ({ cell: sessionCell(verdict, 0, 0, columnColor(runIndex)), label: text[verdict] }))
-  const legendItem = (item: LegendItem) => <Text><Text {...cellProps(item.cell)}>{item.cell.glyph}</Text><Text dimColor>{item.label} </Text></Text>
-  // 그래프 줄: 이름(같은 폭으로 맞춤) · sparkline · 요약. sparkline 은 pane 폭에서 이름과 요약을 뺀 만큼 최근 값부터 그린다.
-  const { metrics } = board
-  const labelWidth = Math.max(...[text.finishedLabel, text.createdLabel, text.activityLabel].map(displayWidth))
-  const label = (name: string) => `${name}${' '.repeat(labelWidth - displayWidth(name))} `
-  const week = metrics.days.slice(-metrics.window_days)
-  const finishedWeek = sum(week.map((day) => day.finished))
-  const createdWeek = sum(week.map((day) => day.created))
-  const net = createdWeek - finishedWeek
-  const finishedSummary = text.finishedSummary(metrics.days.at(-1)?.finished ?? 0, finishedWeek, metrics.window_days)
-  const createdSummary = text.createdSummary(metrics.days.at(-1)?.created ?? 0, createdWeek, metrics.window_days, `${net > 0 ? '+' : ''}${net}`)
-  const lastActivity = metrics.last_activity_at == null ? null : text.age(ageOf(current.refreshedAt - Date.parse(metrics.last_activity_at)))
-  const activitySummary = text.activitySummary(metrics.hours.at(-1) ?? 0, lastActivity)
-  const sparkWidth = (summary: string) => Math.max(0, motion.columns - labelWidth - 1 - displayWidth(summary) - 1)
-  const dayCount = Math.min(metrics.days.length, sparkWidth(finishedSummary), sparkWidth(createdSummary))
-  const shownDays = metrics.days.slice(metrics.days.length - dayCount)
-  const dayMax = Math.max(...shownDays.map((day) => Math.max(day.finished, day.created)), 0)
-  const shownHours = metrics.hours.slice(Math.max(0, metrics.hours.length - sparkWidth(activitySummary)))
-  const chartRow = (name: string, values: number[], max: number, color: string | undefined, summary: string) => (
-    <Text wrap="truncate-end">
-      <Text dimColor>{label(name)}</Text>
-      {sparkRuns(sparkline(values, max)).map((run) => <Text color={run.isZero ? undefined : color} dimColor={run.isZero}>{run.text}</Text>)}
-      <Text dimColor> {summary}</Text>
-    </Text>
-  )
-  const runColor = cellProps({ glyph: ' ', color: columnColor(runIndex), background: DEFAULT_COLOR }).color
-  // 마지막 활동이 오래된 카드부터 적는다. 활동 코멘트도 session_started_at 도 없는 카드가 맨 앞이다.
-  const running = metrics.running.toSorted((a, b) => (a.last_activity_at == null ? -1 : b.last_activity_at == null ? 1 : Date.parse(a.last_activity_at) - Date.parse(b.last_activity_at)))
-  const runningText = running.map((card) => `k${card.id} ${card.last_activity_at == null ? '-' : text.age(ageOf(current.refreshedAt - Date.parse(card.last_activity_at)))}`).join(' · ')
-  const laneEta = (lane: BoardLane) => {
-    if (lane.total - lane.finished <= 0) return ''
-    const days = etaDays(lane, metrics.window_days)
-    return days == null ? text.etaStalled(metrics.window_days) : text.eta(days)
-  }
-  const textRows = (rows: Cell[][]) => rows.map((row) => <Text wrap="truncate-end">{colorRuns(row).map((run) => <Text color={run.color} backgroundColor={run.backgroundColor}>{run.text}</Text>)}</Text>)
-  const laneBlock = (item: LaneFrame) => {
-    const { lane, head, rows, isFlashing } = item
-    return (
-      <Box flexDirection="column">
-        <Box flexDirection="row">
-          {Raster && motion.layout != null ? <Raster key={headKey(item)} columns={1} rows={1} cells={packCells([[head]])} /> : <Text {...cellProps(head)}>{head.glyph}</Text>}
-          <Text> </Text>
-          {/* width 0: 제목 길이가 flexbox 의 축소 비율에 들어가면 끝낸 수/전체 수의 폭이 소수점 아래로 줄어 그 글이 다음 줄로 넘어간다. */}
-          <Button key={`toggle:${lane.key}`} plain dimColor={!lane.is_running} onPress={() => void toggleLane($, lane.key)}>
-            <Text inverse={isFlashing}>{motion.collapsed.includes(lane.key) ? COLLAPSED_GLYPH : EXPANDED_GLYPH} {lane.id == null ? text.noMilestone : `k${lane.id}`}</Text>
-          </Button>
-          <Box width={0} flexGrow={1}>
-            <Text wrap="truncate-end" inverse={isFlashing} dimColor={!lane.is_running}>{lane.id == null ? '' : ` ${lane.title}`}</Text>
-          </Box>
-          <Text dimColor> {lane.finished}/{lane.total}{laneEta(lane)}</Text>
-        </Box>
-        {rows.length == 0 ? null : Raster && motion.layout != null ? <Raster key={barKey(item)} columns={motion.columns} rows={rows.length} cells={packCells(rows)} /> : textRows(rows)}
-      </Box>
-    )
-  }
+  const runColorValue = statusColor(board, board.run_status)
   return (
     <Box flexDirection="column">
       <Text dimColor wrap="truncate-end">{text.header(clockText(current.refreshedAt), cards, milestones, board.interval_seconds)}</Text>
-      {legendLines('', columnItems, motion.columns).map((items) => <Text wrap="truncate-end">{items.map(legendItem)}</Text>)}
-      {legendLines(prefix, verdictItems, motion.columns).map((items, index) => (
-        <Text wrap="truncate-end">
-          {index == 0 ? <Text dimColor>{prefix}</Text> : null}
-          {items.map(legendItem)}
-        </Text>
-      ))}
+      {legendRows(ui, board, text, motion.columns, runColorValue)}
       <Text> </Text>
-      {chartRow(text.finishedLabel, shownDays.map((day) => day.finished), dayMax, 'success', finishedSummary)}
-      {chartRow(text.createdLabel, shownDays.map((day) => day.created), dayMax, undefined, createdSummary)}
-      {chartRow(text.activityLabel, shownHours, Math.max(...shownHours, 0), runColor, activitySummary)}
-      {running.length == 0 ? null : <Text wrap="truncate-end"><Text dimColor>{text.runningPrefix(board.run_status)}</Text>{runningText}</Text>}
+      {chartRows(ui, board, text, motion.columns, current.refreshedAt, runColorValue)}
       <Text> </Text>
-      {lanes.map(laneBlock)}
+      {lanes.map((item) => laneBlock($, ui, item, motion, text, board.metrics.window_days, Raster))}
     </Box>
   )
 }
 
 // 타이머는 모듈을 다시 읽으면 엔진이 버린다. 그래서 상태도 register 가 돌 때마다 새로 만든다.
 export const register: Register = (on) => {
-  const polling: Polling = { timer: null, periodMs: 0, locale: 'en', motion: newMotion() }
+  const polling: Polling = { timer: null, periodMs: 0, locale: 'en', motion: newMotion(), synced: null }
 
   on('session.start', async ($, e, next) => {
-    polling.locale = await resolveLocale($)
-    await $.command.register({ name: COMMAND, description: TEXT[polling.locale].description })
-    await loadCollapsedLanes($)
+    await syncSession($, polling, undefined)
     void start($, polling)
     return next(e)
   })
@@ -472,25 +521,24 @@ export const register: Register = (on) => {
   })
 
   on('command.run', { command: COMMAND }, async ($) => {
+    // 문구는 start 뒤에 고른다. start 의 refresh 가 root 나 찾은 보드가 바뀐 것을 보면 syncSession 이 locale 을 바꾸기 때문이다.
+    const { result, placement } = await start($, polling)
     const text = TEXT[polling.locale]
-    const result = await refresh($, polling)
-    schedule($, polling, result)
     if (result.kind == 'none') return { text: text.noBoard }
-    const placement = await readPlacement($, PLUGIN)
     if (placement) return { text: text.inGrid(placement.tab) }
-    await $.ui.open({ id: PANE, title: TITLE })
     return { text: result.kind == 'ok' ? text.opened(result.board.root, result.board.interval_seconds) : text.failed(result.message) }
   })
 
   // delegate 스킬의 금지 1 을 도구가 지킨다. 판정은 guard 명령이 갖고, 이 훅은 종료 코드만 본다.
   // 1 이면 거절하지 않고 사용자에게 묻는다. 사용자가 직접 하라고 한 작업은 그 질문에서 허용한다. 0 · 3(보드 없음)이면 그대로 넘긴다.
+  // guard 를 실행하지 못하면(process.run 이 시작 실패 · 30000 ms 초과로 reject) 엔진은 실패한 훅을 건너뛰어 도구가 그대로 실행되므로, guard.mjs 의 「세션을 찾지 못하면 묻는다(막는 쪽)」와 같게 .catch 에서 묻는다. next 를 이미 불렀으면(판정이 끝났으면) 그 결과를 둔다.
   on('classic.PreToolUse', { tool: GUARDED_TOOLS }, async ($, e, next) => {
     const path = e.tool == 'NotebookEdit' ? e.notebook_path : e.tool == 'Edit' || e.tool == 'Write' ? e.file_path : null
     if (path == null) return next(e)
     const ran = await runSkill($, skillArgv($, ['guard', path, '--session', await $.session.id()]), 30000)
     if (ran.exitCode != 1) return next(e)
     return { ask: ran.stderr.trim() }
-  })
+  }).catch(($, e, next) => (next.called ? next(e) : { ask: TEXT[polling.locale].notRun(`${SKILL_BIN} guard`, next.error.message ?? next.error.kind) }))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawBoard($, e, polling, PANE, e.props.bodyColumns))
 

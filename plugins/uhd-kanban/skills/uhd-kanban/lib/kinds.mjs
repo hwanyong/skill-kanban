@@ -1,7 +1,5 @@
-// 코멘트 kind 는 카드 파일의 머리 줄 `### c<n> [<kind>]` 에 기록하는 영어 id 다. 보드의 locale 과 무관하게 같은 값을 쓴다.
+// 코멘트 kind 는 카드 파일의 머리 줄 `### c<n> [<kind>]` 에 기록하는 영어 id 다(형식은 ids.mjs 의 ID). 보드의 locale 과 무관하게 같은 값을 쓴다.
 // 사람에게 보일 때의 이름은 messages/<locale>.mjs 의 `kind.<id>` 가 갖는다(i18n.mjs 의 kindText).
-
-export const KIND_ID = /^[a-z][a-z0-9-]*$/
 
 // run · recover 가 카드에 쓰거나 세션에 쓰라고 하는 kind. comments.kinds 에 있어야 한다.
 export const RUN_KINDS = ['assign', 'progress', 'question', 'result']

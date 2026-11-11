@@ -2,26 +2,25 @@
 // 파일 이름의 순서 번호는 completed_at 의 날짜(이 Mac 의 시간대)로 바뀐다.
 // uhd-kanban archive [--dry-run]
 
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { moveFile } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
-import { archivedName, localDate } from '../filename.mjs'
+import { archiveMonth, archivedName, localDate } from '../filename.mjs'
 import { t } from '../i18n.mjs'
-
-const DAY_MS = 24 * 60 * 60 * 1000
+import { DAY_MS, timeOf } from '../time.mjs'
 
 export const run = async ({ flags }) => {
   const dryRun = flags['dry-run'] == true
   return editBoard(async ({ project, board }) => {
     const { columns, after_days: afterDays, dir } = project.config.archive
     const targets = board.cards.filter((card) => columns.includes(card.status))
-    const missing = targets.filter((card) => Number.isNaN(Date.parse(card.data.completed_at ?? '')))
-    const due = targets.filter((card) => !missing.includes(card) && Date.now() - Date.parse(card.data.completed_at) >= afterDays * DAY_MS)
+    const missing = targets.filter((card) => timeOf(card.data.completed_at) == null)
+    const due = targets.filter((card) => !missing.includes(card) && Date.now() - timeOf(card.data.completed_at) >= afterDays * DAY_MS)
     for (const card of due) {
       const date = localDate(new Date(card.data.completed_at))
-      const target = join(project.boardPath, dir, date.slice(0, 7), archivedName({ date, id: card.id, title: card.data.title }))
+      const target = join(project.boardPath, dir, archiveMonth(date), archivedName({ date, id: card.id, title: card.data.title }))
       if (!dryRun) moveFile(project, card.path, target)
-      console.log(`${dryRun ? '(dry-run) ' : ''}k${card.id} → ${target.slice(project.root.length + 1)}`)
+      console.log(`${dryRun ? '(dry-run) ' : ''}k${card.id} → ${relative(project.root, target)}`)
     }
     console.log(t(dryRun ? 'archive.summaryDry' : 'archive.summary', { count: due.length, days: afterDays, columns }))
     if (missing.length == 0) return 0

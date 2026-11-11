@@ -3,20 +3,22 @@
 // 이 명령은 메시지를 보내지 않는다. Claude Code 에 메시지를 보내는 CLI 명령이 없어(2.1.312), 그 줄을 읽은 AI 가 SendMessage 도구를 부른다.
 // uhd-kanban comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> | --text-file <경로>)
 
-import { readFileSync } from 'node:fs'
+import { relative } from 'node:path'
 import { t } from '../i18n.mjs'
-import { UsageError, cardId, listFrom } from '../args.mjs'
-import { findCard, now, writeCard } from '../cards.mjs'
+import { UsageError, cardId, listFrom, readFlagFile, stringFlag } from '../args.mjs'
+import { findCard, updateCard } from '../cards.mjs'
+import { now } from '../time.mjs'
 import { USER, appendComment, isName, textProblems } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
 import { resolveName, roleName } from '../main.mjs'
-import { ProjectError, assertKind, loadProject } from '../project.mjs'
+import { ProjectError } from '../errors.mjs'
+import { assertKind, loadProject } from '../project.mjs'
 import { currentSessionName, listSessions } from '../sessions.mjs'
 
 const readText = (flags) => {
-  const given = ['text', 'text-file'].filter((key) => typeof flags[key] == 'string')
+  const given = ['text', 'text-file'].filter((key) => stringFlag(flags, key) != null)
   if (given.length != 1) throw new UsageError(t('comment.textOrFile'))
-  return given[0] == 'text' ? flags.text : readFileSync(flags['text-file'], 'utf8')
+  return given[0] == 'text' ? flags.text : readFlagFile(flags, 'text-file')
 }
 
 // 세션 목록을 못 읽어도 코멘트는 쓴다. 받는 이름을 대조하지 못했다는 것만 알린다.
@@ -32,12 +34,12 @@ const trySessions = () => {
 export const run = async ({ positional, flags }) => {
   if (positional[0] == null) throw new UsageError(t('comment.usage'))
   const id = cardId(positional[0])
-  if (typeof flags.kind != 'string') throw new UsageError(t('args.required', { flag: '--kind' }))
+  if (stringFlag(flags, 'kind') == null) throw new UsageError(t('args.required', { flag: '--kind' }))
   const to = listFrom(flags.to)
   if (to.length == 0) throw new UsageError(t('args.required', { flag: '--to' }))
   const text = readText(flags).replace(/\s+$/, '')
   const sessions = trySessions()
-  const from = typeof flags.from == 'string' ? flags.from : sessions && roleName(loadProject(), currentSessionName(sessions))
+  const from = stringFlag(flags, 'from') ?? (sessions && roleName(loadProject(), currentSessionName(sessions)))
   if (from == null) throw new UsageError(t('comment.noFrom'))
   const badNames = [from, ...to].filter((name) => !isName(name))
   if (badNames.length > 0) throw new UsageError(t('comment.badNames', { names: badNames }))
@@ -47,8 +49,8 @@ export const run = async ({ positional, flags }) => {
     const kind = assertKind(project, flags.kind)
     const card = findCard(board, id)
     const { body, n } = appendComment(card.body, { kind, from, to, at: now(), text })
-    writeCard(card.path, { ...card.data, updated_at: now() }, body)
-    console.log(`k${id} c${n} ${card.path.slice(project.root.length + 1)}`)
+    updateCard(card, {}, body)
+    console.log(`k${id} c${n} ${relative(project.root, card.path)}`)
     const known = new Set((sessions ?? []).map((session) => session.name))
     const summary = `k${id} c${n} [${kind}] ${text.split('\n')[0]}`
     to.filter((name) => name != USER).forEach((name) => {

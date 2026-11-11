@@ -106,10 +106,10 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 | 명령 | 하는 일 |
 |---|---|
-| `uk init [--dir <경로>] [--locale ko\|en]` | `.uhd-kanban/`(config.json · profiles.json)과 `kanban/` 을 만든다. `--locale` 이 없으면 그때의 `LANG` 으로 정해 config.json 에 적는다. 이미 있거나, 다른 보드 안이거나, 바로 아래 디렉터리에 보드가 있거나, 홈 디렉터리면 바꾸지 않고 종료 코드 1 |
+| `uk init [--dir <경로>] [--locale ko\|en]` | `.uhd-kanban/`(config.json · profiles.json)과 `kanban/` 을 만든다. `--locale` 이 없으면 그때의 환경 변수(`LC_ALL` → `LC_MESSAGES` → `LANG` 중 처음 비지 않은 값. `ko` 로 시작하면 `ko`, 아니면 `en`)로 정해 config.json 에 적는다. 이미 있거나, 다른 보드 안이거나, 바로 아래 디렉터리에 보드가 있거나(그 디렉터리가 이 저장소의 linked worktree 면 세지 않는다), 홈 디렉터리이거나, git worktree 안이고 주 worktree 에 보드가 있으면 바꾸지 않고 종료 코드 1 |
 | `uk migrate [--dry-run]` | 0.4.0 까지 만든 보드의 코멘트 kind 를 영어 id 로 바꾸고 config.json 에 `"locale": "ko"` 를 넣는다. 다시 실행해도 바꿀 것이 없으면 아무것도 쓰지 않는다 |
 | `uk locale` | 이 디렉터리에서 쓸 출력 언어(`ko` · `en`)를 낸다 |
-| `uk check` | config.json · profiles.json 과 모든 카드를 검증한다. 파일은 바꾸지 않는다. `planned` 인데 `run.status` 열의 소속 카드가 있는 milestone 과, `active` 인데 소속 카드가 모두 끝난 milestone 을 stderr 로 알린다. 이 알림은 종료 코드를 바꾸지 않는다 |
+| `uk check` | config.json · profiles.json 과 모든 카드를 검증한다. 파일은 바꾸지 않는다. `planned` 인데 `run.status` 열의 소속 카드가 있는 milestone 과, `active` 인데 소속 카드가 모두 끝난 milestone 을 stderr 로 알린다. 이 보드가 홈 디렉터리이거나, 다른 보드 안이거나, 바로 아래 디렉터리에 보드가 있으면(`lib/root.mjs` 의 `overlappingBoards`. 그 디렉터리가 이 저장소의 linked worktree 면 세지 않는다) 그것도 stderr 로 알린다. 두 알림 모두 종료 코드를 바꾸지 않는다 |
 | `uk new --type <type> --title <제목> [--status <status>] [--priority medium] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file <경로>] [자리]` | 카드를 만든다. `--status` 가 없으면 `initial` 의 열에 둔다 |
 | `uk move <k id> <status> [자리] [--force]` | 다른 열로 옮긴다. `dependencies.abandoned` 의 열로 옮기면 그 카드를 기다리는 카드마다 `set --remove-depends` 명령과(그 열이 그 type 을 받으면) 함께 그만두는 `move` 명령을 낸다. `run.status` 의 열로 옮기면 그 카드가 속한 `planned` milestone 을 `active` 로 함께 옮긴다(`uk run` · `uk recover` 도 카드를 그 열로 옮길 때 같다) |
 | `uk order <k id> <자리>` | 같은 열 안에서 자리를 바꾼다. 카드 내용은 바뀌지 않는다 |
@@ -143,9 +143,9 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 `uk run k457` 이 하는 일:
 
 1. 카드의 `model:<프로필>` 태그를 `profiles.json` 으로 `--model` 값으로 바꾼다. `effort:<값>` 태그가 있으면 `--effort` 로 넘긴다. 태그가 없으면 그 옵션을 넘기지 않아 claude 의 기본 모델 · 기본 effort 로 띄운다.
-2. 카드를 `run.status` 열(`in-progress`)로 옮긴다. 의존성 검사는 `move` 와 같다.
-3. `claude --bg --dangerously-skip-permissions -n k457 --model … <프롬프트>` 를 프로젝트 루트에서 실행한다. `run` · `recover` 가 띄우는 세션은 모두 권한 확인 없이 돈다(`lib/sessions.mjs` 의 `BACKGROUND_ARGS`). 백그라운드 세션에는 확인 창에 답할 사람이 없다. 프롬프트는 카드 본문 뒤에 `progress` · `question` · `result` 코멘트를 남기는 명령과, `run.finish` 에 그 type 이 있으면 `[result]` 뒤에 카드를 그 열로 옮기는 `uk move` 명령을 붙인 것이다. 카드 파일은 경로가 아니라 글로브 `kanban/*/*-k<id>-*.md` 로 알려 준다. 카드를 옮기면 경로가 바뀐다.
-4. 카드에 `session` · `session_started_at` 과 `[assign]` 코멘트를 적는다.
+2. 카드를 `run.status` 열(`in-progress`)로 옮길 수 있는지 `move` 와 같은 의존성 검사로 본다(`--force` 로 건너뛴다. 카드가 이미 그 열에 있으면 검사하지 않는다). 옮길 수 없으면 띄우지 않는다. 이전 세션과 동시 실행 수(아래 「동시 실행」)도 이때 본다.
+3. `claude --bg --dangerously-skip-permissions -n k457 --model … -- <프롬프트>` 를 프로젝트 루트에서 실행한다. 프롬프트를 `--` 뒤에 두는 것은 카드 본문이 `-` 로 시작하면(마크다운 목록) claude 가 그 줄을 옵션으로 읽기 때문이다(`lib/sessions.mjs` 의 `launchBackground`). `--dry-run` 이 stdout 에 찍는 명령 줄(`lib/sessions.mjs` 의 `backgroundCommand`)에는 `--` 가 없다. `run` · `recover` 가 띄우는 세션은 모두 권한 확인 없이 돈다(`lib/sessions.mjs` 의 `BACKGROUND_ARGS`). 백그라운드 세션에는 확인 창에 답할 사람이 없다. 프롬프트는 카드 본문 뒤에 `progress` · `question` · `result` 코멘트를 남기는 명령과, `run.finish` 에 그 type 이 있으면 `[result]` 뒤에 카드를 그 열로 옮기는 `uk move` 명령을 붙인 것이다. 카드 파일은 경로가 아니라 글로브 `kanban/*/[0-9][0-9][0-9][0-9]-k<id>-*.md`(`order.width` 4 일 때. 순서 번호 자리는 `order.width` 자리 숫자로 고정한다. 제목에 그 id 를 적은 다른 카드와 맞지 않게 하려는 것이다)로 알려 준다. 카드를 옮기면 경로가 바뀐다.
+4. 띄운 뒤에 카드를 `run.status` 열로 옮기고, `session` · `session_started_at` 과 `[assign]` 코멘트를 함께 적는다. 띄우지 못하면 카드는 바뀌지 않는다.
 
 `config.json` 의 `run.env` 에 환경 변수 이름 → 문자열 값 객체를 적으면 `run` 과 `recover`(이어 감 · 멈춤 · `--force` 모두)가 띄우는 카드 세션에 그 값을 넣는다. 예: `"run": { "status": "in-progress", "env": { "MY_TOOL_MODE": "off" } }`. 넣는 방법은 `claude --settings '{"env":{…}}'` 인자이고(`lib/sessions.mjs` 의 `envArgs`), 카드 세션의 Bash 도구와 훅 프로세스 환경에 들어간다. `uk run` 을 실행한 셸의 환경 변수는 `claude --bg` 세션에 전달되지 않으므로 이 키로 준다. 키가 없거나 비었으면 그 인자를 넘기지 않는다. 이름은 영문자 · 숫자 · 밑줄이고 숫자로 시작하지 않으며, 값은 문자열이다. 다르면 `check` 와 모든 명령이 위반으로 알린다. 이미 도는 카드 세션에는 적용되지 않고, 다음 `run` · `recover` 부터 적용된다.
 
@@ -165,7 +165,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 **`run` · `recover` 는 신뢰된 workspace 에서만 된다.** `claude --bg` 는 workspace trust 를 상위 디렉터리에서 물려받지 않는다. 프로젝트 루트에서 `claude` 를 한 번 열어 trust 대화 상자를 수락해야 한다. 수락하지 않았으면 `Workspace not trusted` 로 실패하고 카드는 바뀌지 않는다. trust 설정은 사용자가 바꾼다.
 
-`run` 은 카드의 이전 세션이 아직 돌거나 다시 뜨는 중이면 새로 띄우지 않는다.
+`run` 은 카드의 이전 세션 판정이 돈다 · 다시 뜨는 중 · 멈춤 · 모르는 state 이면(`lib/sessions.mjs` 의 `RUNNING_VERDICTS`) 새로 띄우지 않고 종료 코드 1 로 끝난다. 멈춤이면 `uk recover k<id>` 로 이어 간다.
 
 ### 동시 실행
 
@@ -173,7 +173,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 | 조건 | 판정 | 누가 지키는가 |
 |---|---|---|
-| 동시 실행 수 | `run.status` 열에서 세션 판정이 돈다 · 다시 뜨는 중 · 멈춤인 카드가 `config.json` 의 `run.max_parallel` 개 이상이면 `run` 은 띄우지 않고 종료 코드 1 로 그 카드 id 를 알린다. `recover` 는 이어 감 판정인 카드를 띄우지 않고 「자리를 기다린다」로 세고 종료 코드 1 을 낸다. 멈춤 판정인 카드는 이미 센 세션을 바꿔 띄우므로 수가 늘지 않는다 | `uk run` · `uk recover`(`lib/sessions.mjs` 의 `runningCards` · `hasRoom`) |
+| 동시 실행 수 | `run.status` 열에서 세션 판정이 돈다 · 다시 뜨는 중 · 멈춤 · 모르는 state 인 카드(`lib/sessions.mjs` 의 `RUNNING_VERDICTS`)가 `config.json` 의 `run.max_parallel` 개 이상이면 `run` 은 띄우지 않고 종료 코드 1 로 그 카드 id 를 알린다. `recover` 는 이어 감 판정인 카드를 띄우지 않고 「자리를 기다린다」로 세고 종료 코드 1 을 낸다. 멈춤 판정인 카드는 이미 센 세션을 바꿔 띄우므로 수가 늘지 않는다 | `uk run` · `uk recover`(`lib/sessions.mjs` 의 `runningCards` · `hasRoom`) |
 | 업무 순서 | 앞 작업의 결과가 필요한 카드는 `depends_on` 에 앞 카드를 적는다. `run` 은 `move` 와 같은 의존성 검사로 앞 카드가 끝나기 전에 띄우지 않는다 | `uk run`(`--force` 로 건너뛴다) |
 | 작업 충돌 | 카드 세션은 모두 같은 작업 트리(프로젝트 루트)에서 돈다. 같은 파일 · 같은 생성물(빌드 폴더 · 잠금 파일 · DB 스키마)을 고치는 카드, 같은 장치 · VM 을 다루는 카드는 함께 돌리지 않는다. 뒤 카드의 `depends_on` 에 앞 카드를 적어 차례로 만든다 | 카드를 나누는 세션. 도구는 카드가 무엇을 고칠지 모르므로 검사하지 않는다 |
 
@@ -202,12 +202,12 @@ Mac 을 재부팅하면 카드 세션이 `pid` 없이 `state failed` 로 남는�
 
 ## 보드 모니터
 
-이 스킬이 든 플러그인 `uhd-kanban` 의 hooks 모듈(`hooks/register.tsx`)이 세션 디렉터리 위에 보드가 있으면 pane 을 열고, 끝나지 않은 milestone 마다 행 하나(swimlane: 소속으로 묶은 가로 행)를 그린다. `collection` 이 빈 카드는 마지막 「소속 없음」 행에 든다. 머리 줄은 milestone 의 기호 · 접기 기호 · id · 제목 · 끝난 수 / 전체 수이고, 그 아래 막대에서 소속 작업 카드 하나가 한 칸이다. 칸의 색은 카드의 열이고, `run.status` 열의 칸은 세션 판정(`recover` 와 같은 판정)으로 글자와 색이 바뀐다. milestone 카드는 칸으로 그리지 않는다. 끝난 milestone 은 행을 그리지 않고, 그 소속 카드는 어느 행에도 들지 않으며 열별 카드 수에는 남는다.
+이 스킬이 든 플러그인 `uhd-kanban` 의 hooks 모듈(`hooks/register.tsx`)이 `uk board --json` 으로 보드를 찾으면 pane 을 열고(찾는 차례는 `lib/root.mjs` 의 `findCallerRootOrNull` 이다. 세션 디렉터리 위의 보드, 이 세션을 메인 세션으로 등록한 보드, 이 세션을 띄운 디렉터리 위의 보드 차례다), 끝나지 않은 milestone 마다 행 하나(swimlane: 소속으로 묶은 가로 행)를 그린다. `collection` 이 빈 카드는 마지막 「소속 없음」 행에 든다. 머리 줄은 milestone 의 기호 · 접기 기호 · id · 제목 · 끝난 수 / 전체 수이고, 그 아래 막대에서 소속 작업 카드 하나가 한 칸이다. 칸의 색은 카드의 열이고, `run.status` 열의 칸은 세션 판정(`recover` 와 같은 판정)으로 글자와 색이 바뀐다. milestone 카드는 칸으로 그리지 않는다. 끝난 milestone 은 행을 그리지 않고, 그 소속 카드는 어느 행에도 들지 않으며 열별 카드 수에는 남는다.
 
 - 머리 줄의 `▾ k<id>` 는 Button 이다. 누르면 그 행의 막대를 접고 기호가 `▸` 로 바뀌며, 머리 줄 기호의 애니메이션과 끝난 수 / 전체 수는 그대로다. 접은 행의 목록은 `$.store` 에 세션 디렉터리마다 저장한다.
 - 갱신 주기는 `config.json` 의 `monitor.interval_seconds` 다(10 이상의 정수, 기본 60). 값을 바꾸면 다음 갱신부터 그 주기로 다시 읽는다.
 - 막대는 pane 폭에서 줄을 바꾼다. 칸의 차례는 끝난 열 → 나머지 열의 역순이고(`lib/lanes.mjs` 의 `finishOrder`), 행의 차례는 `active` milestone → `planned` milestone → 소속 없음이다. 머리 줄의 기호는 `active` 면 `●`, `planned` 면 `○` 이고, 소속 카드의 세션 판정이 `restart` · `unknown` · `pending` · `live` · `resume` 중 하나이면 이 차례로 앞선 판정의 기호로 바뀐다. `planned` 행의 제목은 흐리게 그린다. 격자를 계산하는 규칙은 `hooks/frames.ts` 의 `laneFrames` 가 갖는다.
-- 터미널에서는 `live` · `pending` · `restart` 칸을 250 ms 간격으로 다시 그리고, 카드가 생성 · 삭제 · 이동되면 재배치를 100 ms 간격으로 재생한다. milestone 의 열이 바뀌면 머리 줄을 8프레임 반전한다. 재배치 계획은 `hooks/frames.ts` 의 `planTransition`, 재생 차례는 `hooks/register.tsx` 의 `advance` 가 갖는다. 터미널 밖의 surface 와 256행이 넘는 막대는 `Text` 로 고정한다.
+- 터미널에서는 `live` · `pending` · `restart` 칸을 250 ms 간격으로 다시 그리고, 카드가 생성 · 삭제 · 이동되면 재배치를 100 ms 간격으로 재생한다. milestone 이 끝나지 않은 열 사이에서 옮겨지면 머리 줄을 8프레임 반전한다(끝난 열로 옮기면 그 행은 칸이 사라진 뒤 없어진다). 재배치 계획은 `hooks/frames.ts` 의 `planTransition`, 재생 차례는 `hooks/register.tsx` 의 `advance` 가 갖는다. 터미널 밖의 surface, 폭이 512칸을 넘는 pane, 256행이 넘는 막대는 `Text` 로 고정한다(`hooks/register.tsx` 의 `MAX_RASTER_COLUMNS` · `MAX_RASTER_ROWS`).
 - 같은 모듈이 Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행하고, 종료 코드 1 이면 사용자에게 확인 창을 띄운다(`../delegate/SKILL.md`).
 - 범례 아래 그래프 4줄: 날짜별 끝난 작업 카드 수(`completed_at`, 그래서 `done` 만 센다) · 날짜별 만든 작업 카드 수(`created_at`) · 최근 24시간의 시간별 활동 코멘트(`progress` · `result` · `done-evidence`) 수 · `run.status` 카드마다 마지막 활동 뒤로 지난 시간(오래된 카드부터). 머리 줄 오른쪽의 `약 n일` 은 남은 소속 카드 수를 최근 7일 처리 속도로 나눈 값이다. 글자로 바꾸는 규칙은 `hooks/charts.ts` 가 갖는다.
 - pane 은 `uk board --json` 의 stdout 을 그리기만 한다. 보드가 없는 디렉터리(종료 코드 3)에서는 열지 않는다. 닫힌 pane 은 `/kanban-board` 로 다시 연다.

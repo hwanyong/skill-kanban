@@ -3,15 +3,20 @@
 // 메시지를 내지 않는다. i18n.mjs 가 메시지 표를 고르기 전에 이 모듈로 config.json 을 찾기 때문이다.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { claudeConfigDir, readAgents } from './agents.mjs'
+import { callerSessionId, claudeConfigDir, readAgents, sessionById } from './agents.mjs'
 
 export const SETTINGS_DIR = '.uhd-kanban'
 export const BOARD_DIR = 'kanban'
 
-const hasBoard = (dir) => existsSync(join(dir, SETTINGS_DIR, 'config.json'))
+// `.uhd-kanban/` 아래 설정 파일의 경로.
+export const configFile = (root) => join(root, SETTINGS_DIR, 'config.json')
+export const profilesFile = (root) => join(root, SETTINGS_DIR, 'profiles.json')
+export const mainFile = (root) => join(root, SETTINGS_DIR, 'main.json')
+
+const hasBoard = (dir) => existsSync(configFile(dir))
 
 const gitMainRoot = (cwd) => {
   try {
@@ -29,6 +34,35 @@ const walkUp = (start) => {
   }
 }
 
+// cwd 가 든 git worktree 의 루트. git 저장소가 아니면 null.
+const gitToplevel = (cwd) => {
+  try {
+    return execFileSync('git', ['rev-parse', '--path-format=absolute', '--show-toplevel'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return null
+  }
+}
+
+// dir 이 든 linked worktree 의 루트(top)와 그 주 worktree 의 루트(main). dir 이 주 worktree 안이거나 git 저장소가 아니거나 아직 없으면 null.
+// 두 값 모두 git 이 낸 값끼리 비교한다. git 은 경로의 심볼릭 링크를 풀고 대소문자를 디스크 표기로 바꾼 값을 낸다.
+// 2026-11-11 scratch 재현: 주 worktree 를 가리키는 심볼릭 링크로 init --dir 을 부르자, git 의 주 worktree 루트를 resolve 한 경로와 비교한 판정이 주 worktree 자신을 linked worktree 로 보고 init.worktree 로 거절했다.
+const linkedWorktree = (dir) => {
+  const main = gitMainRoot(dir)
+  const top = gitToplevel(dir)
+  return main != null && top != null && top != main ? { top, main } : null
+}
+
+// sub 가 dir 를 주 worktree 로 둔 linked worktree 의 루트인가. 그런 worktree 는 주 worktree 의 추적 파일 사본이라 `.uhd-kanban/` 이 있어도
+// findRootOrNull 이 gitMainRoot 로 주 worktree 의 보드를 먼저 찾으므로 dir 의 보드를 가리지 않는다.
+// 2026-11-11 scratch 재현에서 루트 바로 아래 linked worktree 를 check 가 겹친 보드로 알렸고, 그 worktree 안의 uk 는 루트 보드를 썼다.
+// 독립된 하위 git 저장소는 여기 들지 않는다. 그 보드는 실제로 dir 의 보드를 가리고 ancestor 판정도 그것을 겹침으로 본다.
+// git 은 경로의 심볼릭 링크를 풀고 대소문자를 디스크 표기로 바꾼 값을 내므로 realpathSync.native 와 비교한다.
+// realpathSync(JS 구현)는 대소문자를 적은 그대로 둔다(2026-11-11 실측: `…/proj` 를 그대로 냈고 native 와 git 은 `…/Proj` 를 냈다).
+const isLinkedWorktreeOf = (sub, dir) => {
+  const linked = linkedWorktree(sub)
+  return linked != null && linked.top == realpathSync.native(sub) && linked.main == realpathSync.native(dir)
+}
+
 // 그 경로가 든 보드의 루트. 보드가 없으면 null.
 export const findRootOrNull = (cwd) => {
   const main = gitMainRoot(cwd)
@@ -42,7 +76,7 @@ export const findRootOrNull = (cwd) => {
 const sessionDir = (id) => {
   const sessions = readAgentsOrNull()
   if (!Array.isArray(sessions)) return null
-  return sessions.find((session) => session.sessionId == id)?.cwd ?? null
+  return sessionById(sessions, id)?.cwd ?? null
 }
 
 // 찾지 못하면 원래 오류(project.noRoot)로 끝나야 하므로 claude 실행 실패와 JSON 오류는 여기서 null 로 바꾼다.
@@ -59,7 +93,8 @@ const readAgentsOrNull = () => {
 // 파일: <Claude Code 설정 디렉터리>/uhd-kanban/boards.json = { "roots": [<절대 경로>, ...] }
 const boardsPath = () => join(claudeConfigDir(), 'uhd-kanban', 'boards.json')
 
-const readJsonOrNull = (path) => {
+// 파일을 읽지 못하거나 JSON 이 아니면 null.
+export const readJsonOrNull = (path) => {
   try {
     return JSON.parse(readFileSync(path, 'utf8'))
   } catch {
@@ -87,7 +122,7 @@ export const rememberBoard = (root) => {
 
 // main.json 의 session 이 id 인 보드의 루트. 없으면 null. 둘 이상이면 main.json 의 set_at 이 가장 늦은 보드다.
 const mainBoardOf = (id) => knownRoots()
-  .map((root) => ({ root, main: readJsonOrNull(join(root, SETTINGS_DIR, 'main.json')) }))
+  .map((root) => ({ root, main: readJsonOrNull(mainFile(root)) }))
   .filter(({ root, main }) => main?.session == id && hasBoard(root))
   .sort((a, b) => String(b.main.set_at ?? '').localeCompare(String(a.main.set_at ?? '')))[0]?.root ?? null
 
@@ -102,7 +137,7 @@ const mainBoardOf = (id) => knownRoots()
 export const findCallerRootOrNull = (cwd) => {
   const root = findRootOrNull(cwd)
   if (root != null) return root
-  const id = process.env.CLAUDE_CODE_SESSION_ID
+  const id = callerSessionId()
   if (!id) return null
   const main = mainBoardOf(id)
   if (main != null) return main
@@ -114,6 +149,7 @@ export const findCallerRootOrNull = (cwd) => {
 // ancestor: root 를 감싸는 보드의 루트(없으면 null). children: root 바로 아래 디렉터리 중 보드가 있는 것.
 // home: root 가 홈 디렉터리이거나 파일 시스템의 루트다. 그 아래 보드 없는 프로젝트가 모두 이 보드를 쓴다.
 // 아래쪽은 한 단계만 본다. ~/LOCAL 은 SMB 공유라 깊이 없이 훑으면 Mac mini 의 smbd 가 파일을 너무 많이 연다.
+// children 에서 dir 의 linked worktree 는 뺀다(isLinkedWorktreeOf). git 은 보드가 있는 하위 디렉터리에만 부른다.
 export const overlappingBoards = (root) => {
   const dir = resolve(root)
   const parent = dirname(dir)
@@ -122,5 +158,14 @@ export const overlappingBoards = (root) => {
   const children = !existsSync(dir) ? [] : readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && hasBoard(join(dir, entry.name)))
     .map((entry) => join(dir, entry.name))
+    .filter((child) => !isLinkedWorktreeOf(child, dir))
   return { ancestor, children, home: dir == homedir() || parent == dir }
+}
+
+// dir 에 보드를 만들어도 쓰이지 않게 하는 보드의 루트. 없으면 null.
+// findRootOrNull 이 gitMainRoot 를 먼저 보므로, 이것이 null 이 아니면 dir 에 만든 보드는 쓰이지 않는다. dir 이 linked worktree 이고 주 worktree 쪽에 보드가 있는 경우다.
+// dir 이 아직 없으면(init --dir) linkedWorktree 가 null 이다.
+export const shadowingBoard = (root) => {
+  const linked = linkedWorktree(resolve(root))
+  return linked == null ? null : walkUp(linked.main)
 }

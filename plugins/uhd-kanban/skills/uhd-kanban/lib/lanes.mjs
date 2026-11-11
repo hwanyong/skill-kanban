@@ -30,7 +30,7 @@ export const boardLanes = (project, { cards, archived }, verdicts = new Map()) =
   })
   const past = archived.filter(isWork)
   const milestones = milestoneStatuses(config).open.toReversed().flatMap((status) => cards.filter((card) => card.status == status && !isWork(card)))
-  const collection = (card) => card.data.collection ?? []
+  const collection = (card) => (Array.isArray(card.data.collection) ? card.data.collection : [])
   const lane = (milestone, isMember) => {
     const inLane = work.filter(isMember)
     const pastMembers = past.filter(isMember)
@@ -43,10 +43,11 @@ export const boardLanes = (project, { cards, archived }, verdicts = new Map()) =
 
 // 열이 소속 카드의 진행과 어긋난 milestone. waiting: waiting 열인데 run.status 열의 소속 카드가 있다. finished: running 열인데 소속 카드가 모두 끝났다.
 export const milestoneDrift = (project, board) => {
-  const { waiting, running } = milestoneStatuses(project.config)
+  const { waiting, running, finished: done } = milestoneStatuses(project.config)
   const lanes = boardLanes(project, board).filter((lane) => lane.milestone != null)
+  // 옮길 열(running · finished)이 없으면 안내할 move 가 없으므로 알리지 않는다. cards.mjs 의 startMilestones 와 같은 판단이다.
   return {
-    waiting: lanes.filter((lane) => lane.milestone.status == waiting && lane.cards.some((card) => card.status == project.config.run.status)),
-    finished: lanes.filter((lane) => lane.milestone.status == running && lane.total > 0 && lane.finished == lane.total),
+    waiting: running == null ? [] : lanes.filter((lane) => lane.milestone.status == waiting && lane.cards.some((card) => card.status == project.config.run.status)),
+    finished: done == null ? [] : lanes.filter((lane) => lane.milestone.status == running && lane.total > 0 && lane.finished == lane.total),
   }
 }

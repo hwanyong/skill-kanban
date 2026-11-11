@@ -4,9 +4,11 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { claudeConfigDir, readAgents } from './agents.mjs'
+import { callerSessionId, claudeConfigDir, readAgents, sessionById } from './agents.mjs'
 import { t } from './i18n.mjs'
-import { ProjectError, UNLIMITED, maxParallel, runEnv } from './project.mjs'
+import { ProjectError } from './errors.mjs'
+import { UNLIMITED, maxParallel, runEnv } from './project.mjs'
+import { isoSeconds } from './time.mjs'
 
 // all 이면 끝난 백그라운드 세션까지 낸다(`--all`).
 export const listSessions = ({ all = false } = {}) => {
@@ -17,14 +19,22 @@ export const listSessions = ({ all = false } = {}) => {
 
 // 이 프로세스를 띄운 세션의 이름. CLAUDE_CODE_SESSION_ID 가 없거나 목록에 없으면 null.
 export const currentSessionName = (sessions) => {
-  const id = process.env.CLAUDE_CODE_SESSION_ID
+  const id = callerSessionId()
   if (!id) return null
-  return sessions.find((session) => session.sessionId == id)?.name ?? null
+  return sessionById(sessions, id)?.name ?? null
 }
+
+export const sessionName = (id) => `k${id}`
+
+// run · recover 가 띄운 카드 세션의 이름인가. guard 가 카드 세션을 메인 세션과 가른다.
+export const isCardSessionName = (name) => /^k\d+$/.test(name ?? '')
 
 // run · recover 가 띄우는 세션은 모두 권한 확인 없이 돈다(2026-10-29 사용자 지시). 카드 세션은 백그라운드라 확인 창에 답할 사람이 없다.
 // 2026-10-29 실측(2.1.312): `claude --bg --dangerously-skip-permissions` 로 띄운 세션의 대화 기록에 permissionMode bypassPermissions 가 적혔다.
-export const BACKGROUND_ARGS = ['--bg', '--dangerously-skip-permissions']
+const BACKGROUND_ARGS = ['--bg', '--dangerously-skip-permissions']
+
+// launchBackground 가 실행하는 명령을 run · recover 의 dry-run 출력에 적는 문자열. 프롬프트 자리에는 run.prompt 메시지를 적는다.
+export const backgroundCommand = (args) => `claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <${t('run.prompt')}>`
 
 // config.json 의 run.env 를 카드 세션에 넣는 인자. run.env 가 없거나 비었으면 넣지 않는다.
 // 2026-11-11 실측(2.1.322): `claude --bg` 를 실행한 프로세스의 환경 변수는 세션에 전달되지 않았다(세션은 데몬이 띄운다).
@@ -52,7 +62,7 @@ export const stopSession = (shortId) => {
 }
 
 // 세션 항목의 startedAt(밀리초)을 카드에 적는 ISO 8601 문자열로 바꾼다.
-export const startedAt = (session) => new Date(session.startedAt).toISOString().replace(/\.\d{3}Z$/, 'Z')
+export const startedAt = (session) => isoSeconds(session.startedAt)
 
 // 대화 기록의 마지막 user · assistant 줄. role 은 그 줄의 type, cwd 는 그 줄의 cwd(세션이 그때 일하던 디렉터리)다.
 // toolPending 은 그 줄이 assistant 이고 stop_reason 이 tool_use 인가다. 도구 호출을 냈는데 결과(tool_result 의 user 줄)가 아직 없다는 뜻이다.
@@ -60,7 +70,7 @@ export const startedAt = (session) => new Date(session.startedAt).toISOString().
 // 턴을 끝내고 사람을 기다리는 메시지는 stop_reason end_turn 이다. 기록이 없으면 role · cwd 는 null, toolPending 은 false 다.
 // 2026-11-05 실측(2.1.318): `claude -w` 로 worktree 에서 돈 세션이 pid 없이 state failed 가 되면 claude agents --json 의 cwd 는 저장소 root 였다.
 // worktree 경로는 대화 기록 줄의 cwd 에만 남았다. 그래서 recover 는 이 cwd 에서 `claude --bg --resume` 을 실행한다.
-export const lastTurn = (path) => {
+const lastTurn = (path) => {
   const empty = { role: null, cwd: null, toolPending: false }
   if (path == null) return empty
   const line = readFileSync(path, 'utf8').trim().split('\n').findLast((text) => /^\{"[^"]+":/.test(text) && /"type":"(user|assistant)"/.test(text))
@@ -94,7 +104,7 @@ export const lastTurn = (path) => {
 const EXITED_VERDICTS = { failed: 'resume', working: 'pending', blocked: 'done' }
 
 // turn 은 lastTurn 의 값이다.
-export const classify = (session, recordedStart, turn) => {
+const classify = (session, recordedStart, turn) => {
   if (session == null || session.state == 'stopped') return 'resume'
   if (session.state == 'done') return 'done'
   if (session.pid == null) return EXITED_VERDICTS[session.state] ?? 'unknown'
@@ -109,7 +119,7 @@ export const classify = (session, recordedStart, turn) => {
 export const cardSession = (card, sessions) => {
   const sessionId = card.data.session
   if (!sessionId) return { verdict: 'none', session: null, transcript: null, cwd: null, toolPending: false }
-  const session = sessions.find((item) => item.sessionId == sessionId) ?? null
+  const session = sessionById(sessions, sessionId)
   const transcript = transcriptPath(sessionId)
   const turn = lastTurn(transcript)
   const cwd = turn.cwd != null && existsSync(turn.cwd) ? turn.cwd : null
@@ -132,9 +142,12 @@ export const hasRoom = (project, running) => maxParallel(project.config) == UNLI
 export const findSession = (sessions, shortId) => sessions.find((session) => session.id == shortId || session.sessionId?.startsWith(shortId)) ?? null
 
 
+// 대화 기록의 기준 디렉터리. 프로젝트마다 그 아래에 디렉터리가 하나씩 있다.
+export const transcriptsDir = () => join(claudeConfigDir(), 'projects')
+
 // 대화 기록(jsonl)의 경로. <설정 디렉터리>/projects/<프로젝트>/<sessionId>.jsonl 을 한 단계만 찾는다. 없으면 null.
-export const transcriptPath = (sessionId) => {
-  const base = join(claudeConfigDir(), 'projects')
+const transcriptPath = (sessionId) => {
+  const base = transcriptsDir()
   if (!existsSync(base)) return null
   const dir = readdirSync(base, { withFileTypes: true }).find((entry) => entry.isDirectory() && existsSync(join(base, entry.name, `${sessionId}.jsonl`)))
   return dir ? join(base, dir.name, `${sessionId}.jsonl`) : null

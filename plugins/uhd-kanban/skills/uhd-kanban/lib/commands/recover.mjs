@@ -6,19 +6,20 @@
 // --force 는 끝난(state done) 세션도 이어 간다. 세션이 끝났는데 카드에 작업이 남은 때다. 이어 감 판정과 같이 run.max_parallel 에 센다.
 // 재부팅으로 pid 없이 state failed 가 된 세션은 --force 없이 이어 간다(sessions.mjs 의 classify).
 
-import { join, relative } from 'node:path'
-import { claudeConfigDir } from '../agents.mjs'
+import { relative } from 'node:path'
 import { cardId } from '../args.mjs'
-import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
+import { assignCard, launchCard } from '../assign.mjs'
+import { checkMove, findCard } from '../cards.mjs'
 import { readBoard } from '../board.mjs'
-import { USER, appendComment } from '../comments.mjs'
+import { USER } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
 import { startedNote, t, translator } from '../i18n.mjs'
-import { claimMain, reportName } from '../main.mjs'
+import { reportName } from '../main.mjs'
 import { runSpec } from '../profiles.mjs'
-import { ProjectError, maxParallel } from '../project.mjs'
-import { resumePrompt, sessionName } from '../prompt.mjs'
-import { BACKGROUND_ARGS, cardSession, hasRoom, runningCards, findSession, envArgs, launchBackground, listSessions, startedAt, stopSession } from '../sessions.mjs'
+import { ProjectError } from '../errors.mjs'
+import { maxParallel } from '../project.mjs'
+import { resumePrompt } from '../prompt.mjs'
+import { backgroundCommand, cardSession, hasRoom, runningCards, listSessions, sessionName, startedAt, stopSession, transcriptsDir, envArgs } from '../sessions.mjs'
 
 // 이어 가지 않는 판정. 메시지는 recover.<판정> 키에 있다.
 const SKIPPED = ['live', 'pending', 'done', 'unknown']
@@ -31,6 +32,16 @@ const movable = (project, board, card, status) => {
   } catch (error) {
     if (!(error instanceof ProjectError)) throw error
     return error.message
+  }
+}
+
+// card 의 실행 인자(profiles.mjs 의 runSpec). 프로필이 틀린 카드는 그 카드 하나의 실패로 보고 다음 카드로 넘어가려고 오류 문구를 돌려준다.
+const specOf = (card, profiles) => {
+  try {
+    return { spec: runSpec(card, profiles) }
+  } catch (error) {
+    if (!(error instanceof ProjectError)) throw error
+    return { problem: error.message }
   }
 }
 
@@ -68,7 +79,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
       }
       if (!transcript) {
         counts.failed += 1
-        console.log(t('recover.noTranscript', { id: card.id, sessionId, base: join(claudeConfigDir(), 'projects') }))
+        console.log(t('recover.noTranscript', { id: card.id, sessionId, base: transcriptsDir() }))
         continue
       }
       const counted = verdict == 'restart' && card.status == status
@@ -83,26 +94,26 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
         console.log(t('recover.cannotMove', { id: card.id, status, problem: moveProblem }))
         continue
       }
+      const { spec, problem } = specOf(card, project.profiles)
+      if (problem) {
+        counts.failed += 1
+        console.log(t('recover.cannotRun', { id: card.id, problem }))
+        continue
+      }
       if (!counted) running += 1
-      const spec = runSpec(card, project.profiles)
       const args = ['--resume', sessionId, '-n', sessionName(card.id), ...spec.cliArgs, ...envArgs(project.config)]
       const tr = translator(project.locale)
       const why = verdict == 'restart' ? tr('recover.whyRestart', { startedAt: startedAt(session), toolPending: found.toolPending }) : session ? `state ${session.state}${found.verdict == 'done' ? ', --force' : ''}` : tr('recover.whyMissing')
       counts.resumed += 1
       if (dryRun) {
-        console.log(`(dry-run) k${card.id} ${why} → ${cwd == project.root ? '' : `cd ${relative(project.root, cwd)}; `}${verdict == 'restart' ? `claude stop ${session.id}; ` : ''}claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <${t('run.prompt')}>${card.status == status ? '' : ` · ${card.status} → ${status}`}`)
+        console.log(`(dry-run) k${card.id} ${why} → ${cwd == project.root ? '' : `cd ${relative(project.root, cwd)}; `}${verdict == 'restart' ? `claude stop ${session.id}; ` : ''}${backgroundCommand(args)}${card.status == status ? '' : ` · ${card.status} → ${status}`}`)
         continue
       }
       if (verdict == 'restart') stopSession(session.id)
-      const shortId = launchBackground(args, resumePrompt(project, card, { skillRoot }), cwd)
-      claimMain(project, sessions)
-      const resumed = findSession(listSessions({ all: true }), shortId)
-      const changes = resumed ? { session: resumed.sessionId, session_started_at: startedAt(resumed) } : {}
+      const { shortId, session: resumed } = launchCard(project, sessions, args, resumePrompt(project, card, { skillRoot }), cwd)
       const text = tr('recover.assigned', { why, sessionId, resumed: resumed?.sessionId ?? `${shortId}(${tr('recover.notFound')})` })
-      const { body } = appendComment(card.body, { kind: 'assign', from, to: [sessionName(card.id)], at: now(), text })
-      const moved = card.status == status ? null : moveCard(project, current, { ...card, body }, status, { changes })
-      if (!moved) writeCard(card.path, { ...card.data, ...changes, updated_at: now() }, body)
-      console.log(`k${card.id} ${t('recover.resumed', { why })}: ${shortId} ${resumed?.sessionId ?? ''}${moved ? ` ${card.status} → ${status}: ${moved.path.slice(project.root.length + 1)}${startedNote(moved.started)}` : ''}`)
+      const moved = assignCard(project, current, card, status, { from, text, session: resumed })
+      console.log(`k${card.id} ${t('recover.resumed', { why })}: ${shortId} ${resumed?.sessionId ?? ''}${moved ? ` ${card.status} → ${status}: ${relative(project.root, moved.path)}${startedNote(moved.started)}` : ''}`)
     }
     console.log(t(dryRun ? 'recover.summaryDry' : 'recover.summary', { total: targets.length, ...counts }))
     return counts.failed + counts.waiting + counts.unknown > 0 ? 1 : 0

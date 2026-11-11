@@ -15,7 +15,7 @@ export default {
   'config.columnStatusDup': ({ at, status }) => `${at}.status 가 겹친다: ${status}`,
   'config.columnTypes': ({ at }) => `${at}.types 는 비지 않은 type 이름 배열이다`,
   'config.locale': ({ value, locales }) => `locale 은 ${locales.join(' · ')} 중 하나다: ${value}`,
-  'config.orderWidth': ({ value }) => `order.width 는 3 ~ 8 의 정수다: ${value}`,
+  'config.orderWidth': ({ min, max, value }) => `order.width 는 ${min} ~ ${max} 의 정수다: ${value}`,
   'config.orderStep': ({ value }) => `order.step 은 1 이상의 정수다: ${value}`,
   'config.statusList': ({ key }) => `${key} 는 status 이름 배열이다`,
   'config.unknownStatus': ({ key, status }) => `${key} 의 ${status} 는 columns 에 없는 status 다`,
@@ -38,6 +38,7 @@ export default {
   'args.cardIdName': '카드 id',
   'args.cardId': ({ name, ref }) => `${name} 는 k<정수> 다: ${ref}`,
   'args.onePosition': ({ flags }) => `${flags.join(' · ')} 중 하나만 준다`,
+  'args.readFile': ({ flag, path, message }) => `${flag} 의 ${path} 를 읽을 수 없다: ${message}`,
   // frontmatter.mjs
   'frontmatter.atLine': ({ line, message }) => `${line}번째 줄: ${message}`,
   'frontmatter.badQuoted': ({ text }) => `큰따옴표 문자열을 읽을 수 없다: ${text}`,
@@ -107,6 +108,7 @@ export default {
   'board.unknownDir': 'config.json 의 columns 에 없는 디렉터리다',
   'board.unknownFile': 'config.json 의 columns 에 없는 파일이다',
   'board.needsOrder': '열 안의 카드는 순서 번호로 시작한다',
+  'board.needsDate': '아카이브한 카드는 날짜(YYYY-MM-DD)로 시작한다',
   'board.orderWidth': ({ width }) => `순서 번호가 ${width}자리가 아니다`,
   'board.orderTwice': ({ order }) => `순서 번호 ${order} 가 같은 열에 두 번 있다`,
   'board.duplicateId': ({ id, first, second }) => `k${id} 가 두 곳에 있다: ${first} · ${second}`,
@@ -116,7 +118,6 @@ export default {
   'cards.notFound': ({ id }) => `k${id} 카드가 없다`,
   'cards.selfRef': ({ id, key }) => `k${id} 를 자기 ${key} 에 넣을 수 없다`,
   'cards.refType': ({ key, id, type, actual }) => `${key} 의 k${id} 는 type ${type} 카드가 아니다(type ${actual})`,
-  'cards.anchorNotInColumn': ({ id }) => `k${id} 는 이 열에 없다`,
   'cards.renumberOverflow': ({ status, count, step, width }) => `${status} 열의 카드 ${count}개를 ${step} 간격으로 매기면 ${width}자리를 넘는다. config.json 의 order.width 를 늘린다`,
   'cards.anchorSelf': ({ id }) => `k${id} 를 자기 자신 앞뒤에 둘 수 없다`,
   'cards.anchorNotIn': ({ id, status }) => `k${id} 는 ${status} 열에 없다`,
@@ -193,6 +194,7 @@ export default {
   'init.home': ({ path }) => `${path} 는 홈 디렉터리이거나 파일 시스템의 루트다. 여기 보드를 만들면 그 아래에서 보드 없는 프로젝트의 uk 가 모두 이 보드를 쓴다. 프로젝트 루트에서 init 한다. 바꾸지 않았다`,
   'init.ancestor': ({ path, ancestor }) => `${path} 는 ${ancestor} 의 보드 안에 있다. 여기 보드를 만들면 ${path} 아래에서 부른 uk 는 ${ancestor} 의 보드 대신 새 보드를 쓴다. 바꾸지 않았다`,
   'init.children': ({ path, children }) => `${path} 바로 아래 디렉터리에 보드가 있다: ${children.join(' · ')}. 여기 보드를 만들면 그 아래에서 보드 없는 프로젝트의 uk 가 모두 이 보드를 쓴다. 바꾸지 않았다`,
+  'init.worktree': ({ path, board }) => `${path} 는 git worktree 이고 이 저장소의 보드는 ${board} 다. uk 는 git worktree 안에서 주 worktree 의 보드를 쓰므로 여기 만든 보드는 쓰이지 않는다. 바꾸지 않았다`,
   'init.created': ({ files, locale }) => `만들었다: ${files.join(' · ')} (locale ${locale})`,
   'init.columns': ({ count, dirs }) => `열 ${count}개: ${dirs.join(' · ')}`,
   'check.summary': ({ cards, archived, root }) => `카드 ${cards}개 · 아카이브 ${archived}개 (${root})`,
@@ -204,8 +206,9 @@ export default {
   'check.milestoneFinished': ({ id, status, done, total }) => `k${id} 는 ${status} 인데 소속 카드 ${total}개가 모두 끝났다. 마쳤으면 uhd-kanban move k${id} ${done}`,
   'move.usage': 'move <k id> <status> 형식이다',
   'move.waiting': ({ id, count, status, gate }) => `k${id} 를 기다리는 카드 ${count}개는 ${status} 카드가 끝나지 않으므로 --force 없이 ${gate.join(' · ')} 열로 옮길 수 없다. 카드마다 하나를 고른다:`,
-  'move.waitingItem': ({ card, id, status, cancel }) => `- k${card.id}(${card.status}) ${card.data.title}: 의존을 지운다 uhd-kanban set k${card.id} --remove-depends k${id}${cancel ? ` · 함께 그만둔다 uhd-kanban move k${card.id} ${status}` : ''}`,
+  'move.waitingItem': ({ dependent, dependentStatus, title, id, status, cancel }) => `- k${dependent}(${dependentStatus}) ${title}: 의존을 지운다 uhd-kanban set k${dependent} --remove-depends k${id}${cancel ? ` · 함께 그만둔다 uhd-kanban move k${dependent} ${status}` : ''}`,
   'new.noInitial': ({ type }) => `type ${type} 의 처음 열이 config.json 의 initial 에 없다. --status 로 준다`,
+  'new.badComments': ({ id, problems }) => `k${id} 의 본문 ## Comments 절이 규칙에 맞지 않아 쓰지 않았다:${list(problems)}`,
   'order.usage': 'order <k id> (--top|--bottom|--before k|--after k) 형식이다',
   'order.positionRequired': '--top · --bottom · --before · --after 중 하나가 필요하다',
   'renumber.usage': 'renumber <status> 형식이다',
@@ -223,7 +226,7 @@ export default {
   'guard.denied': ({ name, path }) => `메인 세션${name ? ` ${name}` : ''} 이 프로젝트 파일 ${path} 를 고치려 한다. 작업은 카드로 나눠 uhd-kanban run 으로 맡긴다(delegate 스킬). 사용자가 이 작업을 직접 하라고 했을 때만 허용한다`,
   'run.usage': 'run <k id> [--dry-run] [--force] 형식이다',
   'run.stillRunning': ({ id, session, state }) => `k${id} 의 세션 ${session} 이 아직 있다(state ${state}). 새로 띄우지 않는다. 멈췄으면 uhd-kanban recover k${id}`,
-  'run.full': ({ max, ids }) => `동시에 도는 카드 세션이 run.max_parallel(${max})개에 찼다: ${ids.join(', ')}. 하나가 끝난 뒤 다시 실행하거나 .uhd-kanban/config.json 의 run.max_parallel 을 바꾼다(-1 은 무제한)`,
+  'run.full': ({ max, ids, unlimited }) => `동시에 도는 카드 세션이 run.max_parallel(${max})개에 찼다: ${ids.join(', ')}. 하나가 끝난 뒤 다시 실행하거나 .uhd-kanban/config.json 의 run.max_parallel 을 바꾼다(${unlimited} 은 무제한)`,
   'run.prompt': '프롬프트',
   'run.notFound': ({ shortId }) => `세션 ${shortId} 를 띄웠지만 claude agents --json 에서 찾지 못해 카드를 바꾸지 않았다. claude stop ${shortId} 로 멈추거나 카드에 session 을 직접 적는다`,
   'run.assigned': ({ session, label }) => `claude --bg 로 시작했다. session=${session} ${label}`,
@@ -235,6 +238,7 @@ export default {
   'recover.noTranscript': ({ id, sessionId, base }) => `k${id} 이어 갈 수 없다: 대화 기록 ${sessionId}.jsonl 이 ${base} 에 없다`,
   'recover.waiting': ({ id, max }) => `k${id} 기다린다: 동시에 도는 카드 세션이 run.max_parallel(${max})개에 찼다`,
   'recover.cannotMove': ({ id, status, problem }) => `k${id} 이어 갈 수 없다: ${status} 열로 옮길 수 없다. ${problem}`,
+  'recover.cannotRun': ({ id, problem }) => `k${id} 이어 갈 수 없다: ${problem}`,
   'recover.whyRestart': ({ startedAt, toolPending }) => `데몬이 다시 띄웠지만(startedAt ${startedAt}) ${toolPending ? '결과 없는 마지막 도구 호출을 다시 하지 않고' : '마지막 user 줄에 답하지 않고'} idle 이다`,
   'recover.whyMissing': 'claude agents --json --all 에 없다',
   'recover.notFound': 'claude agents --json 에서 찾지 못했다',
@@ -244,7 +248,7 @@ export default {
   'recover.summaryDry': ({ total, live, pending, done, unknown, resumed, waiting, failed }) => `카드 ${total}개 · 돈다 ${live} · 다시 뜨는 중 ${pending} · 끝남 ${done} · 모르는 state ${unknown} · 이어 갈 것 ${resumed} · 자리를 기다린다 ${waiting} · 이어 갈 수 없다 ${failed}`,
   // bin/uhd-kanban.mjs
   'bin.unknown': ({ name }) => `알 수 없는 명령이다: ${name}`,
-  'usage': `사용법: uhd-kanban <명령> [인자]
+  'usage': ({ unlimited }) => `사용법: uhd-kanban <명령> [인자]
   init [--dir <경로>] [--locale ko|en]   프로젝트 루트에 .uhd-kanban/ 과 kanban/ 을 만든다. locale 기본은 LANG
   check                 config.json 과 모든 카드를 검증한다
   new --type <type> --title <제목> [--status] [--priority] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file] [자리]   --status 기본은 config.json 의 initial
@@ -256,7 +260,7 @@ export default {
   comment <k id> --kind <kind> --to <이름>[,<이름>] [--from <이름>] (--text <글> | --text-file <경로>)
   inbox [<이름>] [--all] [--kind a,b]
   main [--set [<이름>]]   카드 세션이 보고하는 메인 세션(.uhd-kanban/main.json)을 내거나 등록한다. 이름이 없으면 이 세션
-  run <k id> [--dry-run] [--force]   카드 본문으로 claude --bg 세션을 띄운다. run.max_parallel(-1 은 무제한)개까지
+  run <k id> [--dry-run] [--force]   카드 본문으로 claude --bg 세션을 띄운다. run.max_parallel(${unlimited} 은 무제한)개까지
   recover [<k id>…] [--dry-run] [--force]   세션이 멈춘 카드를 claude --bg --resume 으로 이어 간다. --force 는 끝난 세션도
   board [--json]        열마다 카드 수와 run.status 열 카드의 세션 상태를 낸다
   guard <경로> [--session <id>]   메인 세션이 그 프로젝트 파일을 고쳐도 되는지 판정한다(1 이면 안 된다)

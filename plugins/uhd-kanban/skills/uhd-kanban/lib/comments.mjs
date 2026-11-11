@@ -2,7 +2,7 @@
 //   ### c<번호> [<kind>] from=<세션 이름> to=<세션 이름>[,<세션 이름>…] at=<ISO 8601 UTC>
 // 번호는 카드마다 1 부터 빈 번호 없이 늘어난다. to 의 `user` 는 사용자다.
 
-import { t } from './i18n.mjs'
+import { kindText, t } from './i18n.mjs'
 import { bareKeywordLines } from './ultracode.mjs'
 
 export const SECTION = '## Comments'
@@ -54,6 +54,15 @@ export const parseComments = (body) => {
   }
 }
 
+// 코멘트 절의 형식 위반과 kinds(config.json 의 comments.kinds)에 없는 kind 를 이 차례로 모은다. readBoard 와 new 가 같은 판정을 쓴다.
+export const commentProblems = (body, kinds) => {
+  const { comments, problems } = parseComments(body)
+  return [
+    ...problems,
+    ...comments.filter((comment) => !kinds.includes(comment.kind)).map((comment) => t('card.unknownKind', { n: comment.n, kind: comment.kind, kinds: kinds.map((kind) => kindText(kind)) })),
+  ]
+}
+
 // 코멘트 본문으로 쓸 수 없는 것을 모은다. 비었는지 · 머리 줄로 읽힐 줄 · 감싸지 않은 ultracode.
 export const textProblems = (text) => {
   const problems = []
@@ -67,9 +76,9 @@ export const textProblems = (text) => {
   return problems
 }
 
-export const formatHeader = ({ n, kind, from, to, at }) => `### c${n} [${kind}] from=${from} to=${to.join(',')} at=${at}`
+const formatHeader = ({ n, kind, from, to, at }) => `### c${n} [${kind}] from=${from} to=${to.join(',')} at=${at}`
 
-// 반환: 코멘트를 덧붙인 본문. comment 의 n 은 무시하고 다음 번호를 쓴다.
+// 반환: { body, n }. body 는 코멘트를 덧붙인 본문, n 은 그 코멘트에 붙인 번호다. comment 의 n 은 무시하고 다음 번호를 쓴다.
 export const appendComment = (body, comment) => {
   const { main, comments } = parseComments(body)
   const n = comments.length + 1

@@ -51,7 +51,7 @@ Nothing is installed besides the plugin: no Docker, no server, no database, no n
 |---|---|---|
 | Skill `uhd-kanban` | [`plugins/uhd-kanban/skills/uhd-kanban/`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md) | Create, move, reorder, comment on and archive cards. Run a card as a `claude --bg` session. Resume stopped sessions. |
 | Skill `delegate` | [`plugins/uhd-kanban/skills/delegate/`](plugins/uhd-kanban/skills/delegate/SKILL.md) | Rules for the main session of a project with a board: split work into cards, run them with `uk run`, review results, move cards. |
-| Hooks module | [`plugins/uhd-kanban/hooks/register.tsx`](plugins/uhd-kanban/hooks/register.tsx) | Opens the board monitor pane when `.uhd-kanban/config.json` exists above the session directory, registers the `/kanban-board` command, and runs `uk guard` before Edit, Write and NotebookEdit. |
+| Hooks module | [`plugins/uhd-kanban/hooks/register.tsx`](plugins/uhd-kanban/hooks/register.tsx) | Opens the board monitor pane when `uk board --json` finds a board (search order in "Which board does a command use from a subdirectory or from outside the project?"), registers the `/kanban-board` command, and runs `uk guard` before Edit, Write and NotebookEdit. |
 
 ## Quick start
 
@@ -237,7 +237,7 @@ The counts cover work cards only. `6-planned` and `9-active` take only milestone
 
 *Captured from a test `board` output with 24 fictional work cards. It was made to show several session states and is a different board from the demo board in [How the board is stored](#how-the-board-is-stored).*
 
-The pane opens when `.uhd-kanban/config.json` exists above the session directory. Reopen a closed pane with `/kanban-board`. The top line holds the time, the number of work cards, the number of unfinished milestones and the refresh interval, followed by a legend of column colors and session states. Below it each unfinished milestone has one row (a swimlane: a horizontal row grouped by membership), and cards with an empty `collection` are in the last `no milestone` row. Rows are ordered `active` milestones, `planned` milestones, then `no milestone`.
+The pane opens when `uk board --json` finds a board: first the board above the session directory, then the board that registers this session as its main session, then the board above the directory the session was started in ("Which board does a command use from a subdirectory or from outside the project?", `findCallerRootOrNull` in `plugins/uhd-kanban/skills/uhd-kanban/lib/root.mjs`). Reopen a closed pane with `/kanban-board`. The top line holds the time, the number of work cards, the number of unfinished milestones and the refresh interval, followed by a legend of column colors and session states. Below it each unfinished milestone has one row (a swimlane: a horizontal row grouped by membership), and cards with an empty `collection` are in the last `no milestone` row. Rows are ordered `active` milestones, `planned` milestones, then `no milestone`.
 
 | Part of a row | What it shows |
 |---|---|

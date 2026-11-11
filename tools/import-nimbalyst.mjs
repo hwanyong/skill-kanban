@@ -17,15 +17,17 @@ import { DatabaseSync } from 'node:sqlite'
 import { writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { parseArgs } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/args.mjs'
+import { parseArgs, stringFlag } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/args.mjs'
 import { readBoard } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/board.mjs'
 import { writeCard } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/cards.mjs'
 import { SECTION, appendComment, textProblems } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/comments.mjs'
 import { editBoard } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/edit.mjs'
-import { activeName, archivedName, localDate } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/filename.mjs'
+import { activeName, archiveMonth, archivedName, localDate } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/filename.mjs'
 import { tagProblems } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/profiles.mjs'
 import { LEGACY_KINDS } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/kinds.mjs'
-import { ProjectError } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/project.mjs'
+import { ProjectError } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/errors.mjs'
+import { isoSeconds } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/time.mjs'
+import { configFile } from '../plugins/uhd-kanban/skills/uhd-kanban/lib/root.mjs'
 
 const DEFAULT_DB = join(homedir(), 'Library', 'Application Support', '@nimbalyst', 'electron', 'sqlite-db', 'nimbalyst.sqlite')
 
@@ -48,7 +50,6 @@ const UNKNOWN = 'unknown'
 const ITEM_REF = /(?<![0-9A-Za-z_])(?:task|bug|decision|milestone|plan)_[0-9a-z]+(?:_[0-9a-z]+)?(?![0-9A-Za-z_])/g
 const SESSION_ID = /(?:^|[^0-9a-z])([0-9a-f]{8})(?![0-9a-z])/i
 
-const iso = (value) => new Date(value).toISOString().replace(/\.\d{3}Z$/, 'Z')
 const unique = (list) => [...new Set(list)]
 const itemIds = (list) => (Array.isArray(list) ? list.map((entry) => entry?.itemId).filter((id) => typeof id == 'string') : [])
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -84,7 +85,7 @@ const sessionLinks = (sessions) => {
 
 const completedAt = (row) => {
   const changes = (row.data.activity ?? []).filter((entry) => entry.field == 'status' && entry.newValue == 'done')
-  return changes.length > 0 ? iso(Math.max(...changes.map((entry) => entry.timestamp))) : null
+  return changes.length > 0 ? isoSeconds(Math.max(...changes.map((entry) => entry.timestamp))) : null
 }
 
 const convertComments = (row, rewrite, problems, stats) => {
@@ -97,18 +98,18 @@ const convertComments = (row, rewrite, problems, stats) => {
     textProblems(text).forEach((problem) => problems.push(`${row.id} 코멘트 ${comment.id}: ${problem}`))
     stats.kinds[kind] = (stats.kinds[kind] ?? 0) + 1
     stats.from[from == UNKNOWN ? UNKNOWN : '8자리 id'] += 1
-    return { kind, from, to: [UNKNOWN], at: iso(comment.createdAt), text }
+    return { kind, from, to: [UNKNOWN], at: isoSeconds(comment.createdAt), text }
   })
 }
 
 const run = async ({ positional, flags }) => {
   const dryRun = flags['dry-run'] == true
-  const dbPath = typeof flags.db == 'string' ? flags.db : DEFAULT_DB
+  const dbPath = stringFlag(flags, 'db') ?? DEFAULT_DB
   return editBoard(async ({ project, board }) => {
     if (board.cards.length + board.archived.length > 0) throw new ProjectError(`보드에 카드가 ${board.cards.length + board.archived.length}개 있다. 가져오기는 빈 보드에만 한다`)
     const kinds = project.config.comments.kinds
     const absent = unique(Object.values(LEGACY_KINDS)).filter((kind) => !kinds.includes(kind))
-    if (absent.length > 0) throw new ProjectError(`${join(project.settingsPath, 'config.json')} 의 comments.kinds 에 ${absent.join(', ')} 을 더한다. ${IMPORT_KIND} 는 첫 줄로 kind 를 정하지 못한 코멘트에 쓴다`)
+    if (absent.length > 0) throw new ProjectError(`${configFile(project.root)} 의 comments.kinds 에 ${absent.join(', ')} 을 더한다. ${IMPORT_KIND} 는 첫 줄로 kind 를 정하지 못한 코멘트에 쓴다`)
     const workspace = positional[0] ?? project.root
     const { rows, sessions, relations } = readItems(dbPath, workspace)
     if (rows.length == 0) throw new ProjectError(`${dbPath} 에 작업 공간 ${workspace} 의 항목이 없다`)
@@ -164,8 +165,8 @@ const run = async ({ positional, flags }) => {
         tags,
         depends_on: dependsOn,
         collection: collection.length > 0 ? collection : undefined,
-        created_at: iso(row.created),
-        updated_at: iso(row.updated),
+        created_at: isoSeconds(row.created),
+        updated_at: isoSeconds(row.updated),
         completed_at: done ? completedAt(row) ?? undefined : undefined,
         commits: commits.length > 0 ? commits : undefined,
         agent_reason: row.data.agentReason ? rewrite(row.data.agentReason) : undefined,
@@ -189,7 +190,7 @@ const run = async ({ positional, flags }) => {
     const placed = cards.map((card) => {
       if (card.archived) {
         const date = localDate(new Date(card.data.completed_at ?? card.row.archived_at))
-        return { ...card, path: join(project.boardPath, project.config.archive.dir, date.slice(0, 7), archivedName({ date, id: card.id, title: card.data.title })) }
+        return { ...card, path: join(project.boardPath, project.config.archive.dir, archiveMonth(date), archivedName({ date, id: card.id, title: card.data.title })) }
       }
       const order = ((counters.get(card.status) ?? 0) + 1) * step
       counters.set(card.status, order / step)

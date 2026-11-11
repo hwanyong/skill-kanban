@@ -6,12 +6,13 @@
 // 2026-10-29 실측(2.1.312): sonnet · fable · opus · opus[1m] · haiku 모두 생겼다. 그 세션에서 Workflow 도구를 실제로 부르는 것까지는 재지 않았다.
 
 import { t } from './i18n.mjs'
-import { bareKeywordLines, hasTriggerLine } from './ultracode.mjs'
-import { ProjectError } from './project.mjs'
+import { hasTriggerLine, bareBodyKeywordLines } from './ultracode.mjs'
+import { ProjectError } from './errors.mjs'
+import { ID } from './ids.mjs'
 
 const MODEL_TAG = 'model:'
 const EFFORT_TAG = 'effort:'
-export const ULTRACODE_TAG = 'ultracode'
+const ULTRACODE_TAG = 'ultracode'
 
 const isNullableString = (value) => value == null || (typeof value == 'string' && value != '')
 
@@ -20,7 +21,7 @@ export const validateProfiles = (profiles) => {
   const models = profiles?.models
   if (models == null || typeof models != 'object' || Array.isArray(models) || Object.keys(models).length == 0) problems.push(t('profiles.models'))
   Object.entries(models ?? {}).forEach(([name, profile]) => {
-    if (!/^[a-z][a-z0-9-]*$/.test(name)) problems.push(t('profiles.name', { name }))
+    if (!ID.test(name)) problems.push(t('profiles.name', { name }))
     if (!isNullableString(profile?.cli) || !isNullableString(profile?.agent)) problems.push(t('profiles.cliAgent', { name }))
     if (![true, false, null].includes(profile?.ultracode ?? null)) problems.push(t('profiles.ultracode', { name }))
   })
@@ -39,14 +40,14 @@ export const tagProblems = (data, main, profiles) => {
   const models = tagValues(data.tags, MODEL_TAG)
   const efforts = tagValues(data.tags, EFFORT_TAG)
   if (models.length > 1) problems.push(t('tags.modelCount', { count: models.length }))
-  models.filter((name) => profiles.models[name] == null).forEach((name) => problems.push(t('tags.modelUnknown', { name, known: Object.keys(profiles.models) })))
+  models.filter((name) => !Object.hasOwn(profiles.models, name) || profiles.models[name] == null).forEach((name) => problems.push(t('tags.modelUnknown', { name, known: Object.keys(profiles.models) })))
   if (efforts.length > 1) problems.push(t('tags.effortCount', { count: efforts.length }))
   efforts.filter((level) => !profiles.effort.cli.includes(level)).forEach((level) => problems.push(t('tags.effortUnknown', { level })))
   const tagged = (data.tags ?? []).includes(ULTRACODE_TAG)
   const triggered = hasTriggerLine(main)
   if (tagged && !triggered) problems.push(t('tags.ultracodeNoLine'))
   if (!tagged && triggered) problems.push(t('tags.ultracodeNoTag'))
-  bareKeywordLines(main.replace(/^\n+/, ''), { firstLineAllowed: true }).forEach((line) => problems.push(t('tags.bareKeyword', { line })))
+  bareBodyKeywordLines(main).forEach((line) => problems.push(t('tags.bareKeyword', { line })))
   return problems
 }
 
@@ -55,7 +56,7 @@ export const tagProblems = (data, main, profiles) => {
 // ultracode 가 걸리는지는 모델마다 확인한 값이라, 모델을 모르는 기본값으로는 ultracode 카드를 띄우지 않는다.
 export const runSpec = (card, profiles) => {
   const [profileName = null] = tagValues(card.data.tags, MODEL_TAG)
-  const profile = profileName == null ? null : profiles.models[profileName]
+  const profile = profileName == null || !Object.hasOwn(profiles.models, profileName) ? null : profiles.models[profileName]
   if (profile && profile.cli == null) throw new ProjectError(t('run.profileNoCli', { profile: profileName }))
   const ultracode = (card.data.tags ?? []).includes(ULTRACODE_TAG)
   if (ultracode && profile == null) throw new ProjectError(t('run.ultracodeNoModel', { id: card.id }))

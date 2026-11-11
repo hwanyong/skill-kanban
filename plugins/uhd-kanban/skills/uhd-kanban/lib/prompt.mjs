@@ -5,9 +5,10 @@
 import { join } from 'node:path'
 import { parseComments } from './comments.mjs'
 import { t, translator } from './i18n.mjs'
-import { BOARD_DIR, ProjectError, finishStatus } from './project.mjs'
-
-export const sessionName = (id) => `k${id}`
+import { ProjectError } from './errors.mjs'
+import { finishStatus } from './project.mjs'
+import { BOARD_DIR } from './root.mjs'
+import { sessionName } from './sessions.mjs'
 
 // [result] 를 남긴 뒤 카드를 run.finish 의 열로 옮기라는 줄. 그 type 이 run.finish 에 없으면 옮기지 않고 메인 세션이 옮긴다.
 const finishLine = (project, card, cli) => {
@@ -16,13 +17,12 @@ const finishLine = (project, card, cli) => {
   return translator(project.locale)('prompt.finish', { cli, id: card.id, status })
 }
 
-// run · recover 가 띄운 카드 세션의 이름인가. guard 가 카드 세션을 메인 세션과 가른다.
-export const isCardSessionName = (name) => /^k\d+$/.test(name ?? '')
-
 const cliFor = (skillRoot) => `node ${join(skillRoot, 'bin', 'uhd-kanban.mjs')}`
 
 // 카드 파일의 글로브. 카드를 옮기면 열 디렉터리와 순서 번호가 바뀌므로 경로 대신 이것을 준다.
-const cardGlob = (project, card) => join(project.root, BOARD_DIR, '*', `*-k${card.id}-*.md`)
+// 순서 번호 자리는 order.width 자리 숫자로 고정한다. `*-k<id>-*.md` 는 제목에 그 id 를 적은 다른 카드(`0020-k2-k1-후속.md`)와도 맞고,
+// 글로브 문법으로는 「길이가 정해지지 않은 숫자」를 적을 수 없다. 아카이브한 카드(`<YYYY-MM-DD>-k<id>-…`)와는 맞지 않는다.
+const cardGlob = (project, card) => join(project.root, BOARD_DIR, '*', `${'[0-9]'.repeat(project.config.order.width)}-k${card.id}-*.md`)
 
 export const startPrompt = (project, card, { skillRoot, reportTo }) => {
   const main = parseComments(card.body).main.trim()

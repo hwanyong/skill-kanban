@@ -2,20 +2,27 @@
 // 저장소가 git 이고 파일이 추적 중이면 `git mv` 로 옮겨 이력을 잇는다. 아니면 rename 한다.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { KEY_ORDER, readBoard } from './board.mjs'
+import { readBoard } from './board.mjs'
 import { serialize } from './frontmatter.mjs'
 import { activeName } from './filename.mjs'
 import { t } from './i18n.mjs'
-import { COLLECTION_TYPE, ProjectError, milestoneStatuses } from './project.mjs'
+import { ProjectError } from './errors.mjs'
+import { COLLECTION_TYPE, milestoneStatuses } from './project.mjs'
 import { parseComments } from './comments.mjs'
 import { HISTORY_KEY, appendStatus } from './history.mjs'
 import { tagProblems } from './profiles.mjs'
+import { now } from './time.mjs'
 
-export const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+// frontmatter 를 쓸 때 이 순서로 키를 적는다. 없는 키는 이름순으로 뒤에 붙는다.
+const KEY_ORDER = [
+  'id', 'type', 'title', 'priority', 'tags', 'depends_on', 'owner', 'collection',
+  'created_at', 'updated_at', 'completed_at', HISTORY_KEY, 'session', 'session_started_at', 'commits', 'agent_reason',
+  'nimbalyst_id', 'nimbalyst_status', 'nimbalyst_sessions',
+]
 
-export const cardText = (data, body) => `${serialize(data, KEY_ORDER)}\n${body.replace(/^\n*/, '\n')}`
+const cardText = (data, body) => `${serialize(data, KEY_ORDER)}\n${body.replace(/^\n*/, '\n')}`
 
 const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 
@@ -30,16 +37,24 @@ const isTracked = (root, path) => {
 
 // 옮긴 뒤 원래 디렉터리가 비었으면 지운다. 열 디렉터리는 카드가 들어갈 때 만들므로(init.mjs) 빈 열 디렉터리를 남기지 않는다.
 // kanban/ 자체와 그 위는 지우지 않는다. 숨김 파일(.DS_Store 등)이 남은 디렉터리는 비지 않은 것으로 본다.
-const removeIfEmpty = (project, dir) => {
+export const removeIfEmpty = (project, dir) => {
   if (!dir.startsWith(`${project.boardPath}/`) || !existsSync(dir) || readdirSync(dir).length > 0) return
   rmdirSync(dir)
   removeIfEmpty(project, dirname(dir))
 }
 
+// 대소문자를 무시하는 APFS(macOS 기본값)에서는 제목의 대소문자만 바꾼 이름이 같은 파일을 가리켜 existsSync 가 참이다(2026-11-11 실측: set k1 --title Foo 가 cards.targetExists 로 거절됐다). 이름이 아니라 dev · ino 로 같은 파일인지 본다.
+// readdir 로 이름을 비교하지 않는다. 디렉터리를 바꿔 옮길 때(place · archive) 대상 디렉터리에 대소문자만 다른 다른 파일이 있으면 그 파일을 덮어쓴다.
+const sameFile = (a, b) => {
+  const x = statSync(a)
+  const y = statSync(b)
+  return x.dev == y.dev && x.ino == y.ino
+}
+
 export const moveFile = (project, from, to) => {
   // SMB 공유의 readdir 은 한글 이름을 NFD 로 내고 filename.mjs 가 만든 이름은 NFC 다. 같은 파일을 옮기라는 요청을 대상 충돌로 보지 않으려고 NFC 로 비교한다.
   if (from.normalize('NFC') == to.normalize('NFC')) return
-  if (existsSync(to)) throw new ProjectError(t('cards.targetExists', { path: relative(project.root, to) }))
+  if (existsSync(to) && !sameFile(from, to)) throw new ProjectError(t('cards.targetExists', { path: relative(project.root, to) }))
   mkdirSync(dirname(to), { recursive: true })
   if (isTracked(project.root, from)) git(project.root, ['mv', '--', relative(project.root, from), relative(project.root, to)])
   else renameSync(from, to)
@@ -57,8 +72,11 @@ export const assertTags = (project, data, body) => {
   if (problems.length > 0) throw new ProjectError(t('cards.badTags', { id: data.id, problems }))
 }
 
+// 활성 카드와 아카이브 카드에서 id 로 찾는다. assertRefs 가 검증한 depends_on id 를 unresolved 가 같은 규칙으로 다시 찾는다.
+const cardById = (board, id) => [...board.cards, ...board.archived].find((item) => item.id == id)
+
 export const findCard = (board, id) => {
-  const card = [...board.cards, ...board.archived].find((item) => item.id == id)
+  const card = cardById(board, id)
   if (!card) throw new ProjectError(t('cards.notFound', { id }))
   return card
 }
@@ -83,17 +101,19 @@ const between = (lo, hi) => {
 
 // position: { top } · { bottom } · { before: id } · { after: id }. column 은 그 열의 카드(순서 번호 순)이고 옮길 카드는 빼고 준다.
 // 반환: 새 순서 번호, 또는 빈 번호가 없으면 null(호출하는 쪽이 열을 다시 매긴다).
-export const orderFor = (column, position, step, width) => {
+// before · after 의 카드는 column 에 있어야 한다. 부르는 쪽(place 를 부르는 new · order · moveCard)이 checkPosition 으로 먼저 본다. 아래 slotIndex 도 같은 조건에 기댄다.
+const orderFor = (column, position, step, width) => {
   const max = 10 ** width - 1
   const orders = column.map((card) => card.order)
-  if (position.top) return orders.length == 0 ? step : between(-1, orders[0])
-  if (position.bottom || orders.length == 0) {
-    const value = (orders.at(-1) ?? 0) + step
+  // 빈 열에서는 어느 자리든 첫 번호가 같다. step 이 width 자리에 들지 않으면 null 을 돌려 renumberColumn 이 cards.renumberOverflow 를 내게 한다.
+  if (orders.length == 0) return step <= max ? step : null
+  if (position.top) return between(-1, orders[0])
+  if (position.bottom) {
+    const value = orders.at(-1) + step
     return value <= max ? value : between(orders.at(-1), max + 1)
   }
   const anchorId = position.before ?? position.after
   const index = column.findIndex((card) => card.id == anchorId)
-  if (index == -1) throw new ProjectError(t('cards.anchorNotInColumn', { id: anchorId }))
   if (position.before) return between(index == 0 ? -1 : orders[index - 1], orders[index])
   return between(orders[index], index == orders.length - 1 ? max + 1 : orders[index + 1])
 }
@@ -131,7 +151,7 @@ export const checkPosition = (board, status, position, movingId) => {
   if (!board.cards.some((card) => card.id == anchorId && card.status == status)) throw new ProjectError(t('cards.anchorNotIn', { id: anchorId, status }))
 }
 
-// card 를 status 열의 position 자리에 옮기고 새 경로를 돌려준다. card.path 의 파일은 이미 있어야 하고 card.data 는 쓴 뒤다.
+// card 를 status 열의 position 자리에 옮기고 새 경로를 돌려준다. card.path 의 파일은 이미 있어야 한다. 파일 내용은 바꾸지 않는다(호출하는 쪽이 옮긴 뒤 쓴다).
 // 빈 순서 번호가 없으면 그 열 전체를 다시 매긴다. renumbered 는 다시 매긴 카드 수다(옮긴 카드 제외).
 export const place = (project, board, card, status, position) => {
   const { step, width } = project.config.order
@@ -151,38 +171,67 @@ export const place = (project, board, card, status, position) => {
 const unresolved = (project, board, card) => {
   const resolved = new Set(project.config.dependencies.resolved)
   return (card.data.depends_on ?? []).filter((id) => {
-    const dependency = [...board.cards, ...board.archived].find((item) => item.id == id)
+    const dependency = cardById(board, id)
     return !dependency || (dependency.kind == 'active' && !resolved.has(dependency.status))
   })
 }
 
-// card 를 status 열로 옮긴다. move 와 run 이 함께 쓴다. changes 는 함께 바꿀 frontmatter 값이다.
-// dependencies.gate 의 열로 옮길 때 depends_on 카드가 모두 끝나야 한다. force 는 이 검사를 건너뛴다.
-// archive.columns 의 열로 들어가면 completed_at 을 적고, 그 열에서 나가면 지운다. 열이 바뀌면 status_history 에 항목을 덧붙인다(history.mjs).
-// run.status 로 옮기면 waiting 열에 있는 소속 milestone 을 running 열로 함께 옮긴다. 작업 카드가 이미 옮겨졌으므로 의존 검사로 막지 않는다.
-// 반환: { path, renumbered, blocking, started }. blocking 은 force 로 건너뛴 카드 id, started 는 함께 옮긴 milestone id 다.
-// 파일을 바꾸지 않고 옮길 수 있는지만 본다. 반환: force 로 건너뛸 카드 id.
-export const checkMove = (project, board, card, status, { position = { bottom: true }, force = false } = {}) => {
-  if (card.kind != 'active') throw new ProjectError(t('cards.archived', { id: card.id, path: card.relPath }))
+// status 열을 돌려준다. config.json 에 없는 status 면 멈춘다.
+export const requireColumn = (project, status) => {
   const column = project.columnOf(status)
   if (!column) throw new ProjectError(t('cards.unknownStatus', { status }))
-  if (!column.types.includes(card.data.type)) throw new ProjectError(t('card.typeNotAllowed', { type: card.data.type, status, types: column.types }))
+  return column
+}
+
+// status 열을 돌려준다. 그 열이 type 의 카드를 받지 않으면 멈춘다.
+export const columnAccepting = (project, status, type) => {
+  const column = requireColumn(project, status)
+  if (!column.types.includes(type)) throw new ProjectError(t('card.typeNotAllowed', { type, status, types: column.types }))
+  return column
+}
+
+// 아카이브한 카드면 멈춘다. 열을 옮기거나 열 안의 순서를 바꾸는 명령이 먼저 부른다.
+export const assertActive = (card) => {
+  if (card.kind != 'active') throw new ProjectError(t('cards.archived', { id: card.id, path: card.relPath }))
+}
+
+// 파일을 바꾸지 않고 옮길 수 있는지만 본다. 반환: force 로 건너뛸 카드 id.
+export const checkMove = (project, board, card, status, { position = { bottom: true }, force = false } = {}) => {
+  assertActive(card)
+  columnAccepting(project, status, card.data.type)
   const blocking = project.config.dependencies.gate.includes(status) ? unresolved(project, board, card) : []
   if (blocking.length > 0 && !force) throw new ProjectError(t('cards.blocked', { id: card.id, blocking }))
   checkPosition(board, status, position, card.id)
   return blocking
 }
 
+// 카드가 status 열에 들어갈 때 바뀌는 completed_at 과 status_history 를 돌려준다. from 은 지금 열이고 새 카드면 null 이다.
+// archive.columns 의 열로 들어가면 completed_at 을 적고, 그 열에서 나가면 지운다. 열이 바뀌면 status_history 에 항목을 덧붙인다(history.mjs).
+export const entryFields = (project, from, data, status, at) => {
+  const archiveColumns = project.config.archive.columns
+  const entering = archiveColumns.includes(status) && !archiveColumns.includes(from)
+  const leaving = !archiveColumns.includes(status)
+  return {
+    completed_at: entering ? at : leaving ? undefined : data.completed_at,
+    [HISTORY_KEY]: status == from ? data[HISTORY_KEY] : appendStatus(data, status, at),
+  }
+}
+
+// 열을 옮기지 않고 frontmatter 와 본문을 쓰며 updated_at 을 찍는다.
+export const updateCard = (card, changes, body) => writeCard(card.path, { ...card.data, ...changes, updated_at: now() }, body)
+
+// card 를 status 열로 옮긴다. move · run · recover 가 함께 쓴다. changes 는 함께 바꿀 frontmatter 값이다.
+// dependencies.gate 의 열로 옮길 때 depends_on 카드가 모두 끝나야 한다. force 는 이 검사를 건너뛴다.
+// completed_at 과 status_history 는 entryFields 의 규칙으로 바꾼다. updated_at 과 같은 at 을 쓴다.
+// run.status 로 옮기면 waiting 열에 있는 소속 milestone 을 running 열로 함께 옮긴다. 작업 카드가 이미 옮겨졌으므로 의존 검사로 막지 않는다.
+// 반환: { path, renumbered, blocking, started }. blocking 은 force 로 건너뛴 카드 id, started 는 함께 옮긴 milestone id 다.
 export const moveCard = (project, board, card, status, { position = { bottom: true }, force = false, changes = {} } = {}) => {
   const blocking = checkMove(project, board, card, status, { position, force })
-  const archiveColumns = project.config.archive.columns
   const at = now()
-  const entering = archiveColumns.includes(status) && !archiveColumns.includes(card.status)
-  const leaving = !archiveColumns.includes(status)
-  const history = status == card.status ? card.data[HISTORY_KEY] : appendStatus(card.data, status, at)
-  const data = { ...card.data, ...changes, updated_at: at, completed_at: entering ? at : leaving ? undefined : card.data.completed_at, [HISTORY_KEY]: history }
-  writeCard(card.path, data, card.body)
+  const data = { ...card.data, ...changes, updated_at: at, ...entryFields(project, card.status, card.data, status, at) }
+  // 실패할 수 있는 이동을 먼저 하고 내용은 옮긴 뒤 쓴다. place 가 실패하면 파일은 옛 열에 옛 내용 그대로 남는다(status_history 의 historyLast 위반을 남기지 않는다).
   const placed = place(project, board, { ...card, data }, status, position)
+  writeCard(placed.path, data, card.body)
   return { ...placed, blocking, started: startMilestones(project, board, data, status) }
 }
 

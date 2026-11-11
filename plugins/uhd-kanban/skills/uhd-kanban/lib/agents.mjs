@@ -10,3 +10,9 @@ export const readAgents = ({ all = false } = {}) => JSON.parse(execFileSync('cla
 
 // Claude Code 의 설정 디렉터리. CLAUDE_CONFIG_DIR 가 있으면 그 값이고 없으면 ~/.claude 다. 대화 기록 · jobs 가 그 아래에 있다.
 export const claudeConfigDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
+
+// 이 CLI 를 부른 세션의 id. Claude Code 가 Bash 에 넣고, pane 은 $.process.run 의 env 로 넣는다.
+export const callerSessionId = () => process.env.CLAUDE_CODE_SESSION_ID
+
+// `claude agents --json` 의 항목을 전체 session id 로 찾는다. 없으면 null. 짧은 id 로 찾는 것은 sessions.mjs 의 findSession 이다.
+export const sessionById = (sessions, id) => sessions.find((session) => session.sessionId == id) ?? null

@@ -6,23 +6,16 @@
 import { parseComments } from './comments.mjs'
 import { localDate } from './filename.mjs'
 import { isWork } from './lanes.mjs'
+import { DAY_MS, HOUR_MS, timeOf } from './time.mjs'
 
 // days 의 길이. pane 은 폭에 들어가는 만큼 최근 날짜부터 그린다.
-export const DAYS = 30
+const DAYS = 30
 // hours 의 길이. 1시간 한 칸이다.
-export const HOURS = 24
+const HOURS = 24
 // milestone 의 처리 속도와 7일 합계를 세는 기간(일).
-export const WINDOW_DAYS = 7
+const WINDOW_DAYS = 7
 // 카드 세션이 일을 하고 있다는 코멘트 kind. assign · question 처럼 메인 세션이나 사용자가 남기는 kind 는 세지 않는다.
 const ACTIVITY_KINDS = ['progress', 'result', 'done-evidence']
-
-const HOUR_MS = 60 * 60 * 1000
-const DAY_MS = 24 * HOUR_MS
-
-const timeOf = (text) => {
-  const ms = Date.parse(text ?? '')
-  return Number.isNaN(ms) ? null : ms
-}
 
 // 오늘을 끝으로 하는 count 개의 날짜. setDate 로 세어 일광 절약 시간이 바뀌는 날에도 날짜가 빠지거나 겹치지 않는다.
 const recentDates = (nowMs, count) => Array.from({ length: count }, (_, index) => {

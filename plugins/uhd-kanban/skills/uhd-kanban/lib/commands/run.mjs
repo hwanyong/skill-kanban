@@ -4,16 +4,19 @@
 // config.json 의 run.env 가 있으면 그 환경 변수를 세션에 넣는다(lib/sessions.mjs 의 envArgs).
 // uhd-kanban run <k id> [--dry-run] [--force]   --force 는 의존성 검사를 건너뛴다.
 
+import { relative } from 'node:path'
 import { UsageError, cardId } from '../args.mjs'
-import { checkMove, findCard, moveCard, now, writeCard } from '../cards.mjs'
-import { USER, appendComment } from '../comments.mjs'
+import { assignCard, launchCard } from '../assign.mjs'
+import { checkMove, findCard } from '../cards.mjs'
+import { USER } from '../comments.mjs'
 import { editBoard } from '../edit.mjs'
 import { forceNote, startedNote, t, translator } from '../i18n.mjs'
-import { claimMain, reportName } from '../main.mjs'
+import { reportName } from '../main.mjs'
 import { runSpec } from '../profiles.mjs'
-import { ProjectError, maxParallel } from '../project.mjs'
-import { sessionName, startPrompt } from '../prompt.mjs'
-import { BACKGROUND_ARGS, RUNNING_VERDICTS, cardSession, hasRoom, runningCards, findSession, envArgs, launchBackground, listSessions, startedAt } from '../sessions.mjs'
+import { ProjectError } from '../errors.mjs'
+import { UNLIMITED, maxParallel } from '../project.mjs'
+import { startPrompt } from '../prompt.mjs'
+import { RUNNING_VERDICTS, backgroundCommand, cardSession, hasRoom, runningCards, listSessions, sessionName, envArgs } from '../sessions.mjs'
 
 export const run = async ({ positional, flags }, { skillRoot }) => {
   if (positional[0] == null) throw new UsageError(t('run.usage'))
@@ -28,26 +31,21 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
     const previous = cardSession(card, sessions)
     if (RUNNING_VERDICTS.includes(previous.verdict)) throw new ProjectError(t('run.stillRunning', { id, session: card.data.session, state: previous.session.state }))
     const running = runningCards(project, board, sessions)
-    if (!hasRoom(project, running.length)) throw new ProjectError(t('run.full', { max: maxParallel(project.config), ids: running.map((item) => `k${item.id}`) }))
+    if (!hasRoom(project, running.length)) throw new ProjectError(t('run.full', { max: maxParallel(project.config), ids: running.map((item) => `k${item.id}`), unlimited: UNLIMITED }))
     const from = reportName(project, sessions) ?? USER
     const name = sessionName(id)
     const prompt = startPrompt(project, card, { skillRoot, reportTo: from })
     const args = ['-n', name, ...spec.cliArgs, ...envArgs(project.config)]
     if (flags['dry-run'] == true) {
-      console.log(`(dry-run) claude ${[...BACKGROUND_ARGS, ...args].join(' ')} <${t('run.prompt')}>${spec.ultracode ? ' (ultracode)' : ''}\n${prompt}`)
+      console.log(`(dry-run) ${backgroundCommand(args)}${spec.ultracode ? ' (ultracode)' : ''}\n${prompt}`)
       return 0
     }
-    const shortId = launchBackground(args, prompt, project.root)
-    claimMain(project, sessions)
-    const session = findSession(listSessions({ all: true }), shortId)
+    const { shortId, session } = launchCard(project, sessions, args, prompt, project.root)
     if (!session) throw new ProjectError(t('run.notFound', { shortId }))
     const text = translator(project.locale)('run.assigned', { session: session.sessionId, label: `${spec.label}${spec.ultracode ? ' ultracode' : ''}` })
-    const { body } = appendComment(card.body, { kind: 'assign', from, to: [name], at: now(), text })
-    const changes = { session: session.sessionId, session_started_at: startedAt(session) }
-    const moved = card.status == status ? null : moveCard(project, board, { ...card, body }, status, { force, changes })
-    if (!moved) writeCard(card.path, { ...card.data, ...changes, updated_at: now() }, body)
+    const moved = assignCard(project, board, card, status, { from, text, session, force })
     const path = moved?.path ?? card.path
-    console.log(`k${id} ${shortId} ${session.sessionId} ${path.slice(project.root.length + 1)}${forceNote(blocking)}${startedNote(moved?.started ?? [])}`)
+    console.log(`k${id} ${shortId} ${session.sessionId} ${relative(project.root, path)}${forceNote(blocking)}${startedNote(moved?.started ?? [])}`)
     return 0
   })
 }

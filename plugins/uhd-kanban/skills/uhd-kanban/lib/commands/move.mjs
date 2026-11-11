@@ -2,6 +2,7 @@
 // dependencies.abandoned 의 열(cancelled)로 옮기면 그 카드를 기다리는 카드와 고칠 명령을 낸다. 그 카드들은 --force 없이 다시 옮길 수 없다.
 // uhd-kanban move <k id> <status> [--top|--bottom|--before k|--after k] [--force]
 
+import { relative } from 'node:path'
 import { UsageError, cardId, positionFrom } from '../args.mjs'
 import { dependentsOf, findCard, moveCard } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
@@ -16,13 +17,13 @@ export const run = async ({ positional, flags }) => {
   return editBoard(async ({ project, board }) => {
     const card = findCard(board, id)
     const { path, renumbered, blocking, started } = moveCard(project, board, card, status, { position, force: flags.force == true })
-    console.log(`k${id} ${card.status} → ${status}: ${path.slice(project.root.length + 1)}${renumberNote(renumbered)}${forceNote(blocking)}${startedNote(started)}`)
+    console.log(`k${id} ${card.status} → ${status}: ${relative(project.root, path)}${renumberNote(renumbered)}${forceNote(blocking)}${startedNote(started)}`)
     if (!abandonedStatuses(project.config).includes(status)) return 0
     const waiting = dependentsOf(board, id)
     if (waiting.length == 0) return 0
     console.log(t('move.waiting', { id, count: waiting.length, status, gate: project.config.dependencies.gate }))
     const accepts = project.columnOf(status).types
-    waiting.forEach((card) => console.log(t('move.waitingItem', { card, id, status, cancel: accepts.includes(card.data.type) })))
+    waiting.forEach((dependent) => console.log(t('move.waitingItem', { dependent: dependent.id, dependentStatus: dependent.status, title: dependent.data.title, id, status, cancel: accepts.includes(dependent.data.type) })))
     return 0
   })
 }

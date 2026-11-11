@@ -48,7 +48,7 @@
 |---|---|---|
 | 스킬 `uhd-kanban` | [`plugins/uhd-kanban/skills/uhd-kanban/`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md) | 카드 만들기 · 열 옮기기 · 순서 바꾸기 · 코멘트 · 아카이브. 카드를 `claude --bg` 세션으로 실행하기. 멈춘 세션 이어 가기 |
 | 스킬 `delegate` | [`plugins/uhd-kanban/skills/delegate/`](plugins/uhd-kanban/skills/delegate/SKILL.md) | 보드가 있는 프로젝트의 메인 세션이 지킬 규칙. 작업을 카드로 나누고, `uk run` 으로 맡기고, 결과를 검토하고, 카드를 옮긴다 |
-| hooks 모듈 | [`plugins/uhd-kanban/hooks/register.tsx`](plugins/uhd-kanban/hooks/register.tsx) | 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 보드 모니터 pane 을 열고, `/kanban-board` 명령을 등록하고, Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행한다 |
+| hooks 모듈 | [`plugins/uhd-kanban/hooks/register.tsx`](plugins/uhd-kanban/hooks/register.tsx) | `uk board --json` 이 보드를 찾으면 보드 모니터 pane 을 열고(찾는 차례는 「하위 디렉터리나 프로젝트 밖에서 부르면 어느 보드를 쓰는가?」), `/kanban-board` 명령을 등록하고, Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행한다 |
 
 ## 빠른 시작
 
@@ -234,7 +234,7 @@ k1 v1.0 release (active) 7/17
 
 *가상의 작업 카드 24장으로 만든 시험용 `board` 출력을 캡처했다. 세션 상태를 여러 가지 보이려고 만든 출력이고, [보드 파일 배치](#보드-파일-배치) 의 데모 보드와는 다른 보드다.*
 
-pane 은 세션 디렉터리 위에 `.uhd-kanban/config.json` 이 있으면 열린다. 닫힌 pane 은 `/kanban-board` 로 다시 연다. 맨 위 줄은 시각 · 작업 카드 수 · 끝나지 않은 milestone 수 · 갱신 주기이고, 그 아래는 열의 색과 세션 상태의 범례다. 그 아래에 끝나지 않은 milestone 마다 행 하나(swimlane: 소속으로 묶은 가로 행)가 있고, `collection` 이 빈 카드는 마지막 `소속 없음` 행에 든다. 행의 차례는 `active` milestone → `planned` milestone → `소속 없음` 이다.
+pane 은 `uk board --json` 이 보드를 찾으면 열린다. 세션 디렉터리 위의 보드가 먼저이고, 없으면 이 세션을 메인 세션으로 등록한 보드, 그다음 이 세션을 띄운 디렉터리 위의 보드다(「하위 디렉터리나 프로젝트 밖에서 부르면 어느 보드를 쓰는가?」, `plugins/uhd-kanban/skills/uhd-kanban/lib/root.mjs` 의 `findCallerRootOrNull`). 닫힌 pane 은 `/kanban-board` 로 다시 연다. 맨 위 줄은 시각 · 작업 카드 수 · 끝나지 않은 milestone 수 · 갱신 주기이고, 그 아래는 열의 색과 세션 상태의 범례다. 그 아래에 끝나지 않은 milestone 마다 행 하나(swimlane: 소속으로 묶은 가로 행)가 있고, `collection` 이 빈 카드는 마지막 `소속 없음` 행에 든다. 행의 차례는 `active` milestone → `planned` milestone → `소속 없음` 이다.
 
 | 행의 부분 | 보이는 것 |
 |---|---|

@@ -14,7 +14,7 @@ description: 칸반 보드가 있는 프로젝트(루트에 `.uhd-kanban/`)의 �
 | 세션 | 판정 | 걸리는가 |
 |---|---|---|
 | 메인 세션 | 아래 두 가지가 아니다 | 걸린다 |
-| 카드 세션 | 첫 프롬프트에 `이 작업은 uhd-kanban 카드 k<id> 다` 또는 `This task is uhd-kanban card k<id>.` 줄이 있다(`uk run` · `uk recover` 가 보드의 locale 로 붙인다) | 걸리지 않는다. 카드 작업을 직접 한다 |
+| 카드 세션 | 첫 프롬프트에 `이 작업은 uhd-kanban 카드 k<id> 다` 또는 `This task is uhd-kanban card k<id>.` 줄이 있다(`uk run` 이 보드의 locale 로 카드 본문 뒤에 붙인다. `uk recover` 로 이어 간 세션은 그 첫 프롬프트를 대화에 그대로 갖는다) | 걸리지 않는다. 카드 작업을 직접 한다 |
 | 사용자가 직접 하라고 한 작업 | 그 요청에 「직접 해」「카드 만들지 말고」가 있다 | 그 요청 하나에만 걸리지 않는다. 다음 요청부터 다시 걸린다. 아래 훅이 띄우는 확인 창에서 사용자가 허용한다 |
 
 ## 메인 세션이 하지 않는 것
@@ -25,7 +25,7 @@ description: 칸반 보드가 있는 프로젝트(루트에 `.uhd-kanban/`)의 �
 
 도구를 부르기 전에 그 호출이 위 세 가지 중 하나인지 본다. 하나라도 맞으면 부르지 않고 카드를 만든다.
 
-1 의 Edit · Write · NotebookEdit 는 도구가 막는다. 플러그인의 hooks 모듈(`hooks/register.tsx`)이 `classic.PreToolUse` 에서 `uk guard <경로> --session <session id>` 를 실행하고, 종료 코드 1 이면 권한 모드와 무관하게 사용자에게 확인 창을 띄운다(bypassPermissions 에서도 뜬다. 2026-10-29 실행 확인). 사용자가 거절하면 그 호출은 실행되지 않는다. Bash 로 파일을 쓰는 명령 · 2 · 3 은 도구가 막지 않으므로 이 스킬의 규칙으로만 지킨다.
+1 의 Edit · Write · NotebookEdit 는 도구가 막는다. 플러그인의 hooks 모듈(`hooks/register.tsx`)이 `classic.PreToolUse` 에서 `uk guard <경로> --session <session id>` 를 실행하고, 종료 코드 1 이면 권한 모드와 무관하게 사용자에게 확인 창을 띄운다(bypassPermissions 에서도 뜬다. 2026-10-29 실행 확인). guard 를 실행하지 못해도(node 시작 실패 · 30초 초과) 확인 창을 띄운다. 사용자가 거절하면 그 호출은 실행되지 않는다. Bash 로 파일을 쓰는 명령 · 2 · 3 은 도구가 막지 않으므로 이 스킬의 규칙으로만 지킨다.
 
 ## 메인 세션이 하는 것
 

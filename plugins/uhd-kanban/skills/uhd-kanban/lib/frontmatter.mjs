@@ -12,15 +12,19 @@ export class FrontmatterError extends Error {
   }
 }
 
-const KEY = /^([a-z_][a-z0-9_]*):(?:\s+(.*))?$/
+const KEY_NAME = '[a-z_][a-z0-9_]*'
+// parse 는 \n 으로만 줄을 나누므로 행 안의 U+2028 · U+2029 · \r 도 값의 글자다. 키 줄 · 목록 항목의 정규식은 s 플래그로 . 이 그 글자와도 맞게 한다.
+const KEY = new RegExp(`^(${KEY_NAME}):(?:\\s+(.*))?$`, 's')
+const KEY_ONLY = new RegExp(`^${KEY_NAME}$`)
+// 따옴표 없이 쓰면 문자열이 아닌 값으로 되읽히는 낱말과 그 값. parse 는 값을 정하고 serialize 는 이 낱말에 따옴표를 붙인다.
+const WORDS = new Map([['null', null], ['~', null], ['true', true], ['false', false]])
 const INTEGER = /^-?(0|[1-9]\d*)$/
 const NEEDS_QUOTE = /^[\s\-?:,\[\]{}#&*!|>'"%@`]|[:#]\s|\s#|:$|\s$|^$|[\u0000-\u001f\u007f]/
 
 const parseScalar = (raw, line) => {
   const text = raw.trim()
-  if (text == '' || text == 'null' || text == '~') return null
-  if (text == 'true') return true
-  if (text == 'false') return false
+  if (text == '') return null
+  if (WORDS.has(text)) return WORDS.get(text)
   if (INTEGER.test(text)) return Number(text)
   if (text.startsWith('"')) {
     try {
@@ -80,7 +84,7 @@ export const parse = (text) => {
     const line = i + 1
     const row = lines[i]
     if (row.trim() == '' || row.trimStart().startsWith('#')) continue
-    const item = row.match(/^\s+-\s+(.*)$/) ?? row.match(/^-\s+(.*)$/)
+    const item = row.match(/^\s+-\s+(.*)$/s) ?? row.match(/^-\s+(.*)$/s)
     if (item) {
       if (listKey == null) throw new FrontmatterError(t('frontmatter.itemWithoutKey'), line)
       data[listKey].push(parseScalar(item[1], line))
@@ -112,7 +116,7 @@ const formatScalar = (value) => {
     return String(value)
   }
   if (typeof value != 'string') throw new FrontmatterError(t('frontmatter.notScalar', { value: JSON.stringify(value) }))
-  const ambiguous = INTEGER.test(value) || ['true', 'false', 'null', '~'].includes(value)
+  const ambiguous = INTEGER.test(value) || WORDS.has(value)
   return ambiguous || NEEDS_QUOTE.test(value) ? JSON.stringify(value) : value
 }
 
@@ -126,7 +130,7 @@ const formatListItem = (value) => {
 export const serialize = (data, keyOrder = []) => {
   const keys = [...keyOrder.filter((key) => Object.hasOwn(data, key)), ...Object.keys(data).filter((key) => !keyOrder.includes(key)).sort()]
   const rows = keys.filter((key) => data[key] !== undefined).map((key) => {
-    if (!/^[a-z_][a-z0-9_]*$/.test(key)) throw new FrontmatterError(t('frontmatter.badKey', { key }))
+    if (!KEY_ONLY.test(key)) throw new FrontmatterError(t('frontmatter.badKey', { key }))
     const value = data[key]
     if (!Array.isArray(value)) return `${key}: ${formatScalar(value)}`.trimEnd()
     return `${key}: [${value.map(formatListItem).join(', ')}]`

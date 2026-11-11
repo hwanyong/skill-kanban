@@ -7,11 +7,11 @@ import type { Board, BoardCard, BoardLane } from '../types'
 export type Cell = { glyph: string; color: number; background: number }
 export type Verdict = NonNullable<BoardCard['session']>
 // at: 막대 안의 차례(0부터). faded: 사라지는 · 나타나는 중이면 그 프레임의 칸이다.
-export type Slot = { at: number; card: BoardCard; faded?: Cell }
+type Slot = { at: number; card: BoardCard; faded?: Cell }
 // 한 swimlane 의 한 프레임. head: 머리 줄의 기호. rows: 막대의 격자(카드가 없으면 빈 배열). isFlashing: 머리 줄을 반전한다.
 export type LaneFrame = { lane: BoardLane; head: Cell; rows: Cell[][]; isFlashing: boolean }
 
-export const DEFAULT_COLOR = 0x01000000
+const DEFAULT_COLOR = 0x01000000
 const CARD = '█'
 const BLANK: Cell = { glyph: ' ', color: DEFAULT_COLOR, background: DEFAULT_COLOR }
 
@@ -48,6 +48,12 @@ const mix = (from: number, to: number, amount: number) => [16, 8, 0].reduce((sum
 
 export const columnColor = (index: number) => COLUMN_COLORS[index % COLUMN_COLORS.length] ?? DEFAULT_COLOR
 
+// 상태 이름으로 그 열의 색을 고른다. 보드에 없는 상태는 첫 열(index 0)의 색이다.
+export const statusColor = (board: Board, status: string) => columnColor(board.columns.find((column) => column.status == status)?.index ?? 0)
+
+// 세션 판정이 없는 카드 칸. 막대의 카드 칸과 범례 견본이 쓴다.
+export const plainCell = (color: number): Cell => ({ glyph: CARD, color, background: DEFAULT_COLOR })
+
 const glyphAt = (glyphs: string[], index: number) => glyphs[index % glyphs.length] ?? ' '
 
 // live 는 위치마다 어긋난 물결, pending 은 회전, restart 는 글자색과 배경색의 교대다. 나머지 판정은 프레임과 무관하다.
@@ -63,8 +69,8 @@ export const sessionCell = (verdict: Verdict, frame: number, position: number, c
 
 // 칸의 색은 카드의 열이 정한다. session 은 run.status 열의 카드에만 있다.
 const cardCell = (board: Board, card: BoardCard, frame: number, position: number): Cell => {
-  const color = columnColor(board.columns.find((column) => column.status == card.status)?.index ?? 0)
-  if (card.session == null) return { glyph: CARD, color, background: DEFAULT_COLOR }
+  const color = statusColor(board, card.status)
+  if (card.session == null) return plainCell(color)
   return sessionCell(card.session, frame, position, color)
 }
 
@@ -77,7 +83,8 @@ const headCell = (lane: BoardLane, frame: number): Cell => {
   return { glyph: lane.id == null ? ' ' : lane.is_running ? HEAD_RUNNING : HEAD_WAITING, color: DEFAULT_COLOR, background: DEFAULT_COLOR }
 }
 
-// 타이머는 이 값이 참인 동안만 돈다.
+// 표를 Raster 로 그렸고, 가려지지 않았고, 재배치 중이 아닐 때 STATUS_FRAME_MS 타이머는 이 값이 참인 동안만 돈다.
+// 재배치 중의 TRANSITION_FRAME_MS 와 가려진 자기 pane 을 확인하는 HIDDEN_CHECK_MS 는 이 값과 무관하다(register.tsx 의 syncTimer).
 export const hasMovingCards = (board: Board) => board.lanes.some((lane) => lane.cards.some((card) => MOVING_VERDICTS.includes(card.session ?? 'none')))
 
 // reserve: 슬롯이 그보다 적어도 막대 행을 그 카드 수만큼 둔다(재배치 중에 격자 크기가 바뀌지 않게 한다). 행의 길이는 모두 columns 다.
@@ -105,7 +112,7 @@ export const packCells = (grid: Cell[][]) => {
 const css = (color: number) => (color == DEFAULT_COLOR ? undefined : `#${color.toString(16).padStart(6, '0')}`)
 
 // Text 로 그릴 때의 한 행. 색이 같은 칸이 이어지면 한 조각으로 묶는다.
-export type Run = { text: string; color?: string; backgroundColor?: string }
+type Run = { text: string; color?: string; backgroundColor?: string }
 
 export const colorRuns = (row: Cell[]): Run[] => row.reduce((runs: (Cell & { text: string })[], cell) => {
   const last = runs.at(-1)

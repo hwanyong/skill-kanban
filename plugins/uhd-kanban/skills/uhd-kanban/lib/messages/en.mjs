@@ -17,7 +17,7 @@ export default {
   'config.columnStatusDup': ({ at, status }) => `${at}.status is duplicated: ${status}`,
   'config.columnTypes': ({ at }) => `${at}.types must be a non-empty array of type names`,
   'config.locale': ({ value, locales }) => `locale must be one of ${locales.join(', ')}: ${value}`,
-  'config.orderWidth': ({ value }) => `order.width must be an integer from 3 to 8: ${value}`,
+  'config.orderWidth': ({ min, max, value }) => `order.width must be an integer from ${min} to ${max}: ${value}`,
   'config.orderStep': ({ value }) => `order.step must be an integer of 1 or more: ${value}`,
   'config.statusList': ({ key }) => `${key} must be an array of status names`,
   'config.unknownStatus': ({ key, status }) => `${status} in ${key} is not a status in columns`,
@@ -40,6 +40,7 @@ export default {
   'args.cardIdName': 'card id',
   'args.cardId': ({ name, ref }) => `${name} must be k<integer>: ${ref}`,
   'args.onePosition': ({ flags }) => `Give only one of ${flags.join(', ')}`,
+  'args.readFile': ({ flag, path, message }) => `Cannot read ${path} given to ${flag}: ${message}`,
   // frontmatter.mjs
   'frontmatter.atLine': ({ line, message }) => `line ${line}: ${message}`,
   'frontmatter.badQuoted': ({ text }) => `Cannot read the double-quoted string: ${text}`,
@@ -60,7 +61,7 @@ export default {
   'filename.orderWidth': ({ order, width }) => `Order number ${order} has more than ${width} digits. Increase order.width in config.json`,
   'filename.date': ({ date }) => `A date must be YYYY-MM-DD: ${date}`,
   'lock.timeout': ({ dir, seconds, owner }) => `Could not take ${dir} within ${seconds} seconds. Held by: ${owner}`,
-  'edit.boardInvalid': ({ problems }) => `The board has ${problems.length} rule violations, so nothing was changed. Run uhd-kanban check:${list(problems)}`,
+  'edit.boardInvalid': ({ problems }) => `The board has ${count(problems.length, 'rule violation')}, so nothing was changed. Run uhd-kanban check:${list(problems)}`,
   // comments.mjs
   'comments.bodyLine': ({ line }) => `body line ${line}`,
   'comments.sectionTwice': ({ at, section }) => `${at}: the ${section} section appears twice`,
@@ -109,6 +110,7 @@ export default {
   'board.unknownDir': 'This directory is not in columns of config.json',
   'board.unknownFile': 'This file is not in columns of config.json',
   'board.needsOrder': 'A card in a column starts with an order number',
+  'board.needsDate': 'An archived card starts with a date (YYYY-MM-DD)',
   'board.orderWidth': ({ width }) => `The order number does not have ${width} digits`,
   'board.orderTwice': ({ order }) => `Order number ${order} appears twice in the same column`,
   'board.duplicateId': ({ id, first, second }) => `k${id} is in two places: ${first} and ${second}`,
@@ -118,8 +120,7 @@ export default {
   'cards.notFound': ({ id }) => `No card k${id}`,
   'cards.selfRef': ({ id, key }) => `k${id} cannot be in its own ${key}`,
   'cards.refType': ({ key, id, type, actual }) => `k${id} in ${key} is not a type ${type} card (type ${actual})`,
-  'cards.anchorNotInColumn': ({ id }) => `k${id} is not in this column`,
-  'cards.renumberOverflow': ({ status, count, step, width }) => `Numbering ${count} cards in the ${status} column at intervals of ${step} exceeds ${width} digits. Increase order.width in config.json`,
+  'cards.renumberOverflow': ({ status, count: n, step, width }) => `Numbering ${count(n, 'card')} in the ${status} column at intervals of ${step} exceeds ${width} digits. Increase order.width in config.json`,
   'cards.anchorSelf': ({ id }) => `k${id} cannot be placed before or after itself`,
   'cards.anchorNotIn': ({ id, status }) => `k${id} is not in the ${status} column`,
   'cards.archived': ({ id, path }) => `k${id} is archived: ${path}`,
@@ -195,6 +196,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'init.home': ({ path }) => `${path} is the home directory or the filesystem root. A board here would be used by uk in every project below it that has no board of its own. Run init in the project root. Nothing was changed`,
   'init.ancestor': ({ path, ancestor }) => `${path} is inside the board of ${ancestor}. A board here would make uk called below ${path} use the new board instead of the one in ${ancestor}. Nothing was changed`,
   'init.children': ({ path, children }) => `Directories right below ${path} have boards: ${children.join(' · ')}. A board here would be used by uk in every project below it that has no board of its own. Nothing was changed`,
+  'init.worktree': ({ path, board }) => `${path} is a git worktree and the board of this repository is ${board}. Inside a git worktree uk uses the board of the main worktree, so a board here would not be used. Nothing was changed`,
   'init.created': ({ files, locale }) => `Created: ${files.join(' · ')} (locale ${locale})`,
   'init.columns': ({ count: n, dirs }) => `${count(n, 'column')}: ${dirs.join(' · ')}`,
   'check.summary': ({ cards, archived, root }) => `${count(cards, 'card')} · ${archived} archived (${root})`,
@@ -206,8 +208,9 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'check.milestoneFinished': ({ id, status, done, total }) => `k${id} is ${status} but all ${count(total, 'card')} are finished. If it is complete: uhd-kanban move k${id} ${done}`,
   'move.usage': 'Usage: move <k id> <status>',
   'move.waiting': ({ id, count: n, status, gate }) => `${count(n, 'card')} wait for k${id}. A ${status} card never finishes, so they cannot move to the ${gate.join(' · ')} columns without --force. Choose one for each card:`,
-  'move.waitingItem': ({ card, id, status, cancel }) => `- k${card.id}(${card.status}) ${card.data.title}: remove the dependency uhd-kanban set k${card.id} --remove-depends k${id}${cancel ? ` · cancel it too uhd-kanban move k${card.id} ${status}` : ''}`,
+  'move.waitingItem': ({ dependent, dependentStatus, title, id, status, cancel }) => `- k${dependent}(${dependentStatus}) ${title}: remove the dependency uhd-kanban set k${dependent} --remove-depends k${id}${cancel ? ` · cancel it too uhd-kanban move k${dependent} ${status}` : ''}`,
   'new.noInitial': ({ type }) => `initial in config.json has no first column for type ${type}. Give --status`,
+  'new.badComments': ({ id, problems }) => `The ## Comments section in the body of k${id} breaks the rules, so it was not written:${list(problems)}`,
   'order.usage': 'Usage: order <k id> (--top|--bottom|--before k|--after k)',
   'order.positionRequired': 'One of --top · --bottom · --before · --after is required',
   'renumber.usage': 'Usage: renumber <status>',
@@ -225,7 +228,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'guard.denied': ({ name, path }) => `The main session${name ? ` ${name}` : ''} is about to edit the project file ${path}. Split the work into cards and hand them off with uhd-kanban run (delegate skill). Allow it only when the user asked for this work to be done directly`,
   'run.usage': 'Usage: run <k id> [--dry-run] [--force]',
   'run.stillRunning': ({ id, session, state }) => `The session ${session} of k${id} still exists (state ${state}). Not starting a new one. If it stalled, run uhd-kanban recover k${id}`,
-  'run.full': ({ max, ids }) => `Card sessions running at once reached run.max_parallel (${max}): ${ids.join(', ')}. Run again after one finishes, or change run.max_parallel in .uhd-kanban/config.json (-1 means unlimited)`,
+  'run.full': ({ max, ids, unlimited }) => `Card sessions running at once reached run.max_parallel (${max}): ${ids.join(', ')}. Run again after one finishes, or change run.max_parallel in .uhd-kanban/config.json (${unlimited} means unlimited)`,
   'run.prompt': 'prompt',
   'run.notFound': ({ shortId }) => `Session ${shortId} was started but not found in claude agents --json, so the card was not changed. Stop it with claude stop ${shortId} or write session on the card yourself`,
   'run.assigned': ({ session, label }) => `Started with claude --bg. session=${session} ${label}`,
@@ -237,6 +240,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'recover.noTranscript': ({ id, sessionId, base }) => `k${id} cannot be resumed: transcript ${sessionId}.jsonl is not in ${base}`,
   'recover.waiting': ({ id, max }) => `k${id} waits: card sessions running at once reached run.max_parallel (${max})`,
   'recover.cannotMove': ({ id, status, problem }) => `k${id} cannot be resumed: it cannot move to the ${status} column. ${problem}`,
+  'recover.cannotRun': ({ id, problem }) => `k${id} cannot be resumed: ${problem}`,
   'recover.whyRestart': ({ startedAt, toolPending }) => `the daemon restarted it (startedAt ${startedAt}) but it is idle without ${toolPending ? 'redoing its last tool call, which has no result' : 'answering the last user line'}`,
   'recover.whyMissing': 'not in claude agents --json --all',
   'recover.notFound': 'not found in claude agents --json',
@@ -246,7 +250,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'recover.summaryDry': ({ total, live, pending, done, unknown, resumed, waiting, failed }) => `${count(total, 'card')} · running ${live} · restarting ${pending} · finished ${done} · unknown state ${unknown} · would resume ${resumed} · waiting for a slot ${waiting} · cannot resume ${failed}`,
   // bin/uhd-kanban.mjs
   'bin.unknown': ({ name }) => `Unknown command: ${name}`,
-  'usage': `Usage: uhd-kanban <command> [arguments]
+  'usage': ({ unlimited }) => `Usage: uhd-kanban <command> [arguments]
   init [--dir <path>] [--locale ko|en]   creates .uhd-kanban/ and kanban/ at the project root. locale defaults to LANG
   check                 validates config.json and every card
   new --type <type> --title <title> [--status] [--priority] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file] [position]   --status defaults to initial in config.json
@@ -258,7 +262,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   comment <k id> --kind <kind> --to <name>[,<name>] [--from <name>] (--text <text> | --text-file <path>)
   inbox [<name>] [--all] [--kind a,b]
   main [--set [<name>]]   Show or register the main session that card sessions report to (.uhd-kanban/main.json). Without a name, this session
-  run <k id> [--dry-run] [--force]   starts a claude --bg session from the card body. Up to run.max_parallel (-1 means unlimited)
+  run <k id> [--dry-run] [--force]   starts a claude --bg session from the card body. Up to run.max_parallel (${unlimited} means unlimited)
   recover [<k id>…] [--dry-run] [--force]   resumes stalled card sessions with claude --bg --resume. --force also resumes finished sessions
   board [--json]        prints card counts per column and the session state of cards in the run.status column
   guard <path> [--session <id>]   decides whether the main session may edit that project file (1 means it may not)
