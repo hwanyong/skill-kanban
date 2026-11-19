@@ -26,6 +26,7 @@ const COMMANDS = {
   recover: 'recover.mjs',
   board: 'board.mjs',
   guard: 'guard.mjs',
+  outbox: 'outbox.mjs',
   migrate: 'migrate.mjs',
   locale: 'locale.mjs',
 }

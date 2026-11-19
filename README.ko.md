@@ -184,6 +184,8 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 
 카드 세션은 코멘트로 보고한다. `uk comment` 는 코멘트를 덧붙이고 받는 세션 앞으로 보낼 `SendMessage` 줄을 출력하고, `uk inbox` 는 그 세션 앞으로 온 코멘트 중 답하지 않은 것을 출력한다.
 
+`progress` · `question` · `result` 는 `--to` 가 무엇이든(`user` 여도) 메인 세션이 받는다. 카드 세션에서는 AI 가 SendMessage 도구를 부르지 않아도 전달된다. 카드 세션의 `uk comment` 가 같은 메시지를 `.uhd-kanban/outbox/<session id>.jsonl` 에 적고, 보드 모니터 mod 의 `tool.call` 훅이 그 Bash 호출이 끝난 자리에서 `uk outbox` 로 꺼내 `$.session.send` 로 보낸다. 받는 쪽에는 `from-plugin="uhd-kanban"` 인 세션 간 메시지로 나온다.
+
 카드 세션이 보고하는 곳은 역할 이름 `main` 이다. `main` 이 가리키는 세션 이름은 `.uhd-kanban/main.json` 한 곳에 있고, `uk comment` 가 `SendMessage` 줄을 낼 때만 그 이름으로 바꾼다. 메인 세션의 대화가 길어지면 새 세션을 다른 이름으로 열고 그 세션에서 `uk main --set` 을 실행한다. 이미 돌고 있는 카드 세션의 보고도 그 뒤로는 새 세션 앞으로 나온다.
 
 ## 명령
@@ -200,7 +202,8 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | `uk renumber` | 한 열의 순서 번호를 다시 매긴다 |
 | `uk set` | 제목 · 우선순위 · 태그 · `depends_on` · `collection` 을 바꾼다 |
 | `uk archive` | 끝난 뒤 `archive.after_days`(기본 7)일이 지난 카드를 `kanban/archived/` 로 옮긴다 |
-| `uk comment` | 코멘트를 덧붙이고 `SendMessage` 줄을 출력한다 |
+| `uk comment` | 코멘트를 덧붙이고 `SendMessage` 줄을 출력한다. 카드 세션이 부르면 outbox 에도 적는다 |
+| `uk outbox` | 카드 세션의 outbox 를 JSON 배열로 꺼내고 지운다. 보드 모니터 mod 가 부른다 |
 | `uk inbox` | 한 세션 앞으로 온 코멘트 중 답하지 않은 것을 출력한다 |
 | `uk main` | 카드 세션이 보고하는 메인 세션을 출력하거나 `--set` 으로 등록한다 |
 | `uk run` | 카드를 `claude --bg` 세션으로 띄운다 |

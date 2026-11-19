@@ -7,6 +7,7 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { callerSessionId } from './agents.mjs'
 import { USER, isName } from './comments.mjs'
 import { t } from './i18n.mjs'
+import { REPORT_KINDS } from './kinds.mjs'
 import { ProjectError } from './errors.mjs'
 import { readJson } from './project.mjs'
 import { now } from './time.mjs'
@@ -33,6 +34,16 @@ export const writeMain = (project, { name, session }) => {
 
 // 받는 이름을 SendMessage 가 받는 세션 이름으로 바꾼다. main 인데 등록하지 않았으면 null.
 export const resolveName = (project, name) => (name == MAIN ? readMain(project)?.name ?? null : name)
+
+// 코멘트의 받는 쪽. REPORT_KINDS 의 코멘트는 --to 에 메인 세션이 없으면 main 을 더한다. 메인 세션이 쓴 코멘트에는 더하지 않는다.
+// --to user 만 준 [question] 도 메인 세션이 받는다. user 는 SendMessage 가 받지 않고, 사용자에게 넘기는 것은 메인 세션의 일이다(delegate 스킬 「결정 모으기」).
+// user 는 지우지 않는다. 코멘트 머리 줄의 to 와 inbox 가 그 이름을 그대로 쓴다.
+export const recipientsOf = (project, { kind, from, to }) => {
+  if (!REPORT_KINDS.includes(kind)) return to
+  const names = [MAIN, readMain(project)?.name].filter((name) => name != null)
+  if (names.includes(from) || to.some((name) => names.includes(name))) return to
+  return [...to, MAIN]
+}
 
 // 세션 이름을 코멘트에 적을 이름으로 바꾼다. 등록된 메인 세션이면 main 이다.
 export const roleName = (project, name) => (name != null && readMain(project)?.name == name ? MAIN : name)

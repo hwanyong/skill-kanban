@@ -4,6 +4,9 @@
 // run · recover 가 카드에 쓰거나 세션에 쓰라고 하는 kind. comments.kinds 에 있어야 한다.
 export const RUN_KINDS = ['assign', 'progress', 'question', 'result']
 
+// 카드 세션이 메인 세션에 보고하는 kind. 이 kind 의 코멘트는 --to 가 무엇이든 등록된 메인 세션이 받는다(main.mjs 의 recipientsOf).
+export const REPORT_KINDS = ['progress', 'question', 'result']
+
 // 0.4.0 까지는 한국어 낱말을 kind 로 기록했다. migrate 가 이 표로 카드 파일과 config.json 을 바꿔 쓴다.
 // 이미 기록된 값의 표라 고치지 않는다. 표시 이름을 바꾸려면 messages/ko.mjs 를 고친다.
 // 가져옴 은 tools/import-nimbalyst.mjs 가 kind 를 정하지 못한 코멘트에 썼다.

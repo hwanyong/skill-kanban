@@ -25,6 +25,8 @@ const PLUGIN = 'uhd-kanban'
 const SKILL_BIN = 'skills/uhd-kanban/bin/uhd-kanban.mjs'
 const TITLE = 'uhd-kanban'
 const COMMAND = 'kanban-board'
+// uk comment 가 stdout 에 내는 SendMessage 줄의 앞머리(lib/commands/comment.mjs). Bash 결과에 이 줄이 있을 때만 outbox 명령을 부른다.
+const SEND_LINE = /^SendMessage to=/m
 // 메인 세션에서 guard 명령으로 판정하는 도구. 이 셋의 입력은 고칠 파일을 file_path · notebook_path 로 갖는다.
 const GUARDED_TOOLS = ['Edit', 'Write', 'NotebookEdit'] as const
 // 격자의 프레임 간격. 터미널에서만 재생한다. 2.1.312 의 실측은 README 의 보드 모니터 pane 절에 있다.
@@ -74,6 +76,10 @@ const TEXT = {
     runningPrefix: (status: string) => `${status} 마지막 활동: `,
     eta: (days: number) => ` · 약 ${days}일`,
     etaStalled: (days: number) => ` · ${days}일 처리 0`,
+    outboxReport: (lines: string[]) => `uhd-kanban 보드 모니터 mod 가 이 명령의 SendMessage 줄을 처리했다. 「보냄」 줄은 SendMessage 도구로 다시 보내지 않는다. 「보내지 못함」 줄만 SendMessage 도구로 보낸다.\n${lines.join('\n')}`,
+    outboxSent: (line: string) => `보냄: ${line}`,
+    outboxNotSent: (line: string, reason: string) => `보내지 못함(${reason}): ${line}`,
+    outboxFailed: (message: string) => `uhd-kanban 보드 모니터 mod 가 outbox 를 꺼내지 못해 SendMessage 줄을 보내지 않았다(${message}). 그 줄을 SendMessage 도구로 보낸다.`,
   },
   en: {
     // uk board 가 출력하는 판정 id 와 같은 낱말이다.
@@ -107,6 +113,10 @@ const TEXT = {
     runningPrefix: (status: string) => `${status} last activity: `,
     eta: (days: number) => ` · ~${days}d`,
     etaStalled: (days: number) => ` · 0 finished in ${days}d`,
+    outboxReport: (lines: string[]) => `The uhd-kanban board monitor mod handled the SendMessage lines of this command. Do not send a "sent" line again with the SendMessage tool. Send only the "not sent" lines with the SendMessage tool.\n${lines.join('\n')}`,
+    outboxSent: (line: string) => `sent: ${line}`,
+    outboxNotSent: (line: string, reason: string) => `not sent (${reason}): ${line}`,
+    outboxFailed: (message: string) => `The uhd-kanban board monitor mod could not take the outbox, so it sent no SendMessage line (${message}). Send those lines with the SendMessage tool.`,
   },
 } satisfies Record<Locale, unknown>
 
@@ -276,6 +286,25 @@ const skillArgv = ($: EngineInterface, args: string[]) => ['node', `${$.plugin.r
 // 그 디렉터리 위에 보드가 없으면 명령이 그 id 로 이 세션을 메인 세션으로 등록한 보드를 찾는다(lib/root.mjs 의 findCallerRootOrNull).
 const runSkill = async ($: EngineInterface, argv: string[], timeoutMs: number) =>
   $.process.run(argv, { cwd: await $.session.root(), env: { CLAUDE_CODE_SESSION_ID: await $.session.id() }, timeoutMs })
+
+// outbox 명령이 내는 배열의 항목(lib/outbox.mjs). to 는 SendMessage 가 받는 이름, line 은 uk comment 가 낸 줄이다.
+type OutboxMessage = { to: string; text: string; line: string }
+
+// 이 세션의 outbox 를 꺼내 $.session.send 로 보내고, 모델에게 붙일 알림을 돌려준다. 꺼낼 것이 없으면 null.
+// outbox 는 카드 세션의 uk comment 만 적으므로(lib/commands/comment.mjs) 다른 세션에서는 늘 비어 있다.
+const deliverOutbox = async ($: EngineInterface, text: PaneText) => {
+  const ran = await runSkill($, skillArgv($, ['outbox', '--session', await $.session.id()]), 30000).catch((error) => ({ exitCode: -1, stdout: '', stderr: String(error?.message ?? error) }))
+  if (ran.exitCode == 3) return null
+  if (ran.exitCode != 0) return text.outboxFailed(ran.stderr.trim() || text.exitCode(ran.exitCode))
+  const messages = JSON.parse(ran.stdout) as OutboxMessage[]
+  if (messages.length == 0) return null
+  const lines: string[] = []
+  for (const message of messages) {
+    const sent = await $.session.send({ to: message.to, text: message.text }).catch((error) => ({ isDelivered: false as const, reason: String(error?.message ?? error) }))
+    lines.push(sent.isDelivered ? text.outboxSent(message.line) : text.outboxNotSent(message.line, sent.reason))
+  }
+  return text.outboxReport(lines)
+}
 
 // board 를 한 번 실행한 결과. reading 은 실행하기 전의 값이라 여기서 나오지 않는다.
 type BoardRun = Exclude<BoardView, { kind: 'reading' }>
@@ -539,6 +568,16 @@ export const register: Register = (on) => {
     if (ran.exitCode != 1) return next(e)
     return { ask: ran.stderr.trim() }
   }).catch(($, e, next) => (next.called ? next(e) : { ask: TEXT[polling.locale].notRun(`${SKILL_BIN} guard`, next.error.message ?? next.error.kind) }))
+
+  // 카드 세션의 progress · question · result 보고를 AI 의 판단 없이 메인 세션에 보낸다. uk comment 가 outbox 에 적은 메시지를 그 Bash 호출이 끝난 자리에서 꺼내 보낸다.
+  // 2026-11-19 사용자 지시. 그 전에는 uk comment 가 낸 SendMessage 줄을 AI 가 SendMessage 도구로 보내야 했고, rea_cathode 의 카드 k291 세션은 [result] 를 두 번 남기고 한 번도 보내지 않았다.
+  // 보낸 결과는 context 로 모델에 붙인다. 모델은 「보냄」 줄을 다시 보내지 않고 「보내지 못함」 줄만 SendMessage 도구로 보낸다.
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    const result = await next(e)
+    if (result.deny != null || !SEND_LINE.test(result.text ?? '')) return result
+    const report = await deliverOutbox($, TEXT[polling.locale])
+    return report == null ? result : { ...result, context: [...(result.context ?? []), report] }
+  })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawBoard($, e, polling, PANE, e.props.bodyColumns))
 

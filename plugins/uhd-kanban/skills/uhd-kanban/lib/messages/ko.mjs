@@ -136,7 +136,7 @@ export default {
 ---
 이 작업은 uhd-kanban 카드 k${id} 다. 카드 파일은 ${glob} 이고 프로젝트 루트는 ${root} 다.
 - 단계를 하나 마칠 때마다 \`${cli} comment k${id} --kind progress --to ${reportTo} --text "<한 일 · 다음 할 일>"\` 로 남긴다. 세션이 중단되면 이 코멘트에서 이어 간다.
-- 물을 것이 있으면 \`--kind question\`, 끝나면 \`--kind result\` 로 남긴다. 고를 것이 있는 질문은 본문에 무엇을 정해야 하는지 · 선택지 2~4개(각각 결과와 대가) · 권장안과 이유 · 답이 올 때까지 멈추는 일을 적는다. 받는 쪽은 이 코멘트만 읽고 고른다. 명령이 낸 SendMessage 줄은 SendMessage 도구로 보낸다.${finish}
+- 물을 것이 있으면 \`--kind question\`, 끝나면 \`--kind result\` 로 남긴다. 고를 것이 있는 질문은 본문에 무엇을 정해야 하는지 · 선택지 2~4개(각각 결과와 대가) · 권장안과 이유 · 답이 올 때까지 멈추는 일을 적는다. 받는 쪽은 이 코멘트만 읽고 고른다. \`progress\` · \`question\` · \`result\` 는 \`--to\` 가 무엇이든 메인 세션이 받는다(\`user\` 에게 넘기는 것은 메인 세션의 일이다). 명령이 낸 SendMessage 줄은 보드 모니터 mod 가 그 명령이 끝난 자리에서 보내고 명령 결과 뒤에 보낸 줄을 알린다. 보냈다고 알린 줄은 다시 보내지 않는다. 알림이 없거나 보내지 못했다고 알린 줄만 SendMessage 도구로 보낸다.${finish}
 - \`${cli} inbox ${session}\` 로 이 세션 앞으로 온 코멘트를 읽는다.`,
   'prompt.resume': ({ cli, session, glob, finish }) => `이 세션은 중단됐다가 uhd-kanban recover 로 다시 열렸다.
 \`${cli} inbox ${session} --all\` 과 카드 파일 ${glob} 의 ## Comments 에서 마지막 [progress] 코멘트와 그 뒤의 코멘트를 읽고, 그 뒤부터 이어 간다. [result] 를 이미 남긴 카드면 그 뒤의 코멘트가 고칠 것이다. 끝나면 처음 프롬프트대로 [result] 를 다시 남긴다.${finish}`,
@@ -224,6 +224,7 @@ export default {
   'guard.usage': 'guard <경로> [--session <session id>] 형식이다',
   'guard.unknownSession': ({ session, path }) => `세션 ${session} 을 claude agents --json 에서 찾지 못해 메인 세션으로 보고 묻는다. 프로젝트 파일 ${path} 를 고치려 한다. 카드 세션이면 허용해도 된다`,
   'guard.denied': ({ name, path }) => `메인 세션${name ? ` ${name}` : ''} 이 프로젝트 파일 ${path} 를 고치려 한다. 작업은 카드로 나눠 uhd-kanban run 으로 맡긴다(delegate 스킬). 사용자가 이 작업을 직접 하라고 했을 때만 허용한다`,
+  'outbox.badSession': ({ session }) => `outbox 의 --session 이 session id(UUID) 가 아니다: ${session}`,
   'run.usage': 'run <k id> [--dry-run] [--force] 형식이다',
   'run.stillRunning': ({ id, session, state }) => `k${id} 의 세션 ${session} 이 아직 있다(state ${state}). 새로 띄우지 않는다. 멈췄으면 uhd-kanban recover k${id}`,
   'run.full': ({ max, ids, unlimited }) => `동시에 도는 카드 세션이 run.max_parallel(${max})개에 찼다: ${ids.join(', ')}. 하나가 끝난 뒤 다시 실행하거나 .uhd-kanban/config.json 의 run.max_parallel 을 바꾼다(${unlimited} 은 무제한)`,
@@ -264,6 +265,7 @@ export default {
   recover [<k id>…] [--dry-run] [--force]   세션이 멈춘 카드를 claude --bg --resume 으로 이어 간다. --force 는 끝난 세션도
   board [--json]        열마다 카드 수와 run.status 열 카드의 세션 상태를 낸다
   guard <경로> [--session <id>]   메인 세션이 그 프로젝트 파일을 고쳐도 되는지 판정한다(1 이면 안 된다)
+  outbox [--session <id>]   카드 세션이 보낼 메시지를 JSON 배열로 꺼내고 지운다. 보드 모니터 mod 가 부른다
   migrate [--dry-run]   0.4.0 까지 만든 보드의 코멘트 kind 를 영어 id 로 바꾸고 config.json 에 locale 을 넣는다
   locale                이 디렉터리에서 쓸 출력 언어(ko · en)를 낸다
   자리: --top · --bottom · --before <k id> · --after <k id> (기본 --bottom)`,

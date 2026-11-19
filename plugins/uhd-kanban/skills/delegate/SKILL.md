@@ -50,7 +50,7 @@ description: 칸반 보드가 있는 프로젝트(루트에 `.uhd-kanban/`)의 �
 3. **태그를 단다.** `model:<프로필>` · `effort:<값>` · `ultracode` 는 아래 「모델 · effort · `ultracode` 고르기」 대로 단다. `model:` · `effort:` 태그가 없으면 claude 기본값으로 뜬다. 사람이 할 일은 `model:user` 를 단다(`uk run` 이 띄우지 않는다).
 4. **만든다.** `uk new --type task --title <제목> --tags model:deep,effort:medium --depends k455 --body-file <경로>` 뒤 `uk check` 가 종료 코드 0 인지 본다. type 은 아래 「열 옮기기」의 첫 표로 고른다.
 5. **맡긴다.** 의존 카드가 모두 끝난 카드부터 `uk run k<id>` 로 띄운다. 나머지는 앞 카드가 끝난 뒤 띄운다. 도는 카드 세션이 `run.max_parallel` 개에 차면 `uk run` 이 종료 코드 1 로 거절하므로, 우선순위가 높은 카드부터 띄우고 남은 카드는 하나가 끝난 뒤 띄운다.
-6. **지켜본다.** 카드 세션의 `progress` · `question` · `result` 코멘트는 이 세션 앞으로 온다. `uk inbox` 로 읽는다. `question` 은 아래 「결정 모으기」 대로 처리한다. 멈춘 세션은 `uk board` 로 보고 `uk recover` 로 이어 간다. 세션이 끝났는데(state done) 작업이 남은 카드는 `uk recover --force k<id>` 로 이어 간다.
+6. **지켜본다.** 카드 세션의 `progress` · `question` · `result` 코멘트는 `--to` 가 무엇이든(`user` 여도) 이 세션 앞으로 오고, 보드 모니터 mod 가 그 요약을 SendMessage 와 같은 경로로 이 세션에 보낸다(`../uhd-kanban/SKILL.md` 「지킬 것」 4). 받은 메시지 · `uk inbox` 로 읽는다. `user` 앞으로 온 질문을 사용자에게 넘기는 것은 이 세션의 일이다. `question` 은 아래 「결정 모으기」 대로 처리한다. 멈춘 세션은 `uk board` 로 보고 `uk recover` 로 이어 간다. 세션이 끝났는데(state done) 작업이 남은 카드는 `uk recover --force k<id>` 로 이어 간다.
 7. **검토한다.** 카드 세션은 `[result]` 를 남긴 뒤 카드를 `run.finish` 의 열(task · bug 는 `in-review`, decision 은 `decided`)로 옮긴다. `[result]` 코멘트와 `git diff` 를 읽고 끝난 판정을 만족하는지 본다. 판정에 따라 옮기는 열은 아래 「열 옮기기」가 갖는다. 고칠 것이 있으면 그 카드에 `--kind answer` 코멘트로 고칠 것과 끝난 판정을 남기고 `uk recover --force k<id>` 로 이어 가게 하거나(`[result]` 를 남긴 세션은 대개 state done 이라 `--force` 가 없으면 건너뛴다. `recover` 가 카드를 `in-progress` 로 되돌린다) 고칠 일을 새 카드로 만든다. 검토하다 고칠 자리를 찾아도 메인 세션이 고치지 않는다.
 8. **보고한다.** 사용자에게 카드 id · 판정 · 남은 결정을 알린다.
 

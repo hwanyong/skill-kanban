@@ -187,6 +187,8 @@ Card sessions run without permission prompts because nobody is present to answer
 
 Card sessions report back through comments. `uk comment` appends a comment and prints a `SendMessage` line for the recipient session, and `uk inbox` lists comments addressed to a session that have not been answered.
 
+`progress`, `question` and `result` go to the main session whatever `--to` says (`user` included). In a card session they are delivered without the AI calling the SendMessage tool. The card session's `uk comment` writes the same messages to `.uhd-kanban/outbox/<session id>.jsonl`, and the board monitor mod's `tool.call` hook takes them with `uk outbox` as soon as that Bash call ends and sends them with `$.session.send`. The recipient sees a cross-session message with `from-plugin="uhd-kanban"`.
+
 Card sessions report to the role name `main`. The session name that `main` stands for is kept in one place, `.uhd-kanban/main.json`, and `uk comment` substitutes it only when it prints a `SendMessage` line. When the main session's conversation grows long, open a new session under a different name and run `uk main --set` in it. From then on, reports from card sessions that are already running come out addressed to the new session.
 
 ## Commands
@@ -203,7 +205,8 @@ In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`
 | `uk renumber` | Renumbers the order prefixes of one column |
 | `uk set` | Changes title, priority, tags, `depends_on` or `collection` |
 | `uk archive` | Moves finished cards older than `archive.after_days` (default 7) to `kanban/archived/` |
-| `uk comment` | Appends a comment and prints the `SendMessage` line |
+| `uk comment` | Appends a comment and prints the `SendMessage` line. Called from a card session, also writes the outbox |
+| `uk outbox` | Takes a card session's outbox as a JSON array and deletes it. The board monitor mod calls it |
 | `uk inbox` | Lists unanswered comments addressed to a session |
 | `uk main` | Prints the main session that card sessions report to, or registers one with `--set` |
 | `uk run` | Starts a card as a `claude --bg` session |

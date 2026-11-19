@@ -138,7 +138,7 @@ export default {
 ---
 This task is uhd-kanban card k${id}. The card file is ${glob} and the project root is ${root}.
 - Each time you finish a step, leave \`${cli} comment k${id} --kind progress --to ${reportTo} --text "<what you did · what comes next>"\`. If the session is interrupted, work resumes from this comment.
-- If you have a question, leave \`--kind question\`; when you finish, leave \`--kind result\`. A question with a choice states in its body what must be decided, 2 to 4 options (each with its outcome and cost), the recommended option and why, and the work that stops until the answer arrives. The recipient chooses by reading only this comment. Send any SendMessage line the command prints with the SendMessage tool.${finish}
+- If you have a question, leave \`--kind question\`; when you finish, leave \`--kind result\`. A question with a choice states in its body what must be decided, 2 to 4 options (each with its outcome and cost), the recommended option and why, and the work that stops until the answer arrives. The recipient chooses by reading only this comment. \`progress\`, \`question\` and \`result\` go to the main session whatever \`--to\` says (passing them on to \`user\` is the main session's job). The board monitor mod sends the SendMessage lines the command prints as soon as the command ends, and lists the lines it sent after the command's result. Do not send a line it reports as sent again. Send with the SendMessage tool only a line it reports as not sent, or every line when no such report follows.${finish}
 - Read comments addressed to this session with \`${cli} inbox ${session}\`.`,
   'prompt.resume': ({ cli, session, glob, finish }) => `This session was interrupted and reopened by uhd-kanban recover.
 Read the last [progress] comment and the comments after it from \`${cli} inbox ${session} --all\` and the ## Comments section of the card file ${glob}, and continue from there. If the card already has a [result], the comments after it are what to fix. When you finish, leave [result] again as the first prompt says.${finish}`,
@@ -224,6 +224,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'board.column': ({ dir, count, verdicts }) => `${dir} ${count}${verdicts.length > 0 ? ` (sessions: ${verdicts.join(' · ')})` : ''}`,
   'board.lane': ({ id, title, status, finished, total }) => `${id == null ? 'no milestone' : `k${id} ${title} (${status})`} ${finished}/${total}`,
   'guard.usage': 'Usage: guard <path> [--session <session id>]',
+  'outbox.badSession': ({ session }) => `The --session of outbox is not a session id (UUID): ${session}`,
   'guard.unknownSession': ({ session, path }) => `Session ${session} is not in claude agents --json, so it is treated as the main session and you are asked. It is about to edit the project file ${path}. If this is a card session, allowing it is safe`,
   'guard.denied': ({ name, path }) => `The main session${name ? ` ${name}` : ''} is about to edit the project file ${path}. Split the work into cards and hand them off with uhd-kanban run (delegate skill). Allow it only when the user asked for this work to be done directly`,
   'run.usage': 'Usage: run <k id> [--dry-run] [--force]',
@@ -266,6 +267,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   recover [<k id>…] [--dry-run] [--force]   resumes stalled card sessions with claude --bg --resume. --force also resumes finished sessions
   board [--json]        prints card counts per column and the session state of cards in the run.status column
   guard <path> [--session <id>]   decides whether the main session may edit that project file (1 means it may not)
+  outbox [--session <id>]   takes the messages a card session is to send as a JSON array and deletes them. The board monitor mod calls it
   migrate [--dry-run]   converts comment kinds of a board made with 0.4.0 or earlier to English ids and adds locale to config.json
   locale                prints the output language (ko · en) used in this directory
   position: --top · --bottom · --before <k id> · --after <k id> (default --bottom)`,
