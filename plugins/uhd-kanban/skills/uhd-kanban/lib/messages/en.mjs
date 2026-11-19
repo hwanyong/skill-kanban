@@ -204,6 +204,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'check.ancestor': ({ root, ancestor }) => `This board (${root}) is inside the board of ${ancestor}. uk called below ${root} does not use the board in ${ancestor}`,
   'check.children': ({ root, children }) => `Directories right below this board (${root}) have other boards: ${children.join(' · ')}. uk called below those directories does not use this board`,
   'check.problems': ({ problems }) => `${count(problems.length, 'rule violation')}:${list(problems)}`,
+  'check.outboxOrphan': ({ id }) => `.uhd-kanban/outbox/${id}.jsonl holds messages that were not sent, and session ${id} is not in claude agents --json. To read and delete them: uhd-kanban outbox --session ${id}`,
   'check.milestoneWaiting': ({ id, status, running, runStatus, ids }) => `k${id} is ${status} but has ${runStatus} cards: ${ids.join(', ')}. If it is under way: uhd-kanban move k${id} ${running}`,
   'check.milestoneFinished': ({ id, status, done, total }) => `k${id} is ${status} but all ${count(total, 'card')} are finished. If it is complete: uhd-kanban move k${id} ${done}`,
   'move.usage': 'Usage: move <k id> <status>',

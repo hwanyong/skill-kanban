@@ -202,6 +202,7 @@ export default {
   'check.ancestor': ({ root, ancestor }) => `이 보드(${root})는 ${ancestor} 의 보드 안에 있다. ${root} 아래에서 부른 uk 는 ${ancestor} 의 보드를 쓰지 않는다`,
   'check.children': ({ root, children }) => `이 보드(${root}) 바로 아래 디렉터리에 다른 보드가 있다: ${children.join(' · ')}. 그 디렉터리 아래에서 부른 uk 는 이 보드를 쓰지 않는다`,
   'check.problems': ({ problems }) => `규칙 위반 ${problems.length}건:${list(problems)}`,
+  'check.outboxOrphan': ({ id }) => `.uhd-kanban/outbox/${id}.jsonl 에 보내지 못한 메시지가 남았는데 세션 ${id} 가 claude agents --json 목록에 없다. 읽고 지우려면 uhd-kanban outbox --session ${id}`,
   'check.milestoneWaiting': ({ id, status, running, runStatus, ids }) => `k${id} 는 ${status} 인데 ${runStatus} 소속 카드가 있다: ${ids.join(', ')}. 진행 중이면 uhd-kanban move k${id} ${running}`,
   'check.milestoneFinished': ({ id, status, done, total }) => `k${id} 는 ${status} 인데 소속 카드 ${total}개가 모두 끝났다. 마쳤으면 uhd-kanban move k${id} ${done}`,
   'move.usage': 'move <k id> <status> 형식이다',

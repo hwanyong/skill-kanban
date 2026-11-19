@@ -423,7 +423,7 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 
 - **카드 제목에 제어 문자가 있으면 보드를 바꾸는 명령이 멈춘다.** 어느 카드든 `title` 에 제어 문자가 있으면 `uk check` 가 위반으로 알리고, 보드를 바꾸는 명령은 실행을 거절한다. `uk set --title` 도 거절하므로 그 카드의 frontmatter 에서 `title` 을 직접 고치고 `uk check` 를 다시 실행한다. 파일 이름의 제목 부분은 `title` 과 같아야 한다.
 - **그런 제목을 실제 pane 화면으로는 시험하지 않았다.** `uk board --json` 이 milestone 제목에서 제어 문자를 빼고 pane 은 그 값을 그린다. 시험한 것은 JSON 출력까지다.
-- **`.uhd-kanban/main.json` 은 이 Mac 의 세션 이름이다.** `.uhd-kanban/` 을 저장소에 올리는 프로젝트라면 `main.json` 을 `.gitignore` 에 넣는다. 다른 컴퓨터에서 받은 `main.json` 은 그 컴퓨터에 없는 세션을 가리킨다.
+- **`.uhd-kanban/main.json` 은 이 Mac 의 세션 이름이다.** uk 가 `.uhd-kanban/.gitignore` 를 만들어 `main.json` · `lock/` · `lock.new-*` · `lock.old-*` · `lock.break-*` · `outbox/` 를 추적에서 뺀다(프로젝트의 `.gitignore` 는 고치지 않는다). 그 파일이 없거나 내용이 다르면 다음 uk 실행이 다시 쓴다. 다른 컴퓨터에서 받은 `main.json` 은 그 컴퓨터에 없는 세션을 가리키므로 추적하지 않는다. `uk check` 는 `outbox/` 에 파일이 남았는데 세션 목록에 없는 세션이 있으면 알리고, 꺼내 읽고 지우는 `uk outbox --session <id>` 를 안내한다.
 - **처리되지 않은 예외는 거르지 않는다.** 명령이 stdout · stderr 로 쓰는 출력에서는 제어 문자를 뺀다. 명령이 처리되지 않은 예외로 끝나면 Node.js 가 그 필터를 거치지 않고 오류를 stderr 로 내므로, 오류 메시지의 제어 문자가 그대로 나간다.
 
 ## 자주 묻는 질문

@@ -12,7 +12,7 @@
 //   그래서 남이 새로 잡은 lock 을 지우지 않고, 한 lock 을 옮기는 rename 은 한 프로세스만 한다.
 // - break 디렉터리를 쥔 채 죽으면 BREAK_STALE_MS 뒤 그 디렉터리의 mtime 을 이름에 붙인 다음 세대를 mkdir 한다. 앞 세대는 지우지 않는다.
 //   앞 세대를 지우면 그 이름을 다시 mkdir 한 프로세스와 다음 세대를 쥔 프로세스가 함께 쥐게 된다.
-// rename 과 rmSync 사이에 죽으면 `.uhd-kanban/lock.new-*` · `lock.old-*` · `lock.break-*` 가 남는다. 그것을 읽는 코드는 없다.
+// rename 과 rmSync 사이에 죽으면 `.uhd-kanban/lock.new-*` · `lock.old-*` · `lock.break-*` 가 남는다. 그것을 읽는 코드는 없고, `.uhd-kanban/.gitignore`(root.mjs 의 syncIgnoreFile)가 추적에서 뺀다.
 
 import { mkdirSync, mkdtempSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
@@ -20,7 +20,7 @@ import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { t } from './i18n.mjs'
 import { ProjectError } from './errors.mjs'
-import { readJsonOrNull } from './root.mjs'
+import { LOCK_NAME, LOCK_SUFFIXES, readJsonOrNull } from './root.mjs'
 
 const STALE_MS = 10 * 60 * 1000
 const WAIT_MS = 30 * 1000
@@ -65,7 +65,7 @@ const isStale = ({ owner, mtimeMs }) => {
 
 // 쓴 owner 를 돌려준다. lock 이 이미 있으면 null.
 const tryAcquire = (dir) => {
-  const tmp = mkdtempSync(`${dir}.new-`)
+  const tmp = mkdtempSync(`${dir}.${LOCK_SUFFIXES.acquire}-`)
   const owner = { host: hostname(), pid: process.pid, at: Date.now() }
   try {
     writeFileSync(join(tmp, 'owner.json'), JSON.stringify(owner))
@@ -81,7 +81,7 @@ const tryAcquire = (dir) => {
 
 // identity 가 같은 lock 을 치울 권리를 mkdir 로 쥔다. 쥐었으면 그 디렉터리 경로, 남이 쥐고 있으면 null.
 const claimBreak = (dir, identity) => {
-  let path = `${dir}.break-${identity}`
+  let path = `${dir}.${LOCK_SUFFIXES.claim}-${identity}`
   for (;;) {
     try {
       mkdirSync(path)
@@ -102,7 +102,7 @@ const discardIf = (dir, identity) => {
   if (!breakPath) return false
   try {
     if (inspect(dir)?.identity != identity) return false
-    const grave = `${dir}.old-${process.pid}-${Date.now()}`
+    const grave = `${dir}.${LOCK_SUFFIXES.discard}-${process.pid}-${Date.now()}`
     renameSync(dir, grave)
     rmSync(grave, { recursive: true, force: true })
     return true
@@ -113,7 +113,7 @@ const discardIf = (dir, identity) => {
 
 // work 를 lock 안에서 실행하고 반환값을 돌려준다. WAIT_MS 동안 잡지 못하면 ProjectError 로 끝난다.
 export const withLock = async (settingsPath, work) => {
-  const dir = join(settingsPath, 'lock')
+  const dir = join(settingsPath, LOCK_NAME)
   const deadline = Date.now() + WAIT_MS
   let mine = tryAcquire(dir)
   while (!mine) {

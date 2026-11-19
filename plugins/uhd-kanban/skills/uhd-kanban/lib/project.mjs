@@ -7,7 +7,7 @@ import { NoProjectError, ProjectError } from './errors.mjs'
 import { ID, ID_PATTERN } from './ids.mjs'
 import { LEGACY_KINDS, RUN_KINDS, kindId } from './kinds.mjs'
 import { validateProfiles } from './profiles.mjs'
-import { BOARD_DIR, SETTINGS_DIR, configFile, findCallerRootOrNull, profilesFile, rememberBoard } from './root.mjs'
+import { BOARD_DIR, SETTINGS_DIR, configFile, findCallerRootOrNull, profilesFile, rememberBoard, syncIgnoreFile } from './root.mjs'
 
 // order.width(파일 이름의 순서 번호 자릿수)의 범위.
 const MIN_ORDER_WIDTH = 3
@@ -205,6 +205,7 @@ export const validateConfig = (config) => {
 export const loadProject = (cwd = process.cwd()) => {
   const root = findRoot(cwd)
   rememberBoard(root)
+  syncIgnoreFile(root)
   const configPath = configFile(root)
   const config = readJson(configPath)
   const problems = validateConfig(config)
