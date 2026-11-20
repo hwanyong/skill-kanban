@@ -62,8 +62,8 @@ export const run = async ({ flags }) => {
   const main = readMain(project)
   // session id → 메시지에 적을 이름. 카드 세션은 그 카드의 k<id>, 메인 세션은 main.json 의 이름, 나머지는 claude agents --json 의 name 이다.
   const names = new Map([
-    ...sessions.filter((session) => session.name).map((session) => [session.sessionId, session.name]),
-    ...(main?.session ? [[main.session, main.name]] : []),
+    ...sessions.filter((session) => session.name).map((session) => [session.sessionId, text(session.name)]),
+    ...(main?.session ? [[main.session, text(main.name)]] : []),
     ...members.filter((card) => card.data.session).map((card) => [card.data.session, sessionName(card.id)]),
   ])
   const pidNames = new Map(sessions.filter((session) => session.pid != null && names.has(session.sessionId)).map((session) => [session.pid, names.get(session.sessionId)]))
@@ -76,7 +76,8 @@ export const run = async ({ flags }) => {
       title: text(card.data.title),
       status: text(card.status),
       column_index: columnIndex.get(card.status) ?? null,
-      depends_on: card.data.depends_on ?? [],
+      // 배치는 카드 id(정수)로 잇는다. 정수가 아닌 항목은 uk check 가 위반으로 알리고 여기서는 뺀다.
+      depends_on: Array.isArray(card.data.depends_on) ? card.data.depends_on.filter(Number.isInteger) : [],
       dependents: dependentsOf(board, card.id).filter(isWork).map((dependent) => dependent.id),
       verdict: verdict?.verdict ?? null,
       session: text(card.data.session),
@@ -90,7 +91,7 @@ export const run = async ({ flags }) => {
     }
   })
   const fromComments = commented.flatMap(({ card, comments }) => comments.map((comment) => ({ at: text(comment.at), from: text(comment.from), to: text(comment.to.join(',')), kind: text(comment.kind), card: card.id, text: body(comment.text, MESSAGE_CHARS) })))
-  const fromLogs = logs.map((entry) => ({ at: text(entry.at), from: text(names.get(entry.from_session) ?? entry.from_session), to: recipient(text(entry.to) ?? '', pidNames), kind: null, card: null, text: body(entry.text, MESSAGE_CHARS) }))
+  const fromLogs = logs.map((entry) => ({ at: text(entry.at), from: text(names.get(entry.from_session) ?? entry.from_session), to: text(recipient(typeof entry.to == 'string' ? entry.to : '', pidNames)), kind: null, card: null, text: body(entry.text, MESSAGE_CHARS) }))
   const messages = [...fromComments, ...fromLogs].filter((message) => timeOf(message.at) != null).toSorted((a, b) => timeOf(a.at) - timeOf(b.at)).slice(-MESSAGES)
   const { running: runningMilestone } = milestoneStatuses(config)
   const result = {
@@ -105,7 +106,7 @@ export const run = async ({ flags }) => {
       key: milestone ? `k${milestone.id}` : 'none',
       id: milestone?.id ?? null,
       title: text(milestone?.data.title ?? null),
-      status: milestone?.status ?? null,
+      status: text(milestone?.status ?? null),
       is_running: milestone != null && milestone.status == runningMilestone,
       finished,
       total,
