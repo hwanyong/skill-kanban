@@ -138,7 +138,7 @@ member id 는 pane-grid 0.6.0(origin/main 036e392)이 받는다. 그 판의 `ski
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
-| 1 | 3절 데이터 · 4절 그리기 · 노드 상세(Connections · Result · Record · Resume) · 메시지 기록 · README 두 벌(`README.md` · `README.ko.md`) | 2026-11-20 구현 · 확인. 커밋 전 |
+| 1 | 3절 데이터 · 4절 그리기 · 노드 상세(Connections · Result · Record · Resume) · 메시지 기록 · README 두 벌(`README.md` · `README.ko.md`) | 2026-11-20 구현 · 확인 |
 
 ## 7. 결정
 
