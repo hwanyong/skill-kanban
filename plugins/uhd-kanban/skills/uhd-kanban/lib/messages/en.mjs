@@ -226,6 +226,8 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'board.lane': ({ id, title, status, finished, total }) => `${id == null ? 'no milestone' : `k${id} ${title} (${status})`} ${finished}/${total}`,
   'guard.usage': 'Usage: guard <path> [--session <session id>]',
   'outbox.badSession': ({ session }) => `The --session of outbox is not a session id (UUID): ${session}`,
+  'messageLog.badSession': ({ session }) => `The --session of message-log is not a session id (UUID): ${session}`,
+  'messageLog.badInput': 'The stdin of message-log must be JSON { "to": string, "text": string, "agent_id"?: string }',
   'guard.unknownSession': ({ session, path }) => `Session ${session} is not in claude agents --json, so it is treated as the main session and you are asked. It is about to edit the project file ${path}. If this is a card session, allowing it is safe`,
   'guard.denied': ({ name, path }) => `The main session${name ? ` ${name}` : ''} is about to edit the project file ${path}. Split the work into cards and hand them off with uhd-kanban run (delegate skill). Allow it only when the user asked for this work to be done directly`,
   'run.usage': 'Usage: run <k id> [--dry-run] [--force]',
@@ -267,8 +269,10 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   run <k id> [--dry-run] [--force]   starts a claude --bg session from the card body. Up to run.max_parallel (${unlimited} means unlimited)
   recover [<k id>…] [--dry-run] [--force]   resumes stalled card sessions with claude --bg --resume. --force also resumes finished sessions
   board [--json]        prints card counts per column and the session state of cards in the run.status column
+  flow [--json]         prints, per milestone group, the cards, depends_on, card sessions and the messages between sessions. The session flow view calls it
   guard <path> [--session <id>]   decides whether the main session may edit that project file (1 means it may not)
   outbox [--session <id>]   takes the messages a card session is to send as a JSON array and deletes them. The board monitor mod calls it
+  message-log [--session <id>]   writes one JSON message from stdin to .uhd-kanban/message-log/. The board monitor mod's session.send hook calls it
   migrate [--dry-run]   converts comment kinds of a board made with 0.4.0 or earlier to English ids and adds locale to config.json
   locale                prints the output language (ko · en) used in this directory
   position: --top · --bottom · --before <k id> · --after <k id> (default --bottom)`,

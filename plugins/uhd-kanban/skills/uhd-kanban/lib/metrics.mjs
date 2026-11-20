@@ -33,6 +33,9 @@ const activityTimes = (card) => parseComments(card.body).comments.filter((commen
 
 const latest = (times) => (times.length == 0 ? null : new Date(Math.max(...times)).toISOString())
 
+// 카드 세션이 마지막으로 일한 시각: ACTIVITY_KINDS 코멘트와 session_started_at 중 늦은 것. 둘 다 없으면 null. boardMetrics 의 running 과 flow 명령이 쓴다.
+export const lastActivityAt = (card) => latest([...activityTimes(card), timeOf(card.data.session_started_at)].filter((ms) => ms != null))
+
 // 기간 안에 끝난 카드 수. members 는 lanes.mjs 의 boardLanes 가 낸 소속 작업 카드(아카이브 포함)다.
 export const recentFinished = (members, nowMs) => members.filter((card) => {
   const ms = timeOf(card.data.completed_at)
@@ -60,7 +63,7 @@ export const boardMetrics = (project, { cards, archived }, nowMs = Date.now()) =
     last_activity_at: latest(activity),
     running: cards.filter((card) => card.status == runStatus && isWork(card)).map((card) => ({
       id: card.id,
-      last_activity_at: latest([...activityTimes(card), timeOf(card.data.session_started_at)].filter((ms) => ms != null)),
+      last_activity_at: lastActivityAt(card),
     })),
   }
 }

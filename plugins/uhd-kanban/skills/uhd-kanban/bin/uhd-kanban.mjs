@@ -25,8 +25,10 @@ const COMMANDS = {
   run: 'run.mjs',
   recover: 'recover.mjs',
   board: 'board.mjs',
+  flow: 'flow.mjs',
   guard: 'guard.mjs',
   outbox: 'outbox.mjs',
+  'message-log': 'message-log.mjs',
   migrate: 'migrate.mjs',
   locale: 'locale.mjs',
 }

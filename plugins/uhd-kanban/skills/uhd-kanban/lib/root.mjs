@@ -16,15 +16,16 @@ export const configFile = (root) => join(root, SETTINGS_DIR, 'config.json')
 export const profilesFile = (root) => join(root, SETTINGS_DIR, 'profiles.json')
 export const mainFile = (root) => join(root, SETTINGS_DIR, MAIN_NAME)
 
-// `.uhd-kanban/` 아래에서 uk 가 실행 중에 만드는 파일의 이름. 만드는 코드(lock.mjs · outbox.mjs · mainFile)가 이 이름을 쓰고, 무시 규칙(IGNORE_ENTRIES)이 같은 이름에서 나온다.
+// `.uhd-kanban/` 아래에서 uk 가 실행 중에 만드는 파일의 이름. 만드는 코드(lock.mjs · outbox.mjs · message-log.mjs · mainFile)가 이 이름을 쓰고, 무시 규칙(IGNORE_ENTRIES)이 같은 이름에서 나온다.
 // lock 의 임시 이름은 `lock.<LOCK_SUFFIXES 의 값>-*` 이다(lock.mjs). 쥔 프로세스가 죽으면 남는다.
 export const LOCK_NAME = 'lock'
 export const LOCK_SUFFIXES = { acquire: 'new', discard: 'old', claim: 'break' }
 export const OUTBOX_NAME = 'outbox'
+export const MESSAGE_LOG_NAME = 'message-log'
 export const MAIN_NAME = 'main.json'
 
 // 저장소에 추적하면 안 되는 실행 중 파일. config.json · profiles.json 은 보드의 설정이라 추적한다.
-const IGNORE_ENTRIES = [`${LOCK_NAME}/`, ...Object.values(LOCK_SUFFIXES).map((suffix) => `${LOCK_NAME}.${suffix}-*`), MAIN_NAME, `${OUTBOX_NAME}/`]
+const IGNORE_ENTRIES = [`${LOCK_NAME}/`, ...Object.values(LOCK_SUFFIXES).map((suffix) => `${LOCK_NAME}.${suffix}-*`), MAIN_NAME, `${OUTBOX_NAME}/`, `${MESSAGE_LOG_NAME}/`]
 const IGNORE_TEXT = `# uhd-kanban 이 관리하는 파일이다. 실행 중에 만드는 파일이라 추적하지 않는다. 내용이 다르면 uk 가 다시 쓴다.\n${IGNORE_ENTRIES.join('\n')}\n`
 export const ignoreFile = (root) => join(root, SETTINGS_DIR, '.gitignore')
 

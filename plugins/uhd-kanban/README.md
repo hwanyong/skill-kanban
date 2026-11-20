@@ -1,12 +1,13 @@
 # uhd-kanban
 
-프로젝트마다 `kanban/` 디렉터리의 `.md` 카드 파일로 칸반 보드를 운영하는 Claude Code 플러그인이다. 세 가지가 들어 있다.
+프로젝트마다 `kanban/` 디렉터리의 `.md` 카드 파일로 칸반 보드를 운영하는 Claude Code 플러그인이다. 네 가지가 들어 있다.
 
 | 구성 | 경로 | 하는 일 |
 |---|---|---|
 | 스킬 `uhd-kanban` | `skills/uhd-kanban/` | 카드 만들기 · 열 옮기기 · 순서 · 코멘트 · 아카이브 · 카드를 `claude --bg` 세션으로 실행 · 멈춘 세션 이어 가기. 사용법은 `skills/uhd-kanban/SKILL.md` |
 | 스킬 `delegate` | `skills/delegate/` | 보드가 있는 프로젝트의 메인 세션이 작업을 직접 하지 않고 카드로 나눠 `uk run` 으로 맡기게 한다. 규칙은 `skills/delegate/SKILL.md` |
 | 보드 모니터 | `hooks/register.tsx` · `hooks/frames.ts` | `uk board --json` 이 보드를 찾으면 pane 을 열고(세션 디렉터리 위의 보드, 이 세션을 메인 세션으로 등록한 보드, 이 세션을 띄운 디렉터리 위의 보드 차례로 찾는다. `skills/uhd-kanban/lib/root.mjs` 의 `findCallerRootOrNull`), 끝나지 않은 milestone 마다 행 하나를 그려 소속 카드 하나를 한 칸으로 그린다. `run.status` 열(기본 `in-progress`)의 칸 중 세션 판정이 `live` · `pending` · `restart` 인 칸의 애니메이션과 카드 생성 · 삭제 · 이동의 재배치를 재생한다. 머리 줄의 `▾ k<id>` 를 누르면 그 행의 막대를 접는다. 갱신 주기는 `config.json` 의 `monitor.interval_seconds`(기본 60초). 메인 세션이 프로젝트 파일을 Edit · Write · NotebookEdit 로 고치려 하면 `uk guard` 로 판정해 사용자에게 확인 창을 띄운다 |
+| 세션 흐름 | `hooks/flow.tsx` · `hooks/flow-layout.ts` | `/kanban-flow` 로 여는 두 번째 pane. milestone 묶음 하나의 카드를 `depends_on` 에 따라 노드와 선으로 그리고, 노드 상세(앞 · 뒤 카드, 마지막 결과, 대화 기록 경로, `uk recover` Button)와 세션 사이 메시지를 보인다. 값은 `uk flow --json` 이 낸다. SendMessage 로 보낸 메시지는 `session.send` 훅이 `uk message-log` 로 적는다. pane-grid 의 member id 는 보드 모니터가 `uhd-kanban`, 세션 흐름이 `uhd-kanban.flow` 다 |
 
 ## 설치
 

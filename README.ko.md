@@ -25,6 +25,7 @@
 - [카드 세션에 작업 맡기기](#카드-세션에-작업-맡기기)
 - [명령](#명령)
 - [보드 모니터 pane](#보드-모니터-pane)
+- [세션 흐름 pane](#세션-흐름-pane)
 - [필요한 것](#필요한-것)
 - [사용 주의사항](#사용-주의사항)
 - [자주 묻는 질문](#자주-묻는-질문)
@@ -41,6 +42,7 @@
 | 의존성 · 동시 실행 상한 | `depends_on` 에 적은 카드가 끝나기 전에는 카드를 시작하지 않는다. `run.max_parallel`(기본 3)이 동시에 도는 카드 세션 수를 제한한다. |
 | 이어 가기 | `uk recover` 가 멈췄거나 데몬이 다시 띄운 카드 세션을 이어 가고 새 session id 를 카드에 적는다. |
 | 보드 모니터 | pane 이 milestone 마다 행 하나를 그려 소속 카드 하나를 한 칸으로 그리고, in-progress 열의 칸을 세션 상태에 따라 애니메이션으로 그리며, 카드가 생성 · 삭제 · 이동되면 재배치를 재생한다. 행은 클릭이나 키보드로 접는다. 범례 아래에 날짜별 처리량 · 유입, 시간별 활동 코멘트 수, in-progress 카드의 마지막 활동 시각을 그리고, milestone 마다 예상 일수를 적는다. 기본 갱신 주기는 60초다. |
+| 세션 흐름 | 두 번째 pane 이 milestone 묶음 하나의 카드를 `depends_on` 에 따라 노드와 선으로 그리고, 카드 세션 상태 · 노드 상세 · 세션 사이 메시지를 보인다. pane-grid 칸에는 보드 모니터와 따로 둔다. |
 
 ## 플러그인 구성
 
@@ -48,7 +50,7 @@
 |---|---|---|
 | 스킬 `uhd-kanban` | [`plugins/uhd-kanban/skills/uhd-kanban/`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md) | 카드 만들기 · 열 옮기기 · 순서 바꾸기 · 코멘트 · 아카이브. 카드를 `claude --bg` 세션으로 실행하기. 멈춘 세션 이어 가기 |
 | 스킬 `delegate` | [`plugins/uhd-kanban/skills/delegate/`](plugins/uhd-kanban/skills/delegate/SKILL.md) | 보드가 있는 프로젝트의 메인 세션이 지킬 규칙. 작업을 카드로 나누고, `uk run` 으로 맡기고, 결과를 검토하고, 카드를 옮긴다 |
-| hooks 모듈 | [`plugins/uhd-kanban/hooks/register.tsx`](plugins/uhd-kanban/hooks/register.tsx) | `uk board --json` 이 보드를 찾으면 보드 모니터 pane 을 열고(찾는 차례는 「하위 디렉터리나 프로젝트 밖에서 부르면 어느 보드를 쓰는가?」), `/kanban-board` 명령을 등록하고, Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행한다 |
+| hooks 모듈 | [`plugins/uhd-kanban/hooks/register.tsx`](plugins/uhd-kanban/hooks/register.tsx) | `uk board --json` 이 보드를 찾으면 보드 모니터 pane 을 열고(찾는 차례는 「하위 디렉터리나 프로젝트 밖에서 부르면 어느 보드를 쓰는가?」), `/kanban-board` · `/kanban-flow` 명령을 등록하고, Edit · Write · NotebookEdit 앞에서 `uk guard` 를 실행하고, SendMessage 로 보낸 메시지를 `uk message-log` 로 적는다 |
 
 ## 빠른 시작
 
@@ -204,12 +206,14 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | `uk archive` | 끝난 뒤 `archive.after_days`(기본 7)일이 지난 카드를 `kanban/archived/` 로 옮긴다 |
 | `uk comment` | 코멘트를 덧붙이고 `SendMessage` 줄을 출력한다. 카드 세션이 부르면 outbox 에도 적는다 |
 | `uk outbox` | 카드 세션의 outbox 를 JSON 배열로 꺼내고 지운다. 보드 모니터 mod 가 부른다 |
+| `uk message-log` | stdin 의 메시지 하나를 `.uhd-kanban/message-log/` 에 적는다. 보드 모니터 mod 의 `session.send` 훅이 부른다 |
 | `uk inbox` | 한 세션 앞으로 온 코멘트 중 답하지 않은 것을 출력한다 |
 | `uk main` | 카드 세션이 보고하는 메인 세션을 출력하거나 `--set` 으로 등록한다 |
 | `uk run` | 카드를 `claude --bg` 세션으로 띄운다 |
 | `uk recover` | 멈춘 카드 세션을 `claude --bg --resume` 으로 이어 간다 |
 | `uk guard` | 그 세션이 그 파일을 고쳐도 되는지 판정한다(훅이 쓴다) |
 | `uk board` | 열마다 카드 수, 세션 상태, milestone 마다 끝난 수 / 전체 수를 출력한다(pane 이 쓴다) |
+| `uk flow` | milestone 묶음 · 카드 · `depends_on` · 카드 세션 · 세션 사이 메시지를 출력한다(세션 흐름 pane 이 쓴다) |
 | `uk migrate` | 0.4.0 까지 만든 보드의 kind 를 영어 id 로 바꾸고 `locale` 을 넣는다 |
 | `uk locale` | 지금 디렉터리에서 쓸 언어를 출력한다(pane 이 쓴다) |
 
@@ -412,6 +416,36 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 
 세션 두 개를 나란히 15분 동안 실행했을 때, 250 ms 간격으로 다시 그린 세션은 CPU 2.05% 를 썼고 RSS(프로세스 상주 메모리)가 438 MB 에서 486 MB 로 늘었다. 타이머가 꺼진 세션은 CPU 0.43% 를 썼고 RSS 가 426 MB 에서 449 MB 로 늘었다. 15분보다 긴 실행은 재지 않았다.
 
+## 세션 흐름 pane
+
+보드 모니터와 따로 여는 두 번째 pane 이다. milestone 묶음 하나의 카드를 `depends_on` 에 따라 노드와 선으로 그리고, 카드 세션의 상태와 세션 사이의 메시지를 함께 보인다. `/kanban-flow` 로 연다. 세션이 시작될 때 저절로 열리지는 않는다. 값은 `uk flow --json` 이 내고, pane 이 열려 있을 때만 `monitor.interval_seconds` 마다 다시 읽는다.
+
+| 줄 | 그리는 것 |
+|---|---|
+| 머리 줄 | 갱신 시각 · 메인 세션 이름 · 도는 카드 세션 수 / `run.max_parallel`, 고른 묶음의 첫 세션 시작부터 지난 날수 · 끝난 수 / 전체 수. `depends_on` 에 순환이 있으면 `순환 k1 → k6 → k1` 줄이 더 나온다 |
+| 조작 줄 | `‹` · `›` 묶음 고르기, `↓` · `→` 세로 · 가로 배치, `−` · `+` 1줄 노드 · 3줄 노드. 고른 Button 은 반전한다 |
+| 노드와 선 | 카드 하나가 노드 하나다. 테두리 색은 열의 색이고 상태 기호는 보드 모니터와 같다. 3줄 노드가 pane 폭을 넘으면 1줄 노드로, 1줄 노드로도 넘는 묶음은 `k1 → k2, k3` 꼴의 목록 줄로 그린다 |
+| 노드 상세 | 노드를 누르면 나온다. 열 · 세션 판정 · 커밋 수, 시작 · 마지막 활동 시각, 앞 카드(`depends_on`) · 뒤 카드, 마지막 `result`(없으면 `progress`) 코멘트 앞 3줄, 대화 기록 경로. 세션 판정이 `resume` · `restart` 이면 `uk recover k<id>` Button 이 있고, 누르면 그 명령의 종료 코드와 출력 마지막 줄이 아래에 나온다 |
+| 최근 메시지 | 고른 노드가 없을 때 나온다. 카드 코멘트와 세션 사이 메시지를 시각 차례로 합친 최근 10개 |
+| hover 툴팁 | 노드 위에 포인터를 두면 카드 제목 전문 · 마지막 `progress` 첫 줄 · 시각이 나온다 |
+
+고른 묶음 · 배치 방향 · 노드 크기 · 고른 카드는 보드마다 저장되어 `/reload-plugins` 뒤에도 남는다.
+
+세션 사이 메시지는 보낸 쪽이 적는다. 이 플러그인이 켜진 세션에서 모델이 SendMessage 도구로 보낸 메시지가 전달되면, `session.send` 훅이 `uk message-log` 로 `.uhd-kanban/message-log/<보낸 session id>.jsonl` 에 `{ at, to, text }` 한 줄을 더한다. 전달되지 않은 메시지와 mod 가 `$.session.send` 로 보낸 카드 세션 보고(이미 카드 코멘트에 있다)는 적지 않는다. 받는 세션의 `session.receive` 에는 보낸 세션의 id 가 없어서(2026-11-20, Claude Code 2.1.329) 받는 쪽에서는 적지 않는다. `uk flow` 가 읽을 때 session id 를 세션 이름(`k<id>` · 메인 세션 이름 · `claude agents --json` 의 `name`)으로 바꾼다.
+
+### pane-grid 칸에 두기
+
+[pane-grid](https://github.com/hwanyong/pane-grid) 0.6.0 이상이 있으면 두 pane 을 다른 칸에 따로 둘 수 있다.
+
+| pane | member id | 칸에 두는 명령 |
+|---|---|---|
+| 보드 모니터 | `uhd-kanban` | `/grid place uhd-kanban <칸>` |
+| 세션 흐름 | `uhd-kanban.flow` | `/grid place uhd-kanban.flow <칸>` |
+
+칸에 두면 그 pane 의 자기 pane 은 닫힌다. 빈 칸의 고르기 목록에도 두 member id 가 따로 나온다. 세션 흐름 칸은 `hovers:` 를 선언하므로, 다른 칸이 활성이어도 그 칸의 노드 위에서 툴팁이 나온다. 그동안 그 칸의 제목 줄만 칸을 활성으로 바꾸는 영역으로 남는다.
+
+설계와 확인 기록은 [`docs/session-flow-view.md`](docs/session-flow-view.md) 에 있다.
+
 ## 필요한 것
 
 - Claude Code 2.1.312 이상(hooks 모듈 API 를 이 판에서 확인했다)
@@ -423,7 +457,7 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 
 - **카드 제목에 제어 문자가 있으면 보드를 바꾸는 명령이 멈춘다.** 어느 카드든 `title` 에 제어 문자가 있으면 `uk check` 가 위반으로 알리고, 보드를 바꾸는 명령은 실행을 거절한다. `uk set --title` 도 거절하므로 그 카드의 frontmatter 에서 `title` 을 직접 고치고 `uk check` 를 다시 실행한다. 파일 이름의 제목 부분은 `title` 과 같아야 한다.
 - **그런 제목을 실제 pane 화면으로는 시험하지 않았다.** `uk board --json` 이 milestone 제목에서 제어 문자를 빼고 pane 은 그 값을 그린다. 시험한 것은 JSON 출력까지다.
-- **`.uhd-kanban/main.json` 은 이 Mac 의 세션 이름이다.** uk 가 `.uhd-kanban/.gitignore` 를 만들어 `main.json` · `lock/` · `lock.new-*` · `lock.old-*` · `lock.break-*` · `outbox/` 를 추적에서 뺀다(프로젝트의 `.gitignore` 는 고치지 않는다). 그 파일이 없거나 내용이 다르면 다음 uk 실행이 다시 쓴다. 다른 컴퓨터에서 받은 `main.json` 은 그 컴퓨터에 없는 세션을 가리키므로 추적하지 않는다. `uk check` 는 `outbox/` 에 파일이 남았는데 세션 목록에 없는 세션이 있으면 알리고, 꺼내 읽고 지우는 `uk outbox --session <id>` 를 안내한다.
+- **`.uhd-kanban/main.json` 은 이 Mac 의 세션 이름이다.** uk 가 `.uhd-kanban/.gitignore` 를 만들어 `main.json` · `lock/` · `lock.new-*` · `lock.old-*` · `lock.break-*` · `outbox/` · `message-log/` 를 추적에서 뺀다(프로젝트의 `.gitignore` 는 고치지 않는다). 그 파일이 없거나 내용이 다르면 다음 uk 실행이 다시 쓴다. 다른 컴퓨터에서 받은 `main.json` 은 그 컴퓨터에 없는 세션을 가리키므로 추적하지 않는다. `uk check` 는 `outbox/` 에 파일이 남았는데 세션 목록에 없는 세션이 있으면 알리고, 꺼내 읽고 지우는 `uk outbox --session <id>` 를 안내한다.
 - **처리되지 않은 예외는 거르지 않는다.** 명령이 stdout · stderr 로 쓰는 출력에서는 제어 문자를 뺀다. 명령이 처리되지 않은 예외로 끝나면 Node.js 가 그 필터를 거치지 않고 오류를 stderr 로 내므로, 오류 메시지의 제어 문자가 그대로 나간다.
 
 ## 자주 묻는 질문

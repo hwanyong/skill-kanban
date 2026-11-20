@@ -226,6 +226,8 @@ export default {
   'guard.unknownSession': ({ session, path }) => `세션 ${session} 을 claude agents --json 에서 찾지 못해 메인 세션으로 보고 묻는다. 프로젝트 파일 ${path} 를 고치려 한다. 카드 세션이면 허용해도 된다`,
   'guard.denied': ({ name, path }) => `메인 세션${name ? ` ${name}` : ''} 이 프로젝트 파일 ${path} 를 고치려 한다. 작업은 카드로 나눠 uhd-kanban run 으로 맡긴다(delegate 스킬). 사용자가 이 작업을 직접 하라고 했을 때만 허용한다`,
   'outbox.badSession': ({ session }) => `outbox 의 --session 이 session id(UUID) 가 아니다: ${session}`,
+  'messageLog.badSession': ({ session }) => `message-log 의 --session 이 session id(UUID) 가 아니다: ${session}`,
+  'messageLog.badInput': 'message-log 의 stdin 은 { "to": 문자열, "text": 문자열, "agent_id"?: 문자열 } JSON 이어야 한다',
   'run.usage': 'run <k id> [--dry-run] [--force] 형식이다',
   'run.stillRunning': ({ id, session, state }) => `k${id} 의 세션 ${session} 이 아직 있다(state ${state}). 새로 띄우지 않는다. 멈췄으면 uhd-kanban recover k${id}`,
   'run.full': ({ max, ids, unlimited }) => `동시에 도는 카드 세션이 run.max_parallel(${max})개에 찼다: ${ids.join(', ')}. 하나가 끝난 뒤 다시 실행하거나 .uhd-kanban/config.json 의 run.max_parallel 을 바꾼다(${unlimited} 은 무제한)`,
@@ -265,8 +267,10 @@ export default {
   run <k id> [--dry-run] [--force]   카드 본문으로 claude --bg 세션을 띄운다. run.max_parallel(${unlimited} 은 무제한)개까지
   recover [<k id>…] [--dry-run] [--force]   세션이 멈춘 카드를 claude --bg --resume 으로 이어 간다. --force 는 끝난 세션도
   board [--json]        열마다 카드 수와 run.status 열 카드의 세션 상태를 낸다
+  flow [--json]         milestone 묶음마다 카드 · depends_on · 카드 세션 · 세션 사이 메시지를 낸다. 세션 흐름 view 가 부른다
   guard <경로> [--session <id>]   메인 세션이 그 프로젝트 파일을 고쳐도 되는지 판정한다(1 이면 안 된다)
   outbox [--session <id>]   카드 세션이 보낼 메시지를 JSON 배열로 꺼내고 지운다. 보드 모니터 mod 가 부른다
+  message-log [--session <id>]   stdin 의 JSON 메시지 하나를 .uhd-kanban/message-log/ 에 적는다. 보드 모니터 mod 의 session.send 훅이 부른다
   migrate [--dry-run]   0.4.0 까지 만든 보드의 코멘트 kind 를 영어 id 로 바꾸고 config.json 에 locale 을 넣는다
   locale                이 디렉터리에서 쓸 출력 언어(ko · en)를 낸다
   자리: --top · --bottom · --before <k id> · --after <k id> (기본 --bottom)`,

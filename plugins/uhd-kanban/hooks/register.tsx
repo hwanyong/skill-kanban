@@ -1,12 +1,13 @@
 import { atom, read, update } from 'claude-code'
-import type { Elements, EngineInterface, Register, StateWrite, Timer } from 'claude-code'
+import type { Elements, EngineInterface, Register, RenderElement, StateWrite, Timer } from 'claude-code'
 
-import { ageOf, etaDays, sharedDays, sparkRuns, sparkline, stalestFirst, sum, windowTotals } from './charts'
+import { ageOf, displayWidth, etaDays, sharedDays, sparkRuns, sparkline, stalestFirst, sum, windowTotals } from './charts'
 import type { Age } from './charts'
 import { cellProps, colorRuns, columnColor, hasMovingCards, laneFrames, packCells, plainCell, planTransition, sessionCell, statusColor } from './frames'
 import type { Cell, LaneFrame, Transition, Verdict } from './frames'
-import type { Board, BoardView, Locale } from '../types'
-import { fillSlot, offerChoice, placementIn, readPlacement, readShownTab } from './pane-grid'
+import type { Board, BoardView, FlowView, Locale } from '../types'
+import { FLOW_VIEW, drawFlow, loadFlowSettings, readFlowKind, setFlowNotice, setFlowView } from './flow'
+import { fillSlot, hoversKey, offerChoice, offerKey, placementIn, readPlacement, readShownTab } from './pane-grid'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, milestone 마다 한 행(swimlane)을 그린다.
 // 범례 아래에 그래프 4줄(일별 처리량 · 일별 유입 · 시간별 활동 · run.status 카드의 마지막 활동)을 둔다. 값은 board 가 낸 metrics 이고 글자로 바꾸는 것은 charts.ts 가 갖는다.
@@ -17,6 +18,8 @@ import { fillSlot, offerChoice, placementIn, readPlacement, readShownTab } from 
 // 보드를 읽는 규칙은 board 명령(같은 플러그인의 skills/uhd-kanban/lib/)이 갖는다. 이 모듈은 그 stdout 을 그리기만 한다.
 // pane 의 글은 locale 명령이 낸 언어(ko · en)로 고른다. 언어를 정하는 규칙도 그 명령(lib/i18n.mjs)이 갖는다.
 // pane-grid 의 배치에 이 mod 의 칸이 있으면 자기 pane 을 닫고 그 grid pane 의 칸에 같은 그림을 그린다(plugin-pane-grid 의 docs/grid-and-tabs.md §3.3 · §3.5).
+// 두 번째 pane 은 세션 흐름 view 다(flow.tsx, docs/session-flow-view.md). `/kanban-flow` 나 pane-grid 의 member id `uhd-kanban.flow` 로만 열고, 같은 갱신 타이머가 flow 명령을 실행한다.
+// session.send 훅이 이 세션의 모델이 SendMessage 도구로 보낸 메시지를 message-log 명령으로 적는다. 세션 흐름 view 의 최근 메시지가 그 기록을 읽는다.
 
 const PANE = 'uhd-kanban-board'
 // pane-grid 의 layout 에서 이 mod 의 칸을 찾는 이름. plugin.json 의 name 이다.
@@ -25,6 +28,11 @@ const PLUGIN = 'uhd-kanban'
 const SKILL_BIN = 'skills/uhd-kanban/bin/uhd-kanban.mjs'
 const TITLE = 'uhd-kanban'
 const COMMAND = 'kanban-board'
+// 세션 흐름 view 의 자기 pane · 슬래시 명령 · pane-grid member id.
+const FLOW_PANE = 'uhd-kanban-flow'
+const FLOW_TITLE = 'uhd-kanban flow'
+const FLOW_COMMAND = 'kanban-flow'
+const FLOW_MEMBER = `${PLUGIN}.${FLOW_VIEW}`
 // uk comment 가 stdout 에 내는 SendMessage 줄의 앞머리(lib/commands/comment.mjs). Bash 결과에 이 줄이 있을 때만 outbox 명령을 부른다.
 const SEND_LINE = /^SendMessage to=/m
 // 메인 세션에서 guard 명령으로 판정하는 도구. 이 셋의 입력은 고칠 파일을 file_path · notebook_path 로 갖는다.
@@ -80,6 +88,10 @@ const TEXT = {
     outboxSent: (line: string) => `보냄: ${line}`,
     outboxNotSent: (line: string, reason: string) => `보내지 못함(${reason}): ${line}`,
     outboxFailed: (message: string) => `uhd-kanban 보드 모니터 mod 가 outbox 를 꺼내지 못해 SendMessage 줄을 보내지 않았다(${message}). 그 줄을 SendMessage 도구로 보낸다.`,
+    flowDescription: 'uhd-kanban 보드의 milestone 묶음 하나를 카드 · depends_on · 세션 판정 · 세션 사이 메시지로 pane 에 그린다',
+    flowOpened: (root: string) => `${root} 의 세션 흐름을 열었다`,
+    flowInGrid: (tab: string) => `세션 흐름을 pane-grid 의 배치 ${tab} 칸에 그린다. 자기 pane 은 열지 않았다`,
+    flowFailed: (message: string) => `flow 명령이 실패했다: ${message}`,
   },
   en: {
     // uk board 가 출력하는 판정 id 와 같은 낱말이다.
@@ -117,6 +129,10 @@ const TEXT = {
     outboxSent: (line: string) => `sent: ${line}`,
     outboxNotSent: (line: string, reason: string) => `not sent (${reason}): ${line}`,
     outboxFailed: (message: string) => `The uhd-kanban board monitor mod could not take the outbox, so it sent no SendMessage line (${message}). Send those lines with the SendMessage tool.`,
+    flowDescription: 'Draws one milestone group of the uhd-kanban board as cards, depends_on, session verdicts and messages between sessions in a pane',
+    flowOpened: (root: string) => `Opened the session flow of ${root}`,
+    flowInGrid: (tab: string) => `The session flow is drawn in a cell of the pane-grid layout ${tab}, so its own pane was not opened`,
+    flowFailed: (message: string) => `The flow command failed: ${message}`,
   },
 } satisfies Record<Locale, unknown>
 
@@ -141,9 +157,7 @@ const clockText = (ms: number) => {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-// 범례 항목은 글자 하나 · 이름 · 공백 하나다. 한글은 터미널에서 2칸을 쓴다(UAX #11 의 Wide).
-const displayWidth = (text: string) => [...text].reduce((sum, char) => sum + (/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/.test(char) ? 2 : 1), 0)
-
+// 범례 항목은 글자 하나 · 이름 · 공백 하나다. 폭은 charts.ts 의 displayWidth 로 센다.
 // 범례 항목을 pane 폭에 맞춰 줄로 나눈다. prefix 는 첫 줄 앞에 붙는 글이다.
 type LegendItem = { cell: Cell; label: string }
 
@@ -319,30 +333,66 @@ const refresh = async ($: EngineInterface, polling: Polling): Promise<BoardRun> 
     : ran.exitCode == 0
       ? { kind: 'ok', board: JSON.parse(ran.stdout), refreshedAt }
       : { kind: 'error', message: ran.stderr.trim() || text.exitCode(ran.exitCode), refreshedAt }
-  const boardRoot = result.kind == 'ok' ? result.board.root : null
-  const root = await $.session.root()
-  const synced = polling.synced
-  // session.start 뒤 처음 board 를 읽었고 root 가 그대로면 syncSession 을 다시 실행하지 않고 boardRoot 만 적는다.
-  // 같은 root · 같은 세션 id 로 실행한 locale 명령은 board 와 같은 차례(lib/root.mjs 의 findCallerRootOrNull)로 보드를 찾아 locale 을 정했으므로 다시 실행해도 결과가 같다.
-  if (result.kind != 'error' && synced?.root == root && typeof synced.boardRoot == 'undefined') synced.boardRoot = boardRoot
-  else if (result.kind != 'error' && (synced?.root != root || synced?.boardRoot != boardRoot)) await syncSession($, polling, boardRoot)
+  if (result.kind != 'error') await followRoot($, polling, result.kind == 'ok' ? result.board.root : null)
   if (result.kind == 'ok') await beginTransition($, polling.motion, result.board)
   await update($, view, () => result)
   return result
 }
 
-// 주기는 board 가 낸 interval_seconds 다. 보드가 없으면 멈추고(다시 찾는 것은 turn.start 가 한다), board 가 실패하면 마지막 주기를 그대로 둔다.
-const schedule = ($: EngineInterface, polling: Polling, result: BoardView) => {
+// board · flow 를 실행한 결과로 세션 root 나 찾은 보드가 바뀐 것을 잡는다. 명령이 실패한 결과로는 부르지 않는다.
+// session.start 뒤 처음 읽었고 root 가 그대로면 syncSession 을 다시 실행하지 않고 boardRoot 만 적는다.
+// 같은 root · 같은 세션 id 로 실행한 locale 명령은 board 와 같은 차례(lib/root.mjs 의 findCallerRootOrNull)로 보드를 찾아 locale 을 정했으므로 다시 실행해도 결과가 같다.
+const followRoot = async ($: EngineInterface, polling: Polling, boardRoot: string | null) => {
+  const root = await $.session.root()
+  const synced = polling.synced
+  if (synced?.root == root && typeof synced.boardRoot == 'undefined') synced.boardRoot = boardRoot
+  else if (synced?.root != root || synced?.boardRoot != boardRoot) await syncSession($, polling, boardRoot)
+}
+
+type FlowRun = Exclude<FlowView, { kind: 'reading' }>
+
+const refreshFlow = async ($: EngineInterface, polling: Polling): Promise<FlowRun> => {
+  const text = TEXT[polling.locale]
+  const refreshedAt = await $.clock.now()
+  const argv = skillArgv($, ['flow', '--json'])
+  const ran = await runSkill($, argv, 60000).catch((error) => ({ exitCode: -1, stdout: '', stderr: text.notRun(argv.join(' '), String(error?.message ?? error)) }))
+  const result: FlowRun = ran.exitCode == 3
+    ? { kind: 'none' }
+    : ran.exitCode == 0
+      ? { kind: 'ok', flow: JSON.parse(ran.stdout), refreshedAt }
+      : { kind: 'error', message: ran.stderr.trim() || text.exitCode(ran.exitCode), refreshedAt }
+  if (result.kind != 'error') await followRoot($, polling, result.kind == 'ok' ? result.flow.root : null)
+  await setFlowView($, result)
+  return result
+}
+
+// 노드 상세의 recover Button. 판정이 resume · restart 인 카드에만 그린다(docs/session-flow-view.md 7절). 결과의 마지막 줄을 상세 아래에 적고 flow 를 다시 읽는다.
+const recoverCard = async ($: EngineInterface, polling: Polling, id: number) => {
+  const text = TEXT[polling.locale]
+  const argv = skillArgv($, ['recover', `k${id}`])
+  const ran = await runSkill($, argv, 120000).catch((error) => ({ exitCode: -1, stdout: '', stderr: text.notRun(argv.join(' '), String(error?.message ?? error)) }))
+  const lastLine = `${ran.stdout}\n${ran.stderr}`.split('\n').map((line) => line.trim()).filter((line) => line != '').at(-1)
+  await setFlowNotice($, `${text.exitCode(ran.exitCode)}${lastLine == undefined ? '' : ` · ${lastLine}`}`)
+  await refreshFlow($, polling)
+}
+
+// 주기는 board · flow 가 낸 interval_seconds 다(같은 config 값이다). 보드가 없으면 멈추고(다시 찾는 것은 turn.start 가 한다), 명령이 실패하면 마지막 주기를 그대로 둔다.
+const schedule = ($: EngineInterface, polling: Polling, result: BoardRun | FlowRun) => {
   if (result.kind == 'error') return
-  const ms = result.kind == 'ok' ? result.board.interval_seconds * 1000 : 0
+  const ms = result.kind == 'ok' ? ('board' in result ? result.board : result.flow).interval_seconds * 1000 : 0
   setPeriod($, polling, ms, () => void tick($, polling))
 }
 
-// 자기 pane 이 닫혀 있고 grid 에 칸도 없으면 board 를 실행하지 않는다. 가려져 있어도 실행하고, 다시 보일 때 view 를 읽은 그림이 다시 그려진다.
+// 자기 pane 이나 grid 칸이 열려 있는 view 의 명령만 실행한다. 가려져 있어도 실행하고, 다시 보일 때 view 를 읽은 그림이 다시 그려진다.
+const isOpenView = async ($: EngineInterface, pane: string, memberId: string) => (await $.ui.panes()).some((item) => item.id == pane) || (await readPlacement($, memberId)) != undefined
+
 const tick = async ($: EngineInterface, polling: Polling) => {
-  const isOpen = (await $.ui.panes()).some((pane) => pane.id == PANE) || (await readPlacement($, PLUGIN)) != undefined
-  if (!isOpen) return
-  schedule($, polling, await refresh($, polling))
+  const results = [
+    ...((await isOpenView($, PANE, PLUGIN)) ? [await refresh($, polling)] : []),
+    ...((await isOpenView($, FLOW_PANE, FLOW_MEMBER)) ? [await refreshFlow($, polling)] : []),
+  ]
+  const first = results[0]
+  if (first) schedule($, polling, first)
 }
 
 // locale 명령이 실패하면(node 가 없는 등) en 으로 둔다. 실패한 이유는 다음 board 실행이 pane 에 낸다.
@@ -357,7 +407,9 @@ const resolveLocale = async ($: EngineInterface): Promise<Locale> => {
 const syncSession = async ($: EngineInterface, polling: Polling, boardRoot: string | null | undefined) => {
   polling.locale = await resolveLocale($)
   await $.command.register({ name: COMMAND, description: TEXT[polling.locale].description })
+  await $.command.register({ name: FLOW_COMMAND, description: TEXT[polling.locale].flowDescription })
   await loadCollapsedLanes($)
+  await loadFlowSettings($)
   polling.synced = { root: await $.session.root(), boardRoot }
 }
 
@@ -371,16 +423,38 @@ const start = async ($: EngineInterface, polling: Polling) => {
   return { result, placement }
 }
 
-// pane-grid 가 layout 을 쓸 때마다 실행한다. 칸이 생겼으면 자기 pane 을 닫고, 칸이 없어진 그때만 다시 연다.
+// /kanban-flow: flow 를 읽고 주기를 맞춘 뒤, 보드가 있고 grid 칸이 없으면 세션 흐름 pane 을 연다.
+const startFlow = async ($: EngineInterface, polling: Polling) => {
+  const result = await refreshFlow($, polling)
+  schedule($, polling, result)
+  if (result.kind == 'none') return { result, placement: undefined }
+  const placement = await readPlacement($, FLOW_MEMBER)
+  if (!placement) await $.ui.open({ id: FLOW_PANE, title: FLOW_TITLE })
+  return { result, placement }
+}
+
+// pane-grid 의 member id 와 그 자리의 자기 pane.
+// $ 를 넘기는 함수를 값에 두지 않는다. claude plugin validate(2.1.329)는 $ 를 $.이름(...) 꼴이나 이름 있는 함수의 인자로만 받는다.
+type Member = { memberId: string; pane: string; title: string }
+
+const MEMBERS: Member[] = [
+  { memberId: PLUGIN, pane: PANE, title: TITLE },
+  { memberId: FLOW_MEMBER, pane: FLOW_PANE, title: FLOW_TITLE },
+]
+
+// 그 member id 가 그리는 view 의 kind.
+const viewKind = async ($: EngineInterface, member: Member) => (member.memberId == PLUGIN ? (await read($, view)).kind : await readFlowKind($))
+
+// pane-grid 가 layout 을 쓸 때마다 member id 마다 실행한다. 칸이 생겼으면 자기 pane 을 닫고, 칸이 없어진 그때만 다시 연다.
 // 칸이 없는 채로 배치만 바뀔 때는 열지 않는다. 사람이 닫아 둔 pane 을 다시 열지 않기 위해서다.
-const placeOwnPane = async ($: EngineInterface, layout: unknown, previous: unknown) => {
-  const isPlaced = placementIn(layout, PLUGIN) != undefined
-  const isOpen = (await $.ui.panes()).some((pane) => pane.id == PANE)
-  if (isPlaced && isOpen) return $.ui.close({ id: PANE })
-  if (isPlaced || isOpen || placementIn(previous, PLUGIN) == undefined) return
-  const { kind } = await read($, view)
+const placeOwnPane = async ($: EngineInterface, member: Member, layout: unknown, previous: unknown) => {
+  const isPlaced = placementIn(layout, member.memberId) != undefined
+  const isOpen = (await $.ui.panes()).some((pane) => pane.id == member.pane)
+  if (isPlaced && isOpen) return $.ui.close({ id: member.pane })
+  if (isPlaced || isOpen || placementIn(previous, member.memberId) == undefined) return
+  const kind = await viewKind($, member)
   if (kind == 'none' || kind == 'reading') return
-  await $.ui.open({ id: PANE, title: TITLE })
+  await $.ui.open({ id: member.pane, title: member.title })
 }
 
 // pane-grid 가 shown 을 쓸 때마다 실행한다. 이 mod 가 grid 칸에 그리고 있을 때만 재생을 멈추거나 다시 시작한다.
@@ -546,6 +620,7 @@ export const register: Register = (on) => {
   // mod 에는 디렉터리를 옮긴 것을 알리는 이벤트가 없다(CwdChanged 는 settings 의 hook 이벤트다).
   on('turn.start', async ($, e, next) => {
     if ((await read($, view)).kind == 'none') void start($, polling)
+    if ((await readFlowKind($)) == 'none' && (await isOpenView($, FLOW_PANE, FLOW_MEMBER))) void startFlow($, polling)
     return next(e)
   })
 
@@ -556,6 +631,25 @@ export const register: Register = (on) => {
     if (result.kind == 'none') return { text: text.noBoard }
     if (placement) return { text: text.inGrid(placement.tab) }
     return { text: result.kind == 'ok' ? text.opened(result.board.root, result.board.interval_seconds) : text.failed(result.message) }
+  })
+
+  on('command.run', { command: FLOW_COMMAND }, async ($) => {
+    const { result, placement } = await startFlow($, polling)
+    const text = TEXT[polling.locale]
+    if (result.kind == 'none') return { text: text.noBoard }
+    if (placement) return { text: text.flowInGrid(placement.tab) }
+    return { text: result.kind == 'ok' ? text.flowOpened(result.flow.root) : text.flowFailed(result.message) }
+  })
+
+  // 이 세션의 모델(subagent 포함)이 SendMessage 도구로 보낸 메시지를 message-log 명령으로 적는다(docs/session-flow-view.md 3.2 절).
+  // origin.kind 가 plugin 인 것($.session.send, 위 outbox 전달)은 적지 않는다. 그 보고는 카드 코멘트에 이미 있다.
+  // 보드가 없으면 명령이 종료 코드 3 으로 끝나고 아무것도 적지 않는다. 기록이 실패해도 보낸 결과는 그대로 돌려준다.
+  on('session.send', async ($, e, next) => {
+    const sent = await next(e)
+    if (!sent.isDelivered || e.origin.kind != 'model') return sent
+    const input = JSON.stringify(e.agentId == null ? { to: e.to, text: e.text } : { to: e.to, text: e.text, agent_id: e.agentId })
+    await $.process.run(skillArgv($, ['message-log', '--session', await $.session.id()]), { cwd: await $.session.root(), stdin: input, timeoutMs: 30000 }).catch(() => null)
+    return sent
   })
 
   // delegate 스킬의 금지 1 을 도구가 지킨다. 판정은 guard 명령이 갖고, 이 훅은 종료 코드만 본다.
@@ -581,22 +675,34 @@ export const register: Register = (on) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawBoard($, e, polling, PANE, e.props.bodyColumns))
 
+  on('ui.render', { component: 'Pane', requestId: FLOW_PANE }, async ($, e) => drawFlow($, e, polling.locale, e.props.bodyColumns, (id) => recoverCard($, polling, id)))
+
   // pane-grid 의 grid pane: 빈 칸의 선택지에 이 mod 의 Button 을 더하고, 자기 칸이 이 pane 에 있으면 그 칸을 그린다(규약 §3.3 · §3.5).
   // pane-grid 보다 먼저 로드되면 fillSlot 이 pane-grid 가 그린 slot 을 채우고, 뒤에 로드되면 `cell:<이름>` Box 를 next(e) 뒤에 덧붙인다.
   // Claude Code 2.1.325 부터 matcher 에 plugin 이 없으면 ui.render 의 plugin 을 이 hook 을 등록한 plugin 으로 채운다. 비교 값은 pane 을 연 plugin 이고
   // grid pane 은 pane-grid 가 열므로, plugin: 'pane-grid' 가 없으면 이 hook 은 grid pane 에서 불리지 않는다(docs/add-pane-grid-cell.md 「Why plugin: 'pane-grid'」).
+  // member id 가 두 개(보드 모니터 `uhd-kanban`, 세션 흐름 `uhd-kanban.flow`)라 docs/add-pane-grid-cell.md 「A mod with two or more panes」 대로 member id 마다 앞 member id 가 돌려준 트리에 실행한다.
+  // 세션 흐름 칸에는 hover 툴팁이 있어 hoversKey Box 를 둔다. pane-grid 0.6.0 은 그 칸이 활성이 아닐 때 제목 줄만 덮는다.
   on('ui.render', { component: 'Pane', requestId: /^grid-/, plugin: 'pane-grid' }, async ($, e, next) => {
-    const placement = await readPlacement($, PLUGIN)
     const below = await next(e)
     const { Box, Button } = $.ui.resolve(e)
-    const offered = offerChoice(below, PLUGIN, placement, choice => <Button key={choice.key} plain label={choice.label} hotkey={choice.hotkey} onPress={() => {}} />)
-    if (!placement || placement.requestId != e.requestId) return offered
-    const cell = (
-      <Box key={`cell:${PLUGIN}`} flexDirection="column">
-        {await drawBoard($, e, polling, e.requestId, placement.columns)}
-      </Box>
-    )
-    return fillSlot(offered, PLUGIN, cell) ?? <Box flexDirection="column">{offered}{cell}</Box>
+    const draw = async (memberId: string, columns: number) => (memberId == PLUGIN
+      ? [await drawBoard($, e, polling, e.requestId, columns)]
+      : [<Box key={hoversKey(FLOW_MEMBER)} />, await drawFlow($, e, polling.locale, columns, (id) => recoverCard($, polling, id))])
+    const appended: RenderElement[] = []
+    let tree = below
+    for (const { memberId } of MEMBERS) {
+      const placement = await readPlacement($, memberId)
+      tree = offerChoice(tree, memberId, placement, (choice) => <Button key={choice.key} plain label={choice.label} hotkey={choice.hotkey} onPress={() => {}} />)
+      appended.push(<Box key={offerKey(memberId)} />)
+      if (!placement || placement.requestId != e.requestId) continue
+      const columns = placement.columns > 0 ? placement.columns : e.props.bodyColumns
+      const cell = <Box key={`cell:${memberId}`} flexDirection="column">{await draw(memberId, columns)}</Box>
+      const filled = fillSlot(tree, memberId, cell)
+      if (filled) tree = filled
+      else appended.push(cell)
+    }
+    return <Box flexDirection="column">{tree}{appended}</Box>
   })
 
   // matcher 의 참조는 hooks/pane-grid.ts 의 GRID_LAYOUT · GRID_SHOWN 과 같다. 엔진은 $.state.get 의 참조 상수를 export 하지 못하게 해서 여기 다시 적는다.
@@ -604,7 +710,7 @@ export const register: Register = (on) => {
   on('state.set', { plugin: 'pane-grid' as never, key: 'layout' as never }, async ($, e, next) => {
     const write = e as StateWrite
     const result = await next(e)
-    await placeOwnPane($, write.value, write.previous)
+    for (const member of MEMBERS) await placeOwnPane($, member, write.value, write.previous)
     return result
   })
 

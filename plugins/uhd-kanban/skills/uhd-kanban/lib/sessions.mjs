@@ -146,7 +146,8 @@ export const findSession = (sessions, shortId) => sessions.find((session) => ses
 export const transcriptsDir = () => join(claudeConfigDir(), 'projects')
 
 // 대화 기록(jsonl)의 경로. <설정 디렉터리>/projects/<프로젝트>/<sessionId>.jsonl 을 한 단계만 찾는다. 없으면 null.
-const transcriptPath = (sessionId) => {
+// cardSession 과 flow 명령(세션이 끝난 카드의 대화 기록 경로)이 쓴다.
+export const transcriptPath = (sessionId) => {
   const base = transcriptsDir()
   if (!existsSync(base)) return null
   const dir = readdirSync(base, { withFileTypes: true }).find((entry) => entry.isDirectory() && existsSync(join(base, entry.name, `${sessionId}.jsonl`)))

@@ -65,3 +65,20 @@ export const ageOf = (ms: number): Age => {
   if (age < 48 * HOUR_MS) return { value: Math.floor(age / HOUR_MS), unit: 'hour' }
   return { value: Math.floor(age / (24 * HOUR_MS)), unit: 'day' }
 }
+
+// 터미널에서 쓰는 칸 수. 한글은 2칸이다(UAX #11 의 Wide). 보드 모니터의 범례와 세션 흐름 view 의 노드 · 툴팁이 쓴다.
+export const displayWidth = (text: string) => [...text].reduce((sum, char) => sum + (/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/.test(char) ? 2 : 1), 0)
+
+// width 칸을 넘으면 잘라 끝에 … 을 붙인다.
+export const clipWidth = (text: string, width: number) => {
+  if (displayWidth(text) <= width) return text
+  let used = 0
+  const kept: string[] = []
+  for (const char of text) {
+    const next = used + displayWidth(char)
+    if (next > width - 1) break
+    kept.push(char)
+    used = next
+  }
+  return `${kept.join('')}…`
+}

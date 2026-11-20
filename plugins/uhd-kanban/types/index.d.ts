@@ -27,8 +27,53 @@ export type BoardView =
   | { kind: 'ok'; board: Board; refreshedAt: number }
   | { kind: 'error'; message: string; refreshedAt: number }
 
+// `uhd-kanban flow --json` 의 stdout 과 같은 모양이다. 그 명령(skills/uhd-kanban/lib/commands/flow.mjs)이 이 값의 원본이다.
+// FlowGroup: board 의 swimlane 과 같은 묶음. started_at: 소속 카드의 session_started_at 중 가장 이른 값. cards: 소속 카드 id(보드 차례, 아카이브 포함).
+export type FlowGroup = { key: string; id: number | null; title: string | null; status: string | null; is_running: boolean; finished: number; total: number; started_at: string | null; cards: number[] }
+// verdict 는 run.status 열 카드에만 있다. column_index: config.json 의 columns 안의 차례. dependents: 이 카드를 depends_on 에 적은 작업 카드.
+// progress · result: 마지막 그 종류 코멘트의 본문(1000자에서 자른다). transcript: 대화 기록 파일 경로.
+export type FlowCard = {
+  id: number
+  title: string | null
+  status: string
+  column_index: number | null
+  depends_on: number[]
+  dependents: number[]
+  verdict: NonNullable<BoardCard['session']> | null
+  session: string | null
+  started_at: string | null
+  completed_at: string | null
+  last_activity_at: string | null
+  commits: number
+  progress: string | null
+  result: string | null
+  transcript: string | null
+}
+// 카드 코멘트(kind · card 가 있다)와 message-log(둘 다 null)를 시각 차례로 합친 최근 200개. text 는 200자에서 자른다.
+export type FlowMessage = { at: string; from: string | null; to: string; kind: string | null; card: number | null; text: string | null }
+export type Flow = {
+  root: string
+  interval_seconds: number
+  run_status: string
+  max_parallel: number
+  main: string | null
+  working: number
+  columns: { status: string; index: number }[]
+  groups: FlowGroup[]
+  cards: FlowCard[]
+  messages: FlowMessage[]
+}
+// kind 의 뜻은 BoardView 와 같고, 실행한 명령이 flow 다.
+export type FlowView =
+  | { kind: 'reading' }
+  | { kind: 'none' }
+  | { kind: 'ok'; flow: Flow; refreshedAt: number }
+  | { kind: 'error'; message: string; refreshedAt: number }
+// 세션 흐름 view 에서 고른 것. group: 묶음 key(null 이면 기본 묶음). selected: 상세를 보는 카드 id.
+export type FlowSettings = { group: string | null; direction: 'down' | 'right'; size: 'full' | 'compact'; selected: number | null }
+
 declare module 'claude-code' {
   interface PluginState {
-    'uhd-kanban': { view: Shaped<BoardView>; collapsedLanes: string[] }
+    'uhd-kanban': { view: Shaped<BoardView>; collapsedLanes: string[]; flowView: Shaped<FlowView>; flowSettings: FlowSettings; flowNotice: string | null }
   }
 }

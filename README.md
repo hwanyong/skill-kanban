@@ -28,6 +28,7 @@ Nothing is installed besides the plugin: no Docker, no server, no database, no n
 - [Delegating work to card sessions](#delegating-work-to-card-sessions)
 - [Commands](#commands)
 - [Board monitor pane](#board-monitor-pane)
+- [Session flow pane](#session-flow-pane)
 - [Requirements](#requirements)
 - [Usage notes](#usage-notes)
 - [FAQ](#faq)
@@ -44,6 +45,7 @@ Nothing is installed besides the plugin: no Docker, no server, no database, no n
 | Dependencies and a parallel limit | `depends_on` keeps a card from starting before the cards it waits for are finished. `run.max_parallel` (default 3) caps the number of card sessions that run at once. |
 | Recovery | `uk recover` resumes card sessions that stopped or were respawned by the daemon, and records the new session id on the card. |
 | Board monitor | A pane draws one row per milestone with one cell per member card, animates the in-progress cells by session state, and plays a rearrangement when cards are created, deleted or moved. Rows collapse by click or keyboard. Below the legend it charts cards finished and created per day, activity comments per hour and the last activity of each in-progress card, and each milestone shows an estimated number of days. It rereads the board every 60 seconds by default. |
+| Session flow | A second pane draws the cards of one milestone group as nodes and lines by `depends_on`, with card session states, node details and messages between sessions. In pane-grid it is placed in its own cell, apart from the board monitor. |
 
 ## What is in the plugin
 
@@ -51,7 +53,7 @@ Nothing is installed besides the plugin: no Docker, no server, no database, no n
 |---|---|---|
 | Skill `uhd-kanban` | [`plugins/uhd-kanban/skills/uhd-kanban/`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md) | Create, move, reorder, comment on and archive cards. Run a card as a `claude --bg` session. Resume stopped sessions. |
 | Skill `delegate` | [`plugins/uhd-kanban/skills/delegate/`](plugins/uhd-kanban/skills/delegate/SKILL.md) | Rules for the main session of a project with a board: split work into cards, run them with `uk run`, review results, move cards. |
-| Hooks module | [`plugins/uhd-kanban/hooks/register.tsx`](plugins/uhd-kanban/hooks/register.tsx) | Opens the board monitor pane when `uk board --json` finds a board (search order in "Which board does a command use from a subdirectory or from outside the project?"), registers the `/kanban-board` command, and runs `uk guard` before Edit, Write and NotebookEdit. |
+| Hooks module | [`plugins/uhd-kanban/hooks/register.tsx`](plugins/uhd-kanban/hooks/register.tsx) | Opens the board monitor pane when `uk board --json` finds a board (search order in "Which board does a command use from a subdirectory or from outside the project?"), registers the `/kanban-board` and `/kanban-flow` commands, runs `uk guard` before Edit, Write and NotebookEdit, and records messages sent with SendMessage through `uk message-log`. |
 
 ## Quick start
 
@@ -207,12 +209,14 @@ In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`
 | `uk archive` | Moves finished cards older than `archive.after_days` (default 7) to `kanban/archived/` |
 | `uk comment` | Appends a comment and prints the `SendMessage` line. Called from a card session, also writes the outbox |
 | `uk outbox` | Takes a card session's outbox as a JSON array and deletes it. The board monitor mod calls it |
+| `uk message-log` | Writes one message from stdin to `.uhd-kanban/message-log/`. The board monitor mod's `session.send` hook calls it |
 | `uk inbox` | Lists unanswered comments addressed to a session |
 | `uk main` | Prints the main session that card sessions report to, or registers one with `--set` |
 | `uk run` | Starts a card as a `claude --bg` session |
 | `uk recover` | Resumes stopped card sessions with `claude --bg --resume` |
 | `uk guard` | Decides whether a session may edit a file (used by the hook) |
 | `uk board` | Prints card counts per column, session states, and finished / total per milestone (used by the pane) |
+| `uk flow` | Prints milestone groups, cards, `depends_on`, card sessions and messages between sessions (used by the session flow pane) |
 | `uk migrate` | Converts a board made with 0.4.0 or earlier to English kind ids and adds `locale` |
 | `uk locale` | Prints the language used in the current directory (used by the pane) |
 
@@ -415,6 +419,36 @@ Measured on a Mac Studio (`Mac17,14`) with Claude Code 2.1.312 in a 200×50 tmux
 
 In a 15-minute run of two sessions side by side, the session repainting every 250 ms used 2.05% CPU and its RSS (resident memory) went from 438 MB to 486 MB. The session with the timer off used 0.43% CPU and its RSS went from 426 MB to 449 MB. Runs longer than 15 minutes were not measured.
 
+## Session flow pane
+
+A second pane, opened separately from the board monitor. It draws the cards of one milestone group as nodes joined by their `depends_on`, together with card session states and the messages between sessions. Open it with `/kanban-flow`; it does not open by itself when a session starts. `uk flow --json` provides the values, and the pane rereads them every `monitor.interval_seconds` only while it is open.
+
+| Row | What it shows |
+|---|---|
+| Header | Refresh time, main session name, running card sessions / `run.max_parallel`, days since the first session of the selected group started, finished / total. When `depends_on` has a cycle, a `cycle k1 → k6 → k1` line is added |
+| Controls | `‹` `›` select the group, `↓` `→` vertical or horizontal layout, `−` `+` one-line or three-line nodes. The selected buttons are inverted |
+| Nodes and lines | One node per card. The border takes the column color and the state symbol is the board monitor's. When three-line nodes exceed the pane width the pane uses one-line nodes; a group that does not fit even then is drawn as list rows like `k1 → k2, k3` |
+| Node detail | Shown after clicking a node: column, session verdict, commit count, start and last activity times, cards before (`depends_on`) and after, the first 3 lines of the last `result` comment (or `progress`), and the transcript path. When the verdict is `resume` or `restart` there is a `uk recover k<id>` button; pressing it shows that command's exit code and last output line below |
+| Recent messages | Shown when no node is selected: the last 10 of card comments and messages between sessions, in time order |
+| Hover tooltip | Pointing at a node shows the full card title, the first line of the last `progress` and the times |
+
+The selected group, layout direction, node size and selected card are stored per board and survive `/reload-plugins`.
+
+The sending side records messages between sessions. When the model in a session with this plugin sends a message with the SendMessage tool and it is delivered, the `session.send` hook runs `uk message-log`, which appends one `{ at, to, text }` line to `.uhd-kanban/message-log/<sender session id>.jsonl`. Undelivered messages and card session reports sent by the mod with `$.session.send` (they are already card comments) are not recorded. The receiving side records nothing because `session.receive` carries no sender session id (2026-11-20, Claude Code 2.1.329). When `uk flow` reads the files it turns session ids into session names (`k<id>`, the main session name, or `name` from `claude agents --json`).
+
+### Placing the panes in pane-grid cells
+
+With [pane-grid](https://github.com/hwanyong/pane-grid) 0.6.0 or later, the two panes can be placed in separate cells.
+
+| Pane | Member id | Command |
+|---|---|---|
+| Board monitor | `uhd-kanban` | `/grid place uhd-kanban <cell>` |
+| Session flow | `uhd-kanban.flow` | `/grid place uhd-kanban.flow <cell>` |
+
+Placing a pane in a cell closes its own pane. An empty cell's picker lists the two member ids separately. The session flow cell declares `hovers:`, so its tooltips appear even while another cell is active; meanwhile only that cell's title row is left as the area that activates the cell.
+
+The design and verification notes are in [`docs/session-flow-view.md`](docs/session-flow-view.md).
+
 ## Requirements
 
 - Claude Code 2.1.312 or later (the hooks module API was checked against this version)
@@ -426,7 +460,7 @@ In a 15-minute run of two sessions side by side, the session repainting every 25
 
 - **A control character in a card title stops board edits.** While the `title` of any card contains a control character, `uk check` reports a violation and commands that change the board refuse to run. This includes `uk set --title`, so edit `title` in that card's frontmatter directly and run `uk check` again. The title part of the file name must still match `title`.
 - **The rendered pane has not been tested with such a title.** `uk board --json` removes control characters from milestone titles, and the pane draws that value. The JSON output was verified. The pane on screen was not.
-- **`.uhd-kanban/main.json` holds a session name on this Mac.** uk creates `.uhd-kanban/.gitignore`, which keeps `main.json`, `lock/`, `lock.new-*`, `lock.old-*`, `lock.break-*` and `outbox/` out of version control (the project's own `.gitignore` is not edited). Any uk command rewrites that file when it is missing or different. A `main.json` pulled from another computer names a session that does not exist on this one, so it is not tracked. `uk check` reports outbox files whose session is not in the session list and points to `uk outbox --session <id>`, which prints and deletes them.
+- **`.uhd-kanban/main.json` holds a session name on this Mac.** uk creates `.uhd-kanban/.gitignore`, which keeps `main.json`, `lock/`, `lock.new-*`, `lock.old-*`, `lock.break-*`, `outbox/` and `message-log/` out of version control (the project's own `.gitignore` is not edited). Any uk command rewrites that file when it is missing or different. A `main.json` pulled from another computer names a session that does not exist on this one, so it is not tracked. `uk check` reports outbox files whose session is not in the session list and points to `uk outbox --session <id>`, which prints and deletes them.
 - **Uncaught exceptions are not filtered.** Control characters are removed from what commands write to stdout and stderr. When a command ends with an uncaught exception, Node.js prints the error to stderr without going through that filter, so control characters in the error message are output as they are.
 
 ## FAQ
