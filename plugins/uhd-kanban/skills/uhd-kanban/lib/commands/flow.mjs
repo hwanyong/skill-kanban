@@ -24,7 +24,8 @@ const MESSAGES = 200
 const MESSAGE_CHARS = 200
 const CARD_TEXT_CHARS = 1000
 
-// 제목 · 이름은 한 줄로 그리므로 개행까지 빼고, 코멘트 · 메시지 본문은 개행과 탭을 남긴다.
+// 카드 파일 · message-log 에서 읽은 문자열은 pane 이 그대로 그리므로 제어 문자를 뺀다. 코멘트 머리 줄의 정규식(\S+)도 ESC 를 받는다.
+// 제목 · 이름 · 시각 · 경로는 한 줄로 그리므로 개행까지 빼고, 코멘트 · 메시지 본문은 개행과 탭을 남긴다.
 const text = (value) => (typeof value == 'string' ? stripControl(value) : null)
 const body = (value, max) => {
   if (typeof value != 'string') return null
@@ -73,23 +74,23 @@ export const run = async ({ flags }) => {
     return {
       id: card.id,
       title: text(card.data.title),
-      status: card.status,
+      status: text(card.status),
       column_index: columnIndex.get(card.status) ?? null,
       depends_on: card.data.depends_on ?? [],
       dependents: dependentsOf(board, card.id).filter(isWork).map((dependent) => dependent.id),
       verdict: verdict?.verdict ?? null,
-      session: card.data.session ?? null,
-      started_at: card.data.session_started_at ?? null,
-      completed_at: card.data.completed_at ?? null,
+      session: text(card.data.session),
+      started_at: text(card.data.session_started_at),
+      completed_at: text(card.data.completed_at),
       last_activity_at: lastActivityAt(card),
       commits: Array.isArray(card.data.commits) ? card.data.commits.length : 0,
       progress: lastText(comments, 'progress'),
       result: lastText(comments, 'result'),
-      transcript: verdict ? verdict.transcript : card.data.session ? transcriptPath(card.data.session) : null,
+      transcript: text(verdict ? verdict.transcript : card.data.session ? transcriptPath(card.data.session) : null),
     }
   })
-  const fromComments = commented.flatMap(({ card, comments }) => comments.map((comment) => ({ at: comment.at, from: comment.from, to: comment.to.join(','), kind: comment.kind, card: card.id, text: body(comment.text, MESSAGE_CHARS) })))
-  const fromLogs = logs.map((entry) => ({ at: entry.at, from: names.get(entry.from_session) ?? entry.from_session, to: recipient(text(entry.to) ?? '', pidNames), kind: null, card: null, text: body(entry.text, MESSAGE_CHARS) }))
+  const fromComments = commented.flatMap(({ card, comments }) => comments.map((comment) => ({ at: text(comment.at), from: text(comment.from), to: text(comment.to.join(',')), kind: text(comment.kind), card: card.id, text: body(comment.text, MESSAGE_CHARS) })))
+  const fromLogs = logs.map((entry) => ({ at: text(entry.at), from: text(names.get(entry.from_session) ?? entry.from_session), to: recipient(text(entry.to) ?? '', pidNames), kind: null, card: null, text: body(entry.text, MESSAGE_CHARS) }))
   const messages = [...fromComments, ...fromLogs].filter((message) => timeOf(message.at) != null).toSorted((a, b) => timeOf(a.at) - timeOf(b.at)).slice(-MESSAGES)
   const { running: runningMilestone } = milestoneStatuses(config)
   const result = {
@@ -97,7 +98,7 @@ export const run = async ({ flags }) => {
     interval_seconds: config.monitor.interval_seconds,
     run_status: runStatus,
     max_parallel: maxParallel(config),
-    main: main?.name ?? null,
+    main: text(main?.name ?? null),
     working: [...verdicts.values()].filter((verdict) => RUNNING_VERDICTS.includes(verdict.verdict)).length,
     columns: config.columns.flatMap((column, index) => (column.types.some((type) => type != COLLECTION_TYPE) ? [{ status: column.status, index }] : [])),
     groups: lanes.map(({ milestone, members: inGroup, finished, total }) => ({
