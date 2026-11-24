@@ -1,9 +1,9 @@
 // 카드 파일을 쓰고 옮기고, 열 안의 순서 번호를 정한다. 모든 함수는 withLock 안에서 부른다.
-// 저장소가 git 이고 파일이 추적 중이면 `git mv` 로 옮겨 이력을 잇는다. 아니면 rename 한다.
+// 저장소가 git 이고 파일이 추적 중이면 디스크에서 rename 한 뒤 git 색인을 그 경로로 갱신해 이력을 잇는다. 색인에 적는 이름은 디렉터리 엔트리가 돌려준 이름과 같은 정규형으로 한다(아래 indexEntry · diskEntry).
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { readBoard } from './board.mjs'
 import { serialize } from './frontmatter.mjs'
 import { activeName } from './filename.mjs'
@@ -26,13 +26,27 @@ const cardText = (data, body) => `${serialize(data, KEY_ORDER)}\n${body.replace(
 
 const git = (root, args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 
-const isTracked = (root, path) => {
+// git 이 파일 이름을 어떤 정규형으로 저장하는지 본다. macOS 의 git 은 core.precomposeunicode 기본값이 true 라 색인에 완성형(NFC)을 적는다.
+const precomposed = (root) => {
   try {
-    git(root, ['ls-files', '--error-unmatch', '--', relative(root, path)])
-    return true
+    return git(root, ['config', '--get', 'core.precomposeunicode']).trim() != 'false'
   } catch {
-    return false
+    return true
   }
+}
+
+// 색인에 있는 항목의 이름을 되짚는다. 디스크는 자모 분해(NFD)·요청 이름은 완성형(NFC)인 볼륨이 있으므로, 정규형이 같은 항목을 찾아 색인이 쓰는 철자를 그대로 쓴다. 없으면 null.
+const indexEntry = (root, path) => {
+  const dir = relative(root, dirname(path))
+  const target = join(dir, basename(path)).normalize('NFC')
+  // -z 를 쓴다. 기본값 core.quotePath=true 는 비ASCII 이름을 8진 전위로 바꿔 적어 나오므로 정규형 비교가 성립하지 않는다.
+  return git(root, ['ls-files', '-z', '--', dir]).split('\0').find((name) => name.normalize('NFC') == target) ?? null
+}
+
+// 디렉터리 엔트리가 돌려준 이름을 되짚는다(SMB 공유는 한글 이름을 NFD 로 저장한다). 색인에 적는 이름은 이것으로 맞춰야 디스크와 색인이 갈리지 않는다.
+const diskEntry = (path) => {
+  const base = basename(path)
+  return readdirSync(dirname(path)).find((name) => name.normalize('NFC') == base.normalize('NFC')) ?? base
 }
 
 // 옮긴 뒤 원래 디렉터리가 비었으면 지운다. 열 디렉터리는 카드가 들어갈 때 만들므로(init.mjs) 빈 열 디렉터리를 남기지 않는다.
@@ -56,8 +70,13 @@ export const moveFile = (project, from, to) => {
   if (from.normalize('NFC') == to.normalize('NFC')) return
   if (existsSync(to) && !sameFile(from, to)) throw new ProjectError(t('cards.targetExists', { path: relative(project.root, to) }))
   mkdirSync(dirname(to), { recursive: true })
-  if (isTracked(project.root, from)) git(project.root, ['mv', '--', relative(project.root, from), relative(project.root, to)])
-  else renameSync(from, to)
+  const entry = indexEntry(project.root, from)
+  renameSync(from, to)
+  // `git mv` 는 요청받은 목적지 철자를 색인에 그대로 적는다. 그래서 디스크가 NFD 로 저장한 카드와 색인이 NFC 로 갈린다(2026-11-24 실측: SMB 저장소에서 카드 이동 뒤 `git status --porcelain -M0` 가 같은 카드를 R 과 ?? 로 나눠 찍었다). rename 뒤 git add 로 두 경로를 담으면 색인이 디스크 철자를 따른다.
+  if (entry != null) {
+    const spec = (p) => (precomposed(project.root) ? p.normalize('NFC') : p)
+    git(project.root, ['add', '-A', '--', entry, spec(relative(project.root, join(dirname(to), diskEntry(to))))])
+  }
   removeIfEmpty(project, dirname(from))
 }
 
