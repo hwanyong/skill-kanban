@@ -482,6 +482,10 @@ k2 의 소속 카드 5장이 끝났고 k2 를 `done` 으로 옮겼다. k2 행이
 
 `.uhd-kanban/config.json` 의 `run.env` 에 이름 → 문자열 값 객체를 적는다(예: `"env": { "MY_TOOL_MODE": "off" }`). `uk run` 과 `uk recover` 가 띄우는 카드 세션의 Bash 도구와 훅에 그 값이 들어간다. `uk run` 을 실행한 셸의 환경 변수는 카드 세션에 전달되지 않는다.
 
+### 로컬 LLM 이나 다른 gateway 로 카드 세션을 띄울 수 있는가?
+
+메인 세션을 띄운 Claude Code settings 파일의 경로를 `.uhd-kanban/config.json` 의 `run.settings`(보드의 모든 카드) 나 `.uhd-kanban/profiles.json` 의 `models.<프로필>.settings`(그 `model:` 태그를 단 카드)에 적는다(예: `"settings": "~/.claude/profiles/strata.json"`). `uk run` 과 `uk recover` 가 그 파일의 내용에 `run.env` 를 덮어 `claude --settings` 로 넘긴다. 메인 세션의 셸에 `ANTHROPIC_BASE_URL` 같은 gateway 변수가 있는데 카드 세션이 읽을 settings 에 gateway 가 없으면 `uk run` 이 띄우지 않고 종료 코드 1 로 끝난다. 그대로 띄우면 Claude Code 가 「No LLM gateway」로 세션을 끝낸다.
+
 ### 카드를 직접 고쳐도 되는가?
 
 카드 본문(`## Comments` 앞)은 직접 고치고 `uk check` 를 실행한다. frontmatter · 파일 이름 · 열은 `uk new` · `uk set` · `uk move` · `uk order` 로 바꾸고, 코멘트는 `uk comment` 로 남긴다.

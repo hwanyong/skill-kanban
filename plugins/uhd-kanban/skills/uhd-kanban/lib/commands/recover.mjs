@@ -19,7 +19,8 @@ import { runSpec } from '../profiles.mjs'
 import { ProjectError } from '../errors.mjs'
 import { maxParallel } from '../project.mjs'
 import { resumePrompt } from '../prompt.mjs'
-import { backgroundCommand, cardSession, hasRoom, runningCards, listSessions, sessionName, startedAt, stopSession, transcriptsDir, envArgs } from '../sessions.mjs'
+import { saveSessionSettings, sessionSettings } from '../session-settings.mjs'
+import { backgroundCommand, cardSession, hasRoom, runningCards, listSessions, sessionName, startedAt, stopSession, transcriptsDir } from '../sessions.mjs'
 
 // 이어 가지 않는 판정. 메시지는 recover.<판정> 키에 있다.
 const SKIPPED = ['live', 'pending', 'done', 'unknown']
@@ -35,10 +36,12 @@ const movable = (project, board, card, status) => {
   }
 }
 
-// card 의 실행 인자(profiles.mjs 의 runSpec). 프로필이 틀린 카드는 그 카드 하나의 실패로 보고 다음 카드로 넘어가려고 오류 문구를 돌려준다.
-const specOf = (card, profiles) => {
+// card 의 실행 인자(profiles.mjs 의 runSpec)와 --settings 인자(session-settings.mjs 의 sessionSettings).
+// 프로필이나 settings 가 틀린 카드는 그 카드 하나의 실패로 보고 다음 카드로 넘어가려고 오류 문구를 돌려준다.
+const specOf = (project, card) => {
   try {
-    return { spec: runSpec(card, profiles) }
+    const spec = runSpec(card, project.profiles)
+    return { spec, settings: sessionSettings(project, spec) }
   } catch (error) {
     if (!(error instanceof ProjectError)) throw error
     return { problem: error.message }
@@ -94,14 +97,14 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
         console.log(t('recover.cannotMove', { id: card.id, status, problem: moveProblem }))
         continue
       }
-      const { spec, problem } = specOf(card, project.profiles)
+      const { spec, settings, problem } = specOf(project, card)
       if (problem) {
         counts.failed += 1
         console.log(t('recover.cannotRun', { id: card.id, problem }))
         continue
       }
       if (!counted) running += 1
-      const args = ['--resume', sessionId, '-n', sessionName(card.id), ...spec.cliArgs, ...envArgs(project.config)]
+      const args = ['--resume', sessionId, '-n', sessionName(card.id), ...spec.cliArgs, ...settings.args]
       const tr = translator(project.locale)
       const why = verdict == 'restart' ? tr('recover.whyRestart', { startedAt: startedAt(session), toolPending: found.toolPending }) : session ? `state ${session.state}${found.verdict == 'done' ? ', --force' : ''}` : tr('recover.whyMissing')
       counts.resumed += 1
@@ -110,6 +113,7 @@ export const run = async ({ positional, flags }, { skillRoot }) => {
         continue
       }
       if (verdict == 'restart') stopSession(session.id)
+      saveSessionSettings(settings)
       const { shortId, session: resumed } = await launchCard(project, sessions, args, resumePrompt(project, card, { skillRoot }), cwd)
       const text = tr('recover.assigned', { why, sessionId, resumed: resumed?.sessionId ?? `${shortId}(${tr('recover.notFound')})` })
       const moved = assignCard(project, current, card, status, { from, text, session: resumed })

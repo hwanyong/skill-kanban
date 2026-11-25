@@ -33,6 +33,7 @@ export default {
   'config.runEnvObject': ({ value }) => `run.env must be an object of environment variable name → string value: ${value}`,
   'config.runEnvName': ({ name }) => `run.env names must be letters, digits and underscores, not starting with a digit: ${name}`,
   'config.runEnvValue': ({ name, value }) => `run.env.${name} must be a string: ${value}`,
+  'config.runSettings': ({ value }) => `run.settings must be the path of a Claude Code settings file (a non-empty string): ${value}`,
   'config.typeStatusObject': ({ key }) => `${key} must be an object of type name → status name`,
   'config.typeStatusBad': ({ key, type, status }) => `${key} ${type} → ${status}: ${status} is not a status in columns that accepts type ${type}`,
   'config.interval': ({ min, value }) => `monitor.interval_seconds must be an integer of ${min} or more: ${value}`,
@@ -79,6 +80,7 @@ export default {
   'profiles.name': ({ name }) => `A profile name in models must use lowercase letters, digits and -: ${name}`,
   'profiles.cliAgent': ({ name }) => `cli and agent of models.${name} must be a string or null`,
   'profiles.ultracode': ({ name }) => `models.${name}.ultracode must be true, false or null`,
+  'profiles.settings': ({ name }) => `models.${name}.settings must be the path of a Claude Code settings file (a non-empty string)`,
   'profiles.effort': ({ key }) => `effort.${key} must be an array of effort values`,
   'tags.modelCount': ({ count }) => `There are ${count} model: tags`,
   'tags.modelUnknown': ({ name, known }) => `model:${name} is not in models of profiles.json (known: ${known.join(', ')})`,
@@ -128,6 +130,10 @@ export default {
   'cards.blocked': ({ id, blocking }) => `Cards that k${id} waits for are not finished: ${blocking.map((item) => `k${item}`).join(', ')}. Use --force to move it anyway`,
   // sessions.mjs
   'sessions.notArray': 'The stdout of claude agents --json is not an array',
+  'settings.unreadable': ({ path, code }) => `Cannot read the settings file for card sessions (${code}): ${path}`,
+  'settings.invalidJson': ({ path, message }) => `The settings file for card sessions is not JSON (${message}): ${path}`,
+  'settings.shape': ({ path }) => `The settings file for card sessions must be a JSON object, and its env an object: ${path}`,
+  'settings.gatewayMissing': ({ names, files }) => `This shell has the LLM gateway variable ${names.join(', ')}, but no settings the card session reads has a gateway. Claude Code would end the session before any model request ("No LLM gateway" in daemon.log). Put the path of the main session's settings file in run.settings of .uhd-kanban/config.json (whole board) or in models.<profile>.settings of .uhd-kanban/profiles.json (cards with that model: tag). Looked at: the --settings value, ${files.join(', ')}`,
   'sessions.launchFailed': ({ status, output }) => `claude --bg did not start a session (exit code ${status}):\n${output}`,
   'sessions.stopFailed': ({ shortId, status, output }) => `claude stop ${shortId} exited with code ${status}:\n${output}`,
   // prompt.mjs. Card sessions read this text. The first sentence "This task is uhd-kanban card k<id>." is the sentence the delegate skill description uses to tell card sessions apart, so keep it as is.

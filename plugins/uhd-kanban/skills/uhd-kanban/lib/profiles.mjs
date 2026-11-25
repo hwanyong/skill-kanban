@@ -4,6 +4,8 @@
 // 걸리는 것을 확인했는지다(true 확인함 · false 걸리지 않음 · null 재지 않음). null 인 프로필에는 run 이 ultracode 카드를 띄우지 않는다.
 // 확인 방법: 그 모델로 `claude --bg` 에 첫 줄이 ultracode 인 프롬프트를 주고, 대화 기록 jsonl 에 attachment type workflow_keyword_request 가 생기는지 본다.
 // 2026-10-29 실측(2.1.312): sonnet · fable · opus · opus[1m] · haiku 모두 생겼다. 그 세션에서 Workflow 도구를 실제로 부르는 것까지는 재지 않았다.
+// settings 는 그 프로필로 띄우는 카드 세션에 넘길 Claude Code settings 파일 경로다(없어도 된다). 로컬 LLM gateway 처럼 모델과 함께 정해지는 실행 환경을 적는다.
+// 있으면 config.json 의 run.settings 대신 쓴다. 파일을 읽어 넘기는 것은 lib/session-settings.mjs 의 sessionSettings 다.
 
 import { t } from './i18n.mjs'
 import { hasTriggerLine, bareBodyKeywordLines } from './ultracode.mjs'
@@ -24,6 +26,7 @@ export const validateProfiles = (profiles) => {
     if (!ID.test(name)) problems.push(t('profiles.name', { name }))
     if (!isNullableString(profile?.cli) || !isNullableString(profile?.agent)) problems.push(t('profiles.cliAgent', { name }))
     if (![true, false, null].includes(profile?.ultracode ?? null)) problems.push(t('profiles.ultracode', { name }))
+    if (profile?.settings !== undefined && (typeof profile.settings != 'string' || profile.settings == '')) problems.push(t('profiles.settings', { name }))
   })
   for (const key of ['cli', 'agent']) {
     const list = profiles?.effort?.[key]
@@ -65,5 +68,5 @@ export const runSpec = (card, profiles) => {
   const model = profile?.cli ?? null
   const cliArgs = [...(model ? ['--model', model] : []), ...(effort ? ['--effort', effort] : [])]
   const label = `model=${model ?? t('run.default')}${profileName ? `(model:${profileName})` : ''} effort=${effort ?? t('run.default')}`
-  return { ultracode, cliArgs, label }
+  return { ultracode, cliArgs, label, settings: profile?.settings ?? null }
 }

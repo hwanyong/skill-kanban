@@ -151,8 +151,6 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 3. `claude --bg --dangerously-skip-permissions -n k457 --model … -- <프롬프트>` 를 프로젝트 루트에서 실행한다. 프롬프트를 `--` 뒤에 두는 것은 카드 본문이 `-` 로 시작하면(마크다운 목록) claude 가 그 줄을 옵션으로 읽기 때문이다(`lib/sessions.mjs` 의 `launchBackground`). `--dry-run` 이 stdout 에 찍는 명령 줄(`lib/sessions.mjs` 의 `backgroundCommand`)에는 `--` 가 없다. `run` · `recover` 가 띄우는 세션은 모두 권한 확인 없이 돈다(`lib/sessions.mjs` 의 `BACKGROUND_ARGS`). 백그라운드 세션에는 확인 창에 답할 사람이 없다. 프롬프트는 카드 본문 뒤에 `progress` · `question` · `result` 코멘트를 남기는 명령과, `run.finish` 에 그 type 이 있으면 `[result]` 뒤에 카드를 그 열로 옮기는 `uk move` 명령을 붙인 것이다. 카드 파일은 경로가 아니라 글로브 `kanban/*/[0-9][0-9][0-9][0-9]-k<id>-*.md`(`order.width` 4 일 때. 순서 번호 자리는 `order.width` 자리 숫자로 고정한다. 제목에 그 id 를 적은 다른 카드와 맞지 않게 하려는 것이다)로 알려 준다. 카드를 옮기면 경로가 바뀐다.
 4. 띄운 뒤에 카드를 `run.status` 열로 옮기고, `session` · `session_started_at` 과 `[assign]` 코멘트를 함께 적는다. 띄우지 못하면 카드는 바뀌지 않는다.
 
-`config.json` 의 `run.env` 에 환경 변수 이름 → 문자열 값 객체를 적으면 `run` 과 `recover`(이어 감 · 멈춤 · `--force` 모두)가 띄우는 카드 세션에 그 값을 넣는다. 예: `"run": { "status": "in-progress", "env": { "MY_TOOL_MODE": "off" } }`. 넣는 방법은 `claude --settings '{"env":{…}}'` 인자이고(`lib/sessions.mjs` 의 `envArgs`), 카드 세션의 Bash 도구와 훅 프로세스 환경에 들어간다. `uk run` 을 실행한 셸의 환경 변수는 `claude --bg` 세션에 전달되지 않으므로 이 키로 준다. 키가 없거나 비었으면 그 인자를 넘기지 않는다. 이름은 영문자 · 숫자 · 밑줄이고 숫자로 시작하지 않으며, 값은 문자열이다. 다르면 `check` 와 모든 명령이 위반으로 알린다. 이미 도는 카드 세션에는 적용되지 않고, 다음 `run` · `recover` 부터 적용된다.
-
 | 프로필 | `--model` | ultracode 확인 |
 |---|---|---|
 | `model:top` | `fable` | 확인함 |
@@ -170,6 +168,24 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 **`run` · `recover` 는 신뢰된 workspace 에서만 된다.** `claude --bg` 는 workspace trust 를 상위 디렉터리에서 물려받지 않는다. 프로젝트 루트에서 `claude` 를 한 번 열어 trust 대화 상자를 수락해야 한다. 수락하지 않았으면 `Workspace not trusted` 로 실패하고 카드는 바뀌지 않는다. trust 설정은 사용자가 바꾼다.
 
 `run` 은 카드의 이전 세션 판정이 돈다 · 다시 뜨는 중 · 멈춤 · 모르는 state 이면(`lib/sessions.mjs` 의 `RUNNING_VERDICTS`) 새로 띄우지 않고 종료 코드 1 로 끝난다. 멈춤이면 `uk recover k<id>` 로 이어 간다.
+
+### 실행 환경: settings 파일과 환경 변수
+
+`config.json` 의 `run.settings` 나 `profiles.json` 의 `models.<프로필>.settings` 에 Claude Code settings 파일 경로를 적으면 `run` 과 `recover`(이어 감 · 멈춤 · `--force` 모두)가 카드 세션을 그 settings 로 띄운다. 카드의 `model:` 프로필에 `settings` 가 있으면 그것을 쓰고, 없으면 `run.settings` 를 쓴다. 경로는 절대 경로 · `~/` 로 시작하는 경로 · 프로젝트 루트 기준 상대 경로를 받는다. 메인 세션을 `claude --settings ~/.claude/profiles/strata.json` 처럼 로컬 LLM gateway settings 로 띄웠으면 그 경로를 적는다.
+
+```json
+"run": { "status": "in-progress", "settings": "~/.claude/profiles/strata.json", "env": { "API_TIMEOUT_MS": "1800000" } }
+```
+
+```json
+"local": { "cli": "iq3_s", "agent": "iq3_s", "ultracode": false, "settings": "~/.claude/profiles/strata.json" }
+```
+
+`config.json` 의 `run.env` 에는 환경 변수 이름 → 문자열 값 객체를 적는다. 이름은 영문자 · 숫자 · 밑줄이고 숫자로 시작하지 않으며, 값은 문자열이다. `run.settings` 와 `models.<프로필>.settings` 는 빈 문자열이 아닌 문자열이다. 다르면 `check` 와 모든 명령이 위반으로 알린다. settings 파일이 있는지는 띄울 때 본다. 그 파일이 없는 Mac 에서도 `check` 와 다른 명령은 돈다.
+
+넣는 방법: `run` · `recover` 가 띄울 때 settings 파일을 읽고, 그 `env` 위에 `run.env` 를 덮어 JSON 하나로 합치고, 그 JSON 을 `~/.claude/uhd-kanban/settings/<SHA-256 앞 16자>.json`(디렉터리 0700 · 파일 0600)에 써서 `claude --settings <그 경로>` 로 넘긴다(`lib/session-settings.mjs` 의 `sessionSettings` · `saveSessionSettings`). `--settings` 는 값을 하나만 받는 옵션이라 두 번 주면 마지막 값만 남기 때문이다. 넘긴 값은 카드 세션의 Bash 도구와 훅 프로세스 환경에 들어간다. `uk run` 을 실행한 셸의 환경 변수는 `claude --bg` 세션에 전달되지 않으므로 이 두 키로 준다. 둘 다 없으면 `--settings` 를 넘기지 않는다. 파일의 내용을 넘기므로 파일이나 `run.env` 를 고치면 이미 도는 카드 세션에는 적용되지 않고 다음 `run` · `recover` 부터 적용된다. JSON 을 인자로 넘기지 않는 것은 토큰이 `claude --bg` 프로세스가 도는 동안 `ps` 로 다른 사용자에게도 보이기 때문이다. 같은 내용은 같은 파일 하나이고, 띄운 세션이 그 파일을 다시 읽을 수 있으므로 지우지 않는다. `--dry-run` 은 그 파일을 쓰지 않고 경로만 출력한다. `run` 은 `[assign]` 코멘트에 model · effort 와 함께 settings 경로를 적는다.
+
+**gateway 검사.** `uk run` 을 실행한 셸(메인 세션의 Bash 도구 환경)에 `ANTHROPIC_` 으로 시작하고 `BASE_URL` 로 끝나는 변수나 `CLAUDE_CODE_USE_` 로 시작하는 변수가 있는데, 카드 세션이 읽을 settings(`--settings` 값 · `~/.claude/settings.json` · `.claude/settings.json` · `.claude/settings.local.json` · `/Library/Application Support/ClaudeCode/managed-settings.json`) 어디에도 그런 변수가 없으면 `run` 은 띄우지 않고 종료 코드 1 로 끝난다. `recover` 는 그 카드를 실패로 센다. 그대로 띄우면 Claude Code 가 모델 요청 전에 세션을 crashed 로 끝내기 때문이다(2026-11-25 실측, Claude Code 2.1.331: `~/.claude/daemon.log` 에 「No LLM gateway: session stopped」). 메인 세션이 이 거절을 받으면 메인 세션을 어느 settings 파일로 띄웠는지 사용자에게 묻고, 답한 경로를 `run.settings` 에 적는다. API 토큰이 든 값은 `run.env` 에 적지 않는다. `config.json` 은 git 이 추적한다.
 
 ### 동시 실행
 

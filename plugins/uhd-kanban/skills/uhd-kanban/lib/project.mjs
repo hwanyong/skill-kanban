@@ -23,7 +23,7 @@ export const UNLIMITED = -1
 // run · recover 가 동시에 돌리는 카드 세션의 최대 수. UNLIMITED 이면 제한이 없다.
 export const maxParallel = (config) => config.run.max_parallel ?? DEFAULT_MAX_PARALLEL
 
-// run · recover 가 카드 세션에 넣는 환경 변수(이름 → 값). 키가 없으면 넣지 않는다. 넣는 방법은 lib/sessions.mjs 의 envArgs 가 갖는다.
+// run · recover 가 카드 세션에 넣는 환경 변수(이름 → 값). 키가 없으면 넣지 않는다. 넣는 방법은 lib/session-settings.mjs 의 sessionSettings 가 갖는다.
 export const runEnv = (config) => config.run.env ?? {}
 
 // 환경 변수 이름 규칙. POSIX 의 portable 이름(영문자 · 숫자 · 밑줄, 숫자로 시작하지 않음)이다.
@@ -197,6 +197,10 @@ export const validateConfig = (config) => {
   typeStatusProblems(columns, 'initial', config?.initial).forEach((problem) => problems.push(problem))
   typeStatusProblems(columns, 'run.finish', config?.run?.finish).forEach((problem) => problems.push(problem))
   envProblems(config?.run?.env).forEach((problem) => problems.push(problem))
+  // run.settings 는 카드 세션에 넘길 Claude Code settings 파일 경로다(lib/session-settings.mjs). 파일이 있는지는 여기서 보지 않고 띄울 때 본다.
+  // 경로가 이 Mac 의 파일을 가리키므로, 그 파일이 없는 Mac 에서도 check 와 다른 명령이 돌게 하려는 것이다.
+  const settings = config?.run?.settings
+  if (settings !== undefined && (typeof settings != 'string' || settings == '')) problems.push(t('config.runSettings', { value: JSON.stringify(settings) }))
   const interval = config?.monitor?.interval_seconds
   if (!Number.isInteger(interval) || interval < MIN_MONITOR_SECONDS) problems.push(t('config.interval', { min: MIN_MONITOR_SECONDS, value: interval }))
   return problems

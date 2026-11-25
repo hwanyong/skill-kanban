@@ -485,6 +485,10 @@ Three by default. Set `run.max_parallel` in `.uhd-kanban/config.json` to another
 
 Put an object of name → string value in `run.env` of `.uhd-kanban/config.json` (for example `"env": { "MY_TOOL_MODE": "off" }`). The card sessions that `uk run` and `uk recover` start get those values in their Bash tool and hooks. Environment variables of the shell that runs `uk run` do not reach card sessions.
 
+### Can card sessions run on a local LLM or another gateway?
+
+Put the path of the Claude Code settings file the main session was started with in `run.settings` of `.uhd-kanban/config.json` (every card on the board) or in `models.<profile>.settings` of `.uhd-kanban/profiles.json` (cards with that `model:` tag), for example `"settings": "~/.claude/profiles/strata.json"`. `uk run` and `uk recover` read that file, lay `run.env` over its `env`, and pass the result with `claude --settings`. If the main session's shell has a gateway variable such as `ANTHROPIC_BASE_URL` and no settings the card session reads has a gateway, `uk run` does not start the session and exits with code 1. Started that way, Claude Code would end the session with "No LLM gateway".
+
 ### Can I edit cards by hand?
 
 You can edit the card body (the part before `## Comments`) and then run `uk check`. Change frontmatter, file names and columns with `uk new`, `uk set`, `uk move` and `uk order`, and add comments with `uk comment`.

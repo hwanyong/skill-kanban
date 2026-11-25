@@ -31,6 +31,7 @@ export default {
   'config.runEnvObject': ({ value }) => `run.env 는 환경 변수 이름 → 문자열 값 객체다: ${value}`,
   'config.runEnvName': ({ name }) => `run.env 의 이름은 영문자 · 숫자 · 밑줄이고 숫자로 시작하지 않는다: ${name}`,
   'config.runEnvValue': ({ name, value }) => `run.env.${name} 의 값은 문자열이다: ${value}`,
+  'config.runSettings': ({ value }) => `run.settings 는 Claude Code settings 파일 경로(빈 문자열이 아닌 문자열)다: ${value}`,
   'config.typeStatusObject': ({ key }) => `${key} 는 type 이름 → status 이름 객체다`,
   'config.typeStatusBad': ({ key, type, status }) => `${key} 의 ${type} → ${status}: ${status} 는 type ${type} 를 받는 columns 의 status 가 아니다`,
   'config.interval': ({ min, value }) => `monitor.interval_seconds 는 ${min} 이상의 정수다: ${value}`,
@@ -77,6 +78,7 @@ export default {
   'profiles.name': ({ name }) => `models 의 프로필 이름은 영소문자 · 숫자 · - 로 쓴다: ${name}`,
   'profiles.cliAgent': ({ name }) => `models.${name} 의 cli · agent 는 문자열이나 null 이다`,
   'profiles.ultracode': ({ name }) => `models.${name}.ultracode 는 true · false · null 이다`,
+  'profiles.settings': ({ name }) => `models.${name}.settings 는 Claude Code settings 파일 경로(빈 문자열이 아닌 문자열)다`,
   'profiles.effort': ({ key }) => `effort.${key} 는 effort 값 배열이다`,
   'tags.modelCount': ({ count }) => `model: 태그가 ${count}개다`,
   'tags.modelUnknown': ({ name, known }) => `model:${name} 은 profiles.json 의 models 에 없다(있는 것: ${known.join(', ')})`,
@@ -126,6 +128,10 @@ export default {
   'cards.blocked': ({ id, blocking }) => `k${id} 가 기다리는 카드가 끝나지 않았다: ${blocking.map((item) => `k${item}`).join(', ')}. 그래도 옮기려면 --force`,
   // sessions.mjs
   'sessions.notArray': 'claude agents --json 의 stdout 이 배열이 아니다',
+  'settings.unreadable': ({ path, code }) => `카드 세션에 넘길 settings 파일을 읽지 못했다(${code}): ${path}`,
+  'settings.invalidJson': ({ path, message }) => `카드 세션에 넘길 settings 파일이 JSON 이 아니다(${message}): ${path}`,
+  'settings.shape': ({ path }) => `카드 세션에 넘길 settings 파일은 JSON 객체이고 env 는 객체다: ${path}`,
+  'settings.gatewayMissing': ({ names, files }) => `이 셸에 LLM gateway 변수 ${names.join(' · ')} 가 있는데 카드 세션이 읽을 settings 어디에도 gateway 가 없다. 띄우면 Claude Code 가 모델 요청 전에 세션을 끝낸다(daemon.log 의 「No LLM gateway」). 메인 세션과 같은 settings 파일 경로를 .uhd-kanban/config.json 의 run.settings(보드 전체)나 .uhd-kanban/profiles.json 의 models.<프로필>.settings(그 model: 태그의 카드)에 적는다. 본 곳: --settings 값 · ${files.join(' · ')}`,
   'sessions.launchFailed': ({ status, output }) => `claude --bg 가 세션을 띄우지 못했다(종료 코드 ${status}):\n${output}`,
   'sessions.stopFailed': ({ shortId, status, output }) => `claude stop ${shortId} 가 종료 코드 ${status} 로 끝났다:\n${output}`,
   // prompt.mjs. 카드 세션이 읽는 글이다. 첫 문장 「이 작업은 uhd-kanban 카드 k<id> 다」는 delegate 스킬의 description 이 카드 세션을 가르는 문장이라 바꾸지 않는다.
