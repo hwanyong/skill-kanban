@@ -35,8 +35,20 @@ const precomposed = (root) => {
   }
 }
 
-// 색인에 있는 항목의 이름을 되짚는다. 디스크는 자모 분해(NFD)·요청 이름은 완성형(NFC)인 볼륨이 있으므로, 정규형이 같은 항목을 찾아 색인이 쓰는 철자를 그대로 쓴다. 없으면 null.
+// root 가 git 작업 트리 안인가. 저장소 밖이면 rev-parse 가 종료 코드 128 로 끝나고(2026-11-25 실측: 「fatal: not a git repository」), .git 디렉터리 · bare 저장소 안이면 false 를 낸다.
+// git 이 설치되지 않은 때(ENOENT)도 갱신할 색인이 없으므로 false 다.
+const insideWorkTree = (root) => {
+  try {
+    return git(root, ['rev-parse', '--is-inside-work-tree']).trim() == 'true'
+  } catch {
+    return false
+  }
+}
+
+// 색인에 있는 항목의 이름을 되짚는다. 디스크는 자모 분해(NFD)·요청 이름은 완성형(NFC)인 볼륨이 있으므로, 정규형이 같은 항목을 찾아 색인이 쓰는 철자를 그대로 쓴다.
+// 작업 트리 밖이거나 색인에 없으면 null 이고, moveFile 은 그때 디스크에서만 옮긴다.
 const indexEntry = (root, path) => {
+  if (!insideWorkTree(root)) return null
   const dir = relative(root, dirname(path))
   const target = join(dir, basename(path)).normalize('NFC')
   // -z 를 쓴다. 기본값 core.quotePath=true 는 비ASCII 이름을 8진 전위로 바꿔 적어 나오므로 정규형 비교가 성립하지 않는다.
