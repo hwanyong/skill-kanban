@@ -17,6 +17,7 @@ export default {
   'config.locale': ({ value, locales }) => `locale 은 ${locales.join(' · ')} 중 하나다: ${value}`,
   'config.orderWidth': ({ min, max, value }) => `order.width 는 ${min} ~ ${max} 의 정수다: ${value}`,
   'config.orderStep': ({ value }) => `order.step 은 1 이상의 정수다: ${value}`,
+  'config.idStart': ({ value }) => `ids 는 { "start": <1 이상의 정수> } 다. 없으면 첫 카드 번호가 1 이다: ${value}`,
   'config.statusList': ({ key }) => `${key} 는 status 이름 배열이다`,
   'config.unknownStatus': ({ key, status }) => `${key} 의 ${status} 는 columns 에 없는 status 다`,
   'config.abandonedResolved': ({ status }) => `dependencies.abandoned 의 ${status} 가 dependencies.resolved 에도 있다`,
@@ -207,6 +208,7 @@ export default {
   'init.worktree': ({ path, board }) => `${path} 는 git worktree 이고 이 저장소의 보드는 ${board} 다. uk 는 git worktree 안에서 주 worktree 의 보드를 쓰므로 여기 만든 보드는 쓰이지 않는다. 바꾸지 않았다`,
   'init.created': ({ files, locale }) => `만들었다: ${files.join(' · ')} (locale ${locale})`,
   'init.columns': ({ count, dirs }) => `열 ${count}개: ${dirs.join(' · ')}`,
+  'init.idStart': ({ start }) => `첫 카드 번호: k${start}(config.json 의 ids.start)`,
   'check.summary': ({ cards, archived, root }) => `카드 ${cards}개 · 아카이브 ${archived}개 (${root})`,
   'check.home': ({ root }) => `이 보드(${root})는 홈 디렉터리이거나 파일 시스템의 루트에 있다. 그 아래에서 보드 없는 프로젝트의 uk 가 모두 이 보드를 쓴다`,
   'check.ancestor': ({ root, ancestor }) => `이 보드(${root})는 ${ancestor} 의 보드 안에 있다. ${root} 아래에서 부른 uk 는 ${ancestor} 의 보드를 쓰지 않는다`,
@@ -263,7 +265,7 @@ export default {
   // bin/uhd-kanban.mjs
   'bin.unknown': ({ name }) => `알 수 없는 명령이다: ${name}`,
   'usage': ({ unlimited }) => `사용법: uhd-kanban <명령> [인자]
-  init [--dir <경로>] [--locale ko|en]   프로젝트 루트에 .uhd-kanban/ 과 kanban/ 을 만든다. locale 기본은 LANG
+  init [--dir <경로>] [--locale ko|en] [--id-start <k id>]   프로젝트 루트에 .uhd-kanban/ 과 kanban/ 을 만든다. locale 기본은 LANG. --id-start 는 첫 카드 번호다(기본 k1)
   check                 config.json 과 모든 카드를 검증한다
   new --type <type> --title <제목> [--status] [--priority] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file] [자리]   --status 기본은 config.json 의 initial
   move <k id> <status> [자리] [--force]

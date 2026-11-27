@@ -19,6 +19,7 @@ export default {
   'config.locale': ({ value, locales }) => `locale must be one of ${locales.join(', ')}: ${value}`,
   'config.orderWidth': ({ min, max, value }) => `order.width must be an integer from ${min} to ${max}: ${value}`,
   'config.orderStep': ({ value }) => `order.step must be an integer of 1 or more: ${value}`,
+  'config.idStart': ({ value }) => `ids must be { "start": <integer of 1 or more> }. When absent the first card id is 1: ${value}`,
   'config.statusList': ({ key }) => `${key} must be an array of status names`,
   'config.unknownStatus': ({ key, status }) => `${status} in ${key} is not a status in columns`,
   'config.abandonedResolved': ({ status }) => `${status} in dependencies.abandoned is also in dependencies.resolved`,
@@ -209,6 +210,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   'init.worktree': ({ path, board }) => `${path} is a git worktree and the board of this repository is ${board}. Inside a git worktree uk uses the board of the main worktree, so a board here would not be used. Nothing was changed`,
   'init.created': ({ files, locale }) => `Created: ${files.join(' · ')} (locale ${locale})`,
   'init.columns': ({ count: n, dirs }) => `${count(n, 'column')}: ${dirs.join(' · ')}`,
+  'init.idStart': ({ start }) => `First card id: k${start} (ids.start in config.json)`,
   'check.summary': ({ cards, archived, root }) => `${count(cards, 'card')} · ${archived} archived (${root})`,
   'check.home': ({ root }) => `This board (${root}) is in the home directory or the filesystem root. uk in every project below it that has no board of its own uses this board`,
   'check.ancestor': ({ root, ancestor }) => `This board (${root}) is inside the board of ${ancestor}. uk called below ${root} does not use the board in ${ancestor}`,
@@ -265,7 +267,7 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   // bin/uhd-kanban.mjs
   'bin.unknown': ({ name }) => `Unknown command: ${name}`,
   'usage': ({ unlimited }) => `Usage: uhd-kanban <command> [arguments]
-  init [--dir <path>] [--locale ko|en]   creates .uhd-kanban/ and kanban/ at the project root. locale defaults to LANG
+  init [--dir <path>] [--locale ko|en] [--id-start <k id>]   creates .uhd-kanban/ and kanban/ at the project root. locale defaults to LANG. --id-start sets the first card id (default k1)
   check                 validates config.json and every card
   new --type <type> --title <title> [--status] [--priority] [--tags a,b] [--depends k1,k2] [--collection k1] [--body-file] [position]   --status defaults to initial in config.json
   move <k id> <status> [position] [--force]

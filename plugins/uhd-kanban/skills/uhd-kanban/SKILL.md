@@ -23,7 +23,7 @@ description: 프로젝트의 칸반 보드(`kanban/` 의 카드 `.md` 파일)를
 
 | 경로 | 내용 |
 |---|---|
-| `.uhd-kanban/config.json` | 출력 · 카드 세션 프롬프트의 언어(`locale`: `ko` · `en`. 없으면 `LC_ALL` → `LC_MESSAGES` → `LANG`) · 열 · 처음 열(`initial`) · 순서 번호 · 의존성(`gate` · `resolved` · `abandoned`) · 코멘트 kind · 아카이브 · `run`(`status` · `max_parallel` · `finish` · `env`) · `monitor` 설정 |
+| `.uhd-kanban/config.json` | 출력 · 카드 세션 프롬프트의 언어(`locale`: `ko` · `en`. 없으면 `LC_ALL` → `LC_MESSAGES` → `LANG`) · 열 · 처음 열(`initial`) · 첫 카드 번호(`ids.start`) · 순서 번호 · 의존성(`gate` · `resolved` · `abandoned`) · 코멘트 kind · 아카이브 · `run`(`status` · `max_parallel` · `finish` · `env`) · `monitor` 설정 |
 | `.uhd-kanban/profiles.json` | `model:` 태그의 프로필 이름을 `claude --model` 값으로 바꾸는 표 |
 | `.uhd-kanban/main.json` | 카드 세션이 보고하는 메인 세션의 이름 · session id · 등록 시각. `uk main --set` 이 쓰고, 없으면 `uk run` · `uk recover` 가 세션을 띄운 뒤 그 명령을 부른 세션으로 쓴다 |
 | `kanban/<n>-<status>/<순서 번호>-k<id>-<제목>.md` | 열 안의 카드. 예: `kanban/1-to-do/0010-k457-로그인-오류-재현.md` |
@@ -88,7 +88,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 | 키 | 값 |
 |---|---|
-| `id` | 정수. 파일 이름의 `k<id>` 와 같다. 아카이브한 카드까지 포함해 가장 큰 id + 1 이 다음 id 다 |
+| `id` | 정수. 파일 이름의 `k<id>` 와 같다. 아카이브한 카드까지 포함해 가장 큰 id + 1 이 다음 id 다. 그 값이 `config.json` 의 `ids.start`(없으면 1)보다 작으면 `ids.start` 가 다음 id 다 |
 | `type` | `task` · `bug` · `decision` · `milestone` 중 그 열이 허용하는 것 |
 | `priority` | `critical` · `high` · `medium` · `low` |
 | `tags` | 문자열 목록. `model:` · `effort:` · `ultracode` 는 아래 「실행」의 규칙을 따른다 |
@@ -106,7 +106,7 @@ claude --bg 로 시작했다. session=… model=opus(model:deep) effort=high
 
 | 명령 | 하는 일 |
 |---|---|
-| `uk init [--dir <경로>] [--locale ko\|en]` | `.uhd-kanban/`(config.json · profiles.json)과 `kanban/` 을 만든다. `--locale` 이 없으면 그때의 환경 변수(`LC_ALL` → `LC_MESSAGES` → `LANG` 중 처음 비지 않은 값. `ko` 로 시작하면 `ko`, 아니면 `en`)로 정해 config.json 에 적는다. 이미 있거나, 다른 보드 안이거나, 바로 아래 디렉터리에 보드가 있거나(그 디렉터리가 이 저장소의 linked worktree 면 세지 않는다), 홈 디렉터리이거나, git worktree 안이고 주 worktree 에 보드가 있으면 바꾸지 않고 종료 코드 1 |
+| `uk init [--dir <경로>] [--locale ko\|en] [--id-start <k id>]` | `.uhd-kanban/`(config.json · profiles.json)과 `kanban/` 을 만든다. `--id-start` 는 첫 카드 번호이고 config.json 의 `ids.start` 에 적는다(없으면 1. 옛 보드의 카드 번호가 문서에 남아 있는 새 보드에서 그 번호와 겹치지 않게 쓴다). `--locale` 이 없으면 그때의 환경 변수(`LC_ALL` → `LC_MESSAGES` → `LANG` 중 처음 비지 않은 값. `ko` 로 시작하면 `ko`, 아니면 `en`)로 정해 config.json 에 적는다. 이미 있거나, 다른 보드 안이거나, 바로 아래 디렉터리에 보드가 있거나(그 디렉터리가 이 저장소의 linked worktree 면 세지 않는다), 홈 디렉터리이거나, git worktree 안이고 주 worktree 에 보드가 있으면 바꾸지 않고 종료 코드 1 |
 | `uk migrate [--dry-run]` | 0.4.0 까지 만든 보드의 코멘트 kind 를 영어 id 로 바꾸고 config.json 에 `"locale": "ko"` 를 넣는다. 다시 실행해도 바꿀 것이 없으면 아무것도 쓰지 않는다 |
 | `uk locale` | 이 디렉터리에서 쓸 출력 언어(`ko` · `en`)를 낸다 |
 | `uk check` | config.json · profiles.json 과 모든 카드를 검증한다. 파일은 바꾸지 않는다. `planned` 인데 `run.status` 열의 소속 카드가 있는 milestone 과, `active` 인데 소속 카드가 모두 끝난 milestone 을 stderr 로 알린다. 이 보드가 홈 디렉터리이거나, 다른 보드 안이거나, 바로 아래 디렉터리에 보드가 있으면(`lib/root.mjs` 의 `overlappingBoards`. 그 디렉터리가 이 저장소의 linked worktree 면 세지 않는다) 그것도 stderr 로 알린다. 두 알림 모두 종료 코드를 바꾸지 않는다 |

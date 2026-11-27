@@ -26,6 +26,11 @@ export const maxParallel = (config) => config.run.max_parallel ?? DEFAULT_MAX_PA
 // run · recover 가 카드 세션에 넣는 환경 변수(이름 → 값). 키가 없으면 넣지 않는다. 넣는 방법은 lib/session-settings.mjs 의 sessionSettings 가 갖는다.
 export const runEnv = (config) => config.run.env ?? {}
 
+// 새 카드에 줄 가장 작은 id. 이 키보다 먼저 만든 보드의 config.json 에는 ids 가 없으므로 없으면 1 이다.
+// 카드 파일을 옮겨 오지 않은 새 보드가 옛 보드의 번호(문서에 적힌 k1 ~ k420 등)와 겹치지 않게 하려는 것이다(2026-11-27 doghoodie 요청).
+const DEFAULT_ID_START = 1
+export const idStart = (config) => config.ids?.start ?? DEFAULT_ID_START
+
 // 환경 변수 이름 규칙. POSIX 의 portable 이름(영문자 · 숫자 · 밑줄, 숫자로 시작하지 않음)이다.
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
 
@@ -180,6 +185,8 @@ export const validateConfig = (config) => {
   const order = config?.order ?? {}
   if (!Number.isInteger(order.width) || order.width < MIN_ORDER_WIDTH || order.width > MAX_ORDER_WIDTH) problems.push(t('config.orderWidth', { min: MIN_ORDER_WIDTH, max: MAX_ORDER_WIDTH, value: order.width }))
   if (!isPositiveInteger(order.step)) problems.push(t('config.orderStep', { value: order.step }))
+  const ids = config?.ids
+  if (ids !== undefined && (ids == null || typeof ids != 'object' || Array.isArray(ids) || !isPositiveInteger(ids.start))) problems.push(t('config.idStart', { value: JSON.stringify(ids) }))
   const dependencies = config?.dependencies ?? {}
   for (const key of ['gate', 'resolved']) statusListProblems(statuses, `dependencies.${key}`, dependencies[key]).forEach((problem) => problems.push(problem))
   const abandoned = dependencies.abandoned

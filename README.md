@@ -199,7 +199,7 @@ In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`
 
 | Command | What it does |
 |---|---|
-| `uk init` | Creates `.uhd-kanban/` and `kanban/`. `--locale en\|ko` sets the board language. Refuses when the board would overlap another |
+| `uk init` | Creates `.uhd-kanban/` and `kanban/`. `--locale en\|ko` sets the board language. `--id-start <k id>` sets the first card id (`ids.start` in `config.json`, default 1). Refuses when the board would overlap another |
 | `uk check` | Validates the configuration and every card without changing files |
 | `uk new` | Creates a card |
 | `uk move` | Moves a card to another column, with dependency checks |

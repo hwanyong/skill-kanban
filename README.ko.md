@@ -196,7 +196,7 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 
 | 명령 | 하는 일 |
 |---|---|
-| `uk init` | `.uhd-kanban/` 과 `kanban/` 을 만든다. `--locale ko\|en` 이 보드의 언어를 정한다. 다른 보드와 겹치면 거절한다 |
+| `uk init` | `.uhd-kanban/` 과 `kanban/` 을 만든다. `--locale ko\|en` 이 보드의 언어를 정한다. `--id-start <k id>` 는 첫 카드 번호를 정한다(`config.json` 의 `ids.start`, 기본 1). 다른 보드와 겹치면 거절한다 |
 | `uk check` | 설정과 모든 카드를 검증한다. 파일은 바꾸지 않는다 |
 | `uk new` | 카드를 만든다 |
 | `uk move` | 의존성을 검사하고 카드를 다른 열로 옮긴다 |

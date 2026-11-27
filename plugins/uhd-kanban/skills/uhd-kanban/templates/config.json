@@ -11,6 +11,7 @@
     { "dir": "9-active", "status": "active", "types": ["milestone"] }
   ],
   "initial": { "task": "to-do", "bug": "to-do", "decision": "to-do", "milestone": "planned" },
+  "ids": { "start": 1 },
   "order": { "width": 4, "step": 10 },
   "dependencies": { "gate": ["in-progress", "in-review", "done"], "resolved": ["done", "decided", "implemented"], "abandoned": ["cancelled"] },
   "comments": { "kinds": ["question", "answer", "decision", "result", "progress", "report", "correction", "assign", "handoff", "pause", "done-evidence", "user-answer", "user-decision"] },

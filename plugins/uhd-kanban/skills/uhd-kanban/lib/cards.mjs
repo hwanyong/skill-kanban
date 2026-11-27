@@ -9,7 +9,7 @@ import { serialize } from './frontmatter.mjs'
 import { activeName } from './filename.mjs'
 import { t } from './i18n.mjs'
 import { ProjectError } from './errors.mjs'
-import { COLLECTION_TYPE, milestoneStatuses } from './project.mjs'
+import { COLLECTION_TYPE, idStart, milestoneStatuses } from './project.mjs'
 import { parseComments } from './comments.mjs'
 import { HISTORY_KEY, appendStatus } from './history.mjs'
 import { tagProblems } from './profiles.mjs'
@@ -122,8 +122,8 @@ export const assertRefs = (board, ids, { key, self = null, type = null }) => ids
 // depends_on 에 id 를 둔 열 안의 카드. 아카이브한 카드는 다시 옮기지 않으므로 뺀다.
 export const dependentsOf = (board, id) => board.cards.filter((card) => (card.data.depends_on ?? []).includes(id))
 
-// 아카이브한 카드까지 포함해 가장 큰 id + 1 을 준다.
-export const nextId = (board) => Math.max(0, ...board.cards.map((card) => card.id), ...board.archived.map((card) => card.id)) + 1
+// 아카이브한 카드까지 포함해 가장 큰 id + 1 을 준다. 그 값이 config.json 의 ids.start 보다 작으면 ids.start 를 준다.
+export const nextId = (project, board) => Math.max(idStart(project.config), Math.max(0, ...board.cards.map((card) => card.id), ...board.archived.map((card) => card.id)) + 1)
 
 const between = (lo, hi) => {
   const value = Math.floor((lo + hi) / 2)

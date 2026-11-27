@@ -5,23 +5,25 @@
 // config.json 의 locale 은 --locale 로 정하고, 없으면 지금 환경 변수(LC_ALL → LC_MESSAGES → LANG)로 정한다. 그 뒤로는 환경 변수와 무관하게 이 값을 쓴다.
 // .gitignore 는 loadProject 가 쓴다(root.mjs 의 syncIgnoreFile). 이미 있는 보드도 다음 uk 실행에서 같은 내용으로 고쳐진다.
 // 열 디렉터리는 카드가 처음 들어갈 때 만든다. 쓰지 않는 상태의 빈 디렉터리를 남기지 않으려는 것이다.
-// uhd-kanban init [--dir <경로>] [--locale ko|en]
+// config.json 의 ids.start(첫 카드 번호)는 --id-start 로 정하고, 없으면 templates/config.json 의 값(1)이다.
+// uhd-kanban init [--dir <경로>] [--locale ko|en] [--id-start <k id>]
 
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { UsageError, VALUE, stringFlag } from '../args.mjs'
+import { UsageError, VALUE, cardId, stringFlag } from '../args.mjs'
 import { LOCALES, envLocale, t, translator } from '../i18n.mjs'
-import { formatConfig, loadProject, readJson } from '../project.mjs'
+import { formatConfig, idStart, loadProject, readJson } from '../project.mjs'
 import { BOARD_DIR, SETTINGS_DIR, configFile, overlappingBoards, profilesFile, shadowingBoard } from '../root.mjs'
 
 // 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
-export const ARGS = { flags: { dir: VALUE, locale: VALUE }, positional: 0 }
+export const ARGS = { flags: { dir: VALUE, locale: VALUE, 'id-start': VALUE }, positional: 0 }
 
 export const run = async ({ flags }, { skillRoot }) => {
   const root = resolve(stringFlag(flags, 'dir') ?? process.cwd())
   const locale = stringFlag(flags, 'locale') ?? envLocale()
   if (!LOCALES.includes(locale)) throw new UsageError(t('init.locale', { value: flags.locale, locales: LOCALES }))
   const tr = translator(locale)
+  const start = flags['id-start'] == null ? null : cardId(flags['id-start'], '--id-start')
   const settings = join(root, SETTINGS_DIR)
   if (existsSync(settings)) {
     console.error(tr('init.exists', { path: settings }))
@@ -46,11 +48,13 @@ export const run = async ({ flags }, { skillRoot }) => {
     return 1
   }
   mkdirSync(settings, { recursive: true })
-  writeFileSync(configFile(root), formatConfig({ locale, ...readJson(join(skillRoot, 'templates', 'config.json')) }))
+  const template = readJson(join(skillRoot, 'templates', 'config.json'))
+  writeFileSync(configFile(root), formatConfig({ locale, ...template, ...(start == null ? {} : { ids: { ...template.ids, start } }) }))
   copyFileSync(join(skillRoot, 'templates', 'profiles.json'), profilesFile(root))
   mkdirSync(join(root, BOARD_DIR), { recursive: true })
   const project = loadProject(root)
   console.log(tr('init.created', { files: [join(SETTINGS_DIR, 'config.json'), join(SETTINGS_DIR, 'profiles.json'), join(SETTINGS_DIR, '.gitignore'), `${BOARD_DIR}/`], locale }))
   console.log(tr('init.columns', { count: project.config.columns.length, dirs: project.config.columns.map((column) => column.dir) }))
+  console.log(tr('init.idStart', { start: idStart(project.config) }))
   return 0
 }

@@ -50,7 +50,7 @@ export const run = async ({ flags }) => {
     assertRefs(board, dependsOn, { key: 'depends_on' })
     assertRefs(board, collection, { key: 'collection', type: COLLECTION_TYPE })
     checkPosition(board, status, position, null)
-    const id = nextId(board)
+    const id = nextId(project, board)
     const at = now()
     const data = {
       id,
