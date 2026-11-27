@@ -7,7 +7,7 @@ import { layoutFlow } from './flow-layout'
 import type { Component, FlowLayout, PlacedNode } from './flow-layout'
 import { cellProps, columnColor, plainCell, sessionCell } from './frames'
 import type { Cell } from './frames'
-import type { Flow, FlowCard, FlowGroup, FlowNotice, FlowSettings, FlowView, Locale } from '../types'
+import type { FileAction, Flow, FlowCard, FlowGroup, FlowNotice, FlowSettings, FlowView, Locale } from '../types'
 
 // 세션 흐름 view(보드 모니터 mod 의 두 번째 pane). `uhd-kanban flow --json` 의 결과로 milestone 묶음 하나의 카드를 depends_on 의 층으로 그린다.
 // 배치는 flow-layout.ts 가 계산하고, 이 모듈은 머리 줄 · 선 · 노드 · 노드 상세 · 최근 메시지 · hover 툴팁을 그린다. 명령 실행과 타이머는 register.tsx 가 갖는다.
@@ -44,6 +44,8 @@ const FLOW_TEXT = {
     record: '기록',
     recover: (id: number) => `uk recover k${id}`,
     details: '상세',
+    open: '열기',
+    reveal: '위치 보기',
     messages: '최근 메시지',
     noMessages: '메시지가 없다',
     age: ({ value, unit }: Age) => `${value}${{ minute: '분', hour: '시간', day: '일' }[unit]}`,
@@ -69,6 +71,8 @@ const FLOW_TEXT = {
     record: 'record',
     recover: (id: number) => `uk recover k${id}`,
     details: 'details',
+    open: 'open',
+    reveal: 'show in folder',
     messages: 'recent messages',
     noMessages: 'No message',
     age: ({ value, unit }: Age) => `${value}${{ minute: 'm', hour: 'h', day: 'd' }[unit]}`,
@@ -245,10 +249,13 @@ function listedRows($: EngineInterface, ui: Ui, members: number[], cards: Map<nu
 
 const firstLine = (value: string | null) => (value ?? '').split('\n').find((line) => line.trim() != '') ?? ''
 
-// 노드 상세: 제목, 상태 · 세션 판정 · 커밋 수, 시각, 앞 · 뒤 카드, 결과(없으면 진행)의 모든 줄, 대화 기록 경로, recover Button, 그 결과 한 줄.
+// 노드 상세의 Button 이 부르는 함수. register.tsx 가 명령을 실행한다. recover: uk recover k<id>. file: 카드 파일을 운영체제의 기본 앱이나 파일 관리자로 연다.
+export type CardActions = { recover: (id: number) => Promise<void>; file: (id: number, path: string, action: FileAction) => Promise<void> }
+
+// 노드 상세: 제목, 상태 · 세션 판정 · 커밋 수, 시각, 앞 · 뒤 카드, 결과(없으면 진행)의 모든 줄, 대화 기록 경로, 열기 · 위치 보기 Button, recover Button, Button 결과 한 줄.
 // 줄을 자르지 않고 columns 폭에서 줄을 바꾼다(2026-11-27 사용자 요청). 본문은 flow 명령이 CARD_TEXT_CHARS(1000자)에서 자른 값이다.
 // height 는 글자 폭(displayWidth)을 columns 로 나눠 센 줄 수다. 엔진은 낱말 경계에서 줄을 바꾸므로 실제 줄 수는 이 값 이상이다. 툴팁을 노드 아래에 둘지 정하는 데만 쓴다.
-export async function cardDetail($: EngineInterface, { Box, Button, Text }: Ui, card: FlowCard, columns: number, now: number, locale: Locale, recover: (id: number) => Promise<void>) {
+export async function cardDetail($: EngineInterface, { Box, Button, Text }: Ui, card: FlowCard, columns: number, now: number, locale: Locale, actions: CardActions) {
   const text = FLOW_TEXT[locale]
   const notice = await read($, flowNotice)
   const rowsOf = (line: string, width: number) => Math.max(1, Math.ceil(displayWidth(line) / Math.max(1, width)))
@@ -272,7 +279,17 @@ export async function cardDetail($: EngineInterface, { Box, Button, Text }: Ui, 
     ]),
     // 이름표를 따로 두고 경로는 남은 폭에서 줄을 바꾼다. width 0 은 laneBlock 의 제목과 같은 이유다.
     ...(card.transcript == null ? [] : [{ element: <Box flexDirection="row"><Text dimColor>{text.record} </Text><Box width={0} flexGrow={1}><Text wrap="wrap">{card.transcript}</Text></Box></Box>, height: rowsOf(card.transcript, columns - recordWidth) }]),
-    ...(card.verdict != null && RECOVERABLE.includes(card.verdict) ? [{ element: <Box flexDirection="row"><Button key={`flow-recover:k${card.id}`} onPress={() => void recover(card.id)}>{text.recover(card.id)}</Button></Box>, height: 1 }] : []),
+    {
+      element: (
+        <Box flexDirection="row">
+          <Button key={`flow-open:k${card.id}`} onPress={() => void actions.file(card.id, card.path, 'open')}>{text.open}</Button>
+          <Text> </Text>
+          <Button key={`flow-reveal:k${card.id}`} onPress={() => void actions.file(card.id, card.path, 'reveal')}>{text.reveal}</Button>
+        </Box>
+      ),
+      height: 1,
+    },
+    ...(card.verdict != null && RECOVERABLE.includes(card.verdict) ? [{ element: <Box flexDirection="row"><Button key={`flow-recover:k${card.id}`} onPress={() => void actions.recover(card.id)}>{text.recover(card.id)}</Button></Box>, height: 1 }] : []),
     ...(notice == null || notice.id != card.id ? [] : [{ element: <Text dimColor wrap="wrap">{notice.text}</Text>, height: rowsOf(notice.text, columns) }]),
   ]
   return { elements: rows.map((row) => row.element), height: rows.reduce((sum, row) => sum + row.height, 0) }
@@ -325,8 +342,8 @@ export const cardTooltip = ({ Box, Button, Text }: Ui, card: FlowCard, place: To
   )
 }
 
-// 자기 pane 과 grid 칸이 함께 쓰는 그리기 함수. columns 는 그릴 너비, recover 는 노드 상세의 Button 이 부르는 함수(register.tsx 가 uk recover 를 실행한다).
-export async function drawFlow($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], locale: Locale, columns: number, recover: (id: number) => Promise<void>) {
+// 자기 pane 과 grid 칸이 함께 쓰는 그리기 함수. columns 는 그릴 너비, actions 는 노드 상세의 Button 이 부르는 함수(register.tsx 가 명령을 실행한다).
+export async function drawFlow($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], locale: Locale, columns: number, actions: CardActions) {
   const ui = $.ui.resolve(e)
   const { Box, Text } = ui
   const text = FLOW_TEXT[locale]
@@ -363,7 +380,7 @@ export async function drawFlow($: EngineInterface, e: Parameters<EngineInterface
   const diagram = layout.components.flatMap((component, index) => [componentBox($, ui, component, cards, selected), ...(index < layout.components.length - 1 ? [<Text> </Text>] : [])])
   const listed = layout.listed.flatMap((members) => [<Text dimColor>{text.listed}</Text>, ...listedRows($, ui, members, cards, selected)])
   const selectedCard = selected == null ? null : cards.get(selected)
-  const detail = selectedCard ? await cardDetail($, ui, selectedCard, width, refreshedAt, locale, recover) : null
+  const detail = selectedCard ? await cardDetail($, ui, selectedCard, width, refreshedAt, locale, actions) : null
   const recent = messageRows(ui, flow, text)
   const after = [<Text> </Text>, ...(detail ? detail.elements : recent)]
   const diagramRows = layout.components.reduce((sum, component) => sum + component.height, 0) + Math.max(0, layout.components.length - 1)

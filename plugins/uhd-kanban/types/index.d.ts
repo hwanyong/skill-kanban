@@ -31,7 +31,7 @@ export type BoardView =
 // FlowGroup: board 의 swimlane 과 같은 묶음. started_at: 소속 카드의 session_started_at 중 가장 이른 값. cards: 소속 카드 id(보드 차례, 아카이브 포함).
 export type FlowGroup = { key: string; id: number | null; title: string | null; status: string | null; is_running: boolean; finished: number; total: number; started_at: string | null; cards: number[] }
 // verdict 는 run.status 열 카드에만 있다. column_index: config.json 의 columns 안의 차례. dependents: 이 카드를 depends_on 에 적은 작업 카드.
-// progress · result: 마지막 그 종류 코멘트의 본문(1000자에서 자른다). transcript: 대화 기록 파일 경로.
+// progress · result: 마지막 그 종류 코멘트의 본문(1000자에서 자른다). transcript: 대화 기록 파일 경로. path: 카드 파일의 절대 경로.
 export type FlowCard = {
   id: number
   title: string | null
@@ -48,6 +48,7 @@ export type FlowCard = {
   progress: string | null
   result: string | null
   transcript: string | null
+  path: string
 }
 // 카드 코멘트(kind · card 가 있다)와 message-log(둘 다 null)를 시각 차례로 합친 최근 200개. text 는 200자에서 자른다.
 export type FlowMessage = { at: string; from: string | null; to: string; kind: string | null; card: number | null; text: string | null }
@@ -71,7 +72,9 @@ export type FlowView =
   | { kind: 'error'; message: string; refreshedAt: number }
 // 세션 흐름 view 에서 고른 것. group: 묶음 key(null 이면 기본 묶음). selected: 상세를 보는 카드 id.
 export type FlowSettings = { group: string | null; direction: 'down' | 'right'; size: 'full' | 'compact'; selected: number | null }
-// 노드 상세의 recover Button 을 누른 결과 한 줄과 그 카드 id.
+// 카드 파일을 운영체제에서 다루는 방법. open: 기본 앱으로 연다. reveal: 파일 관리자에서 그 파일의 위치를 연다.
+export type FileAction = 'open' | 'reveal'
+// 노드 상세의 recover · 열기 · 위치 보기 Button 을 누른 결과 한 줄과 그 카드 id.
 export type FlowNotice = { id: number; text: string }
 
 declare module 'claude-code' {

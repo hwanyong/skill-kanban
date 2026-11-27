@@ -92,6 +92,8 @@ export const run = async ({ flags }) => {
       progress: lastText(comments, 'progress'),
       result: lastText(comments, 'result'),
       transcript: text(verdict ? verdict.transcript : card.data.session ? transcriptPath(card.data.session) : null),
+      // 카드 파일의 절대 경로. 노드 상세의 열기 · 위치 보기 Button 이 운영체제 명령에 넘긴다. 아카이브한 카드는 archive.dir 아래 경로다.
+      path: text(card.path),
     }
   })
   const fromComments = commented.flatMap(({ card, comments }) => comments.map((comment) => ({ at: text(comment.at), from: text(comment.from), to: text(comment.to.join(',')), kind: text(comment.kind), card: card.id, text: body(comment.text, MESSAGE_CHARS) })))

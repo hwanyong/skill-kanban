@@ -31,6 +31,7 @@ member id 는 pane-grid 0.6.0(origin/main 036e392)이 받는다. 그 판의 `ski
 | 노드 상세 Record | 대화 기록 파일 경로(`cardSession` 의 `transcript`) | 1단계 |
 | 노드 상세 Resume | `uk recover k<id>` 실행 Button(7절) | 1단계 |
 | 노드 상세 Terminal | 대응 없음. pane 에서 다른 세션의 터미널을 열 수단이 엔진에 없다 | 하지 않는다 |
+| 노드 상세 열기 · 위치 보기 | 카드 파일을 운영체제의 기본 앱 · 파일 관리자로 여는 Button(`register.tsx` 의 `fileCommands`). macOS 만 확인 | 0.23.0 |
 | ↓ / → 방향 전환 | 같은 배치를 세로 · 가로로 그린다 | 1단계 |
 | 확대 −/+/Fit | 노드 크기 단계(3줄 노드 · 1줄 노드). 터미널 글자는 배율을 바꿀 수 없다 | 1단계 |
 | hover 툴팁 | 노드 Box 의 `hover`. pane-grid 칸 안에서는 0.6.0 의 `hovers:` 선언이 필요하다 | 1단계 |

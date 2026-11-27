@@ -5,7 +5,8 @@ import { ageOf, displayWidth, etaDays, sharedDays, sparkRuns, sparkline, stalest
 import type { Age } from './charts'
 import { cellProps, colorRuns, columnColor, hasMovingCards, laneFrames, packCells, plainCell, planTransition, sessionCell, statusColor } from './frames'
 import type { Cell, LaneFrame, Transition, Verdict } from './frames'
-import type { Board, BoardView, FlowView, Locale } from '../types'
+import type { Board, BoardView, FileAction, FlowView, Locale } from '../types'
+import type { CardActions } from './flow'
 import { FLOW_VIEW, cardDetail, cardTooltip, drawFlow, loadFlowSettings, readFlowCards, readFlowKind, setFlowNotice, setFlowView } from './flow'
 import { fillSlot, hoversKey, offerChoice, offerKey, placementIn, readPlacement, readShownTab } from './pane-grid'
 
@@ -96,6 +97,8 @@ const TEXT = {
     flowOpened: (root: string) => `${root} 의 세션 흐름을 열었다`,
     flowInGrid: (tab: string) => `세션 흐름을 pane-grid 의 배치 ${tab} 칸에 그린다. 자기 pane 은 열지 않았다`,
     flowFailed: (message: string) => `flow 명령이 실패했다: ${message}`,
+    fileHosted: '이 세션은 hosted 서버에서 돌아 카드 파일을 이 기기에서 열 수 없다',
+    fileFailed: (command: string, message: string) => `${command} 명령이 실패했다: ${message}`,
   },
   en: {
     // uk board 가 출력하는 판정 id 와 같은 낱말이다.
@@ -137,6 +140,8 @@ const TEXT = {
     flowOpened: (root: string) => `Opened the session flow of ${root}`,
     flowInGrid: (tab: string) => `The session flow is drawn in a cell of the pane-grid layout ${tab}, so its own pane was not opened`,
     flowFailed: (message: string) => `The flow command failed: ${message}`,
+    fileHosted: 'This session runs on the hosted server, so the card file cannot be opened on this machine',
+    fileFailed: (command: string, message: string) => `${command} failed: ${message}`,
   },
 } satisfies Record<Locale, unknown>
 
@@ -389,6 +394,46 @@ const recoverCard = async ($: EngineInterface, polling: Polling, id: number) => 
   if (await isOpenView($, PANE, PLUGIN)) await refresh($, polling)
 }
 
+// 카드 파일을 운영체제의 기본 앱(open)이나 파일 관리자(reveal)로 여는 명령. 앞 명령이 실패하면 다음 명령을 실행한다.
+// isExitIgnored: explorer.exe 는 창을 열어도 종료 코드 1 로 끝나므로 종료 코드로 성공을 가르지 않는다.
+// 2026-11-27 macOS(open · open -R)만 실행해 확인했다. Windows · WSL · Linux 명령은 각 운영체제의 명령 문서와 freedesktop FileManager1 규격에서 가져왔고 실행하지 않았다.
+// Linux 의 reveal 은 FileManager1.ShowItems 를 받는 파일 관리자(Nautilus · Dolphin 등)가 그 파일을 고른 채 열고, 받지 않으면 xdg-open 으로 폴더만 연다.
+type FileCommand = { argv: string[]; isExitIgnored?: true }
+
+const fileCommands = (platform: string | undefined, path: string, action: FileAction): FileCommand[] => {
+  const folder = path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')))
+  if (platform == 'macos') return [{ argv: action == 'open' ? ['open', path] : ['open', '-R', path] }]
+  if (platform == 'windows') return [action == 'open' ? { argv: ['cmd', '/c', 'start', '', path] } : { argv: ['explorer', `/select,${path}`], isExitIgnored: true }]
+  if (action == 'open') return [{ argv: ['xdg-open', path] }]
+  const uri = `file://${path.split('/').map(encodeURIComponent).join('/')}`
+  return [
+    { argv: ['dbus-send', '--session', '--print-reply', '--dest=org.freedesktop.FileManager1', '--type=method_call', '/org/freedesktop/FileManager1', 'org.freedesktop.FileManager1.ShowItems', `array:string:${uri}`, 'string:'] },
+    { argv: ['xdg-open', folder] },
+  ]
+}
+
+// WSL 은 Windows 의 explorer.exe 로 연다. 경로는 wslpath -w 로 Windows 경로(\\wsl.localhost\… 또는 C:\…)로 바꾼다.
+const wslCommands = async ($: EngineInterface, path: string, action: FileAction): Promise<FileCommand[]> => {
+  const converted = await $.process.run(['wslpath', '-w', path])
+  const windowsPath = converted.stdout.trim()
+  return [{ argv: action == 'open' ? ['explorer.exe', windowsPath] : ['explorer.exe', `/select,${windowsPath}`], isExitIgnored: true }]
+}
+
+// 노드 상세의 열기 · 위치 보기 Button. 실패하면 마지막 명령의 오류를 그 카드의 상세 아래에 적는다. 성공하면 아무것도 적지 않는다.
+const openCardFile = async ($: EngineInterface, polling: Polling, id: number, path: string, action: FileAction) => {
+  const text = TEXT[polling.locale]
+  const { platform, isHosted } = await $.session.info()
+  if (isHosted) return setFlowNotice($, { id, text: text.fileHosted })
+  const commands = platform == 'wsl' ? await wslCommands($, path, action).catch(() => []) : fileCommands(platform, path, action)
+  let failure = ''
+  for (const command of commands) {
+    const ran = await $.process.run(command.argv).catch((error) => ({ exitCode: -1, stdout: '', stderr: String(error?.message ?? error) }))
+    if (ran.exitCode == 0 || (command.isExitIgnored && ran.exitCode != -1)) return setFlowNotice($, null)
+    failure = text.fileFailed(command.argv[0] ?? '', ran.stderr.trim() || text.exitCode(ran.exitCode))
+  }
+  await setFlowNotice($, { id, text: failure || text.fileFailed('wslpath', text.exitCode(-1)) })
+}
+
 // 주기는 board · flow 가 낸 interval_seconds 다(같은 config 값이다). 보드가 없으면 멈추고(다시 찾는 것은 turn.start 가 한다), 명령이 실패하면 마지막 주기를 그대로 둔다.
 const schedule = ($: EngineInterface, polling: Polling, result: BoardRun | FlowRun) => {
   if (result.kind == 'error') return
@@ -591,12 +636,12 @@ const cardSpots = (lanes: LaneFrame[], laneTop: number) => lanes.reduce(({ spots
   top: top + 1 + item.rows.length,
 }), { spots: [], top: laneTop })
 
-// 자기 pane 과 grid 칸이 함께 쓰는 그리기 함수. requestId 는 그리는 pane 의 id, columns 는 그릴 너비, recover 는 상세의 recover Button 이 부르는 함수다.
+// 자기 pane 과 grid 칸이 함께 쓰는 그리기 함수. requestId 는 그리는 pane 의 id, columns 는 그릴 너비, actions 는 상세의 Button 이 부르는 함수다.
 // 그리는 pane 이 바뀌면 앞 pane 의 가려짐(isHidden)을 지운다. 새 pane 이 가려졌는지는 다음 advance 가 다시 정한다.
 // 막대 칸의 hover 툴팁과 상세는 flow 명령의 카드 값(readFlowCards)으로 그린다. 그 값이 아직 없으면 툴팁도 상세도 없다.
 // Raster 위에 칸마다 빈 Box(1×1)를 겹쳐 hover 묶음에 넣고, 툴팁 안의 Button 으로 상세를 연다. 빈 Box 는 아무것도 그리지 않아 Raster 와 그 blit 이 그대로 보인다.
 // Raster 는 칸마다 누르는 것을 받지 않고, Button 은 글자를 그려 칸을 덮으므로 상세를 여는 Button 은 툴팁 안에 둔다.
-const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], polling: Polling, requestId: string, columns: number, recover: (id: number) => Promise<void>) => {
+const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], polling: Polling, requestId: string, columns: number, actions: CardActions) => {
   const ui = $.ui.resolve(e)
   const { Box, Text } = ui
   const Raster = e.surface == 'terminal' ? $.ui.resolve(e).Raster : null
@@ -638,7 +683,7 @@ const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']
     <Text> </Text>,
   ]
   const { spots, top: lanesEnd } = cardSpots(lanes, top.length)
-  const detail = selectedCard ? await cardDetail($, ui, selectedCard, motion.columns, current.refreshedAt, polling.locale, recover) : null
+  const detail = selectedCard ? await cardDetail($, ui, selectedCard, motion.columns, current.refreshedAt, polling.locale, actions) : null
   const totalRows = lanesEnd + (detail ? 1 + detail.height : 0)
   const shown = flowCards == null ? [] : spots.flatMap((spot) => {
     const card = flowCards.get(spot.id)
@@ -724,9 +769,9 @@ export const register: Register = (on) => {
     return report == null ? result : { ...result, context: [...(result.context ?? []), report] }
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawBoard($, e, polling, PANE, e.props.bodyColumns, (id) => recoverCard($, polling, id)))
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawBoard($, e, polling, PANE, e.props.bodyColumns, { recover: (id) => recoverCard($, polling, id), file: (id, path, action) => openCardFile($, polling, id, path, action) }))
 
-  on('ui.render', { component: 'Pane', requestId: FLOW_PANE }, async ($, e) => drawFlow($, e, polling.locale, e.props.bodyColumns, (id) => recoverCard($, polling, id)))
+  on('ui.render', { component: 'Pane', requestId: FLOW_PANE }, async ($, e) => drawFlow($, e, polling.locale, e.props.bodyColumns, { recover: (id) => recoverCard($, polling, id), file: (id, path, action) => openCardFile($, polling, id, path, action) }))
 
   // pane-grid 의 grid pane: 빈 칸의 선택지에 이 mod 의 Button 을 더하고, 자기 칸이 이 pane 에 있으면 그 칸을 그린다(규약 §3.3 · §3.5).
   // pane-grid 보다 먼저 로드되면 fillSlot 이 pane-grid 가 그린 slot 을 채우고, 뒤에 로드되면 `cell:<이름>` Box 를 next(e) 뒤에 덧붙인다.
@@ -738,8 +783,8 @@ export const register: Register = (on) => {
     const below = await next(e)
     const { Box, Button } = $.ui.resolve(e)
     const draw = async (memberId: string, columns: number) => (memberId == PLUGIN
-      ? [<Box key={hoversKey(PLUGIN)} />, await drawBoard($, e, polling, e.requestId, columns, (id) => recoverCard($, polling, id))]
-      : [<Box key={hoversKey(FLOW_MEMBER)} />, await drawFlow($, e, polling.locale, columns, (id) => recoverCard($, polling, id))])
+      ? [<Box key={hoversKey(PLUGIN)} />, await drawBoard($, e, polling, e.requestId, columns, { recover: (id) => recoverCard($, polling, id), file: (id, path, action) => openCardFile($, polling, id, path, action) })]
+      : [<Box key={hoversKey(FLOW_MEMBER)} />, await drawFlow($, e, polling.locale, columns, { recover: (id) => recoverCard($, polling, id), file: (id, path, action) => openCardFile($, polling, id, path, action) })])
     const appended: RenderElement[] = []
     let tree = below
     for (const { memberId } of MEMBERS) {
