@@ -9,10 +9,13 @@
 
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { UsageError, stringFlag } from '../args.mjs'
+import { UsageError, VALUE, stringFlag } from '../args.mjs'
 import { LOCALES, envLocale, t, translator } from '../i18n.mjs'
 import { formatConfig, loadProject, readJson } from '../project.mjs'
 import { BOARD_DIR, SETTINGS_DIR, configFile, overlappingBoards, profilesFile, shadowingBoard } from '../root.mjs'
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { dir: VALUE, locale: VALUE }, positional: 0 }
 
 export const run = async ({ flags }, { skillRoot }) => {
   const root = resolve(stringFlag(flags, 'dir') ?? process.cwd())

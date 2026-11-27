@@ -5,7 +5,7 @@
 
 import { readFileSync } from 'node:fs'
 import { callerSessionId } from '../agents.mjs'
-import { UsageError, stringFlag } from '../args.mjs'
+import { UsageError, VALUE, stringFlag } from '../args.mjs'
 import { t } from '../i18n.mjs'
 import { appendMessage } from '../message-log.mjs'
 import { isSessionId } from '../outbox.mjs'
@@ -27,6 +27,9 @@ const readInput = () => {
   if (input.agent_id != null && typeof input.agent_id != 'string') throw new UsageError(t('messageLog.badInput'))
   return input
 }
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { session: VALUE }, positional: 0 }
 
 export const run = async ({ flags }) => {
   const sessionId = stringFlag(flags, 'session') ?? callerSessionId()

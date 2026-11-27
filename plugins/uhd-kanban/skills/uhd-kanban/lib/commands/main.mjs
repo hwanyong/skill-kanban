@@ -2,7 +2,7 @@
 // 메인 세션을 새 세션으로 바꿀 때 새 세션에서 --set 을 실행한다. 돌고 있는 카드 세션의 프롬프트는 main 을 가리키므로 고치지 않는다.
 // uhd-kanban main [--set [<이름>]]   --set 에 이름이 없으면 이 세션의 이름.
 
-import { UsageError, stringFlag } from '../args.mjs'
+import { OPTIONAL, UsageError, stringFlag } from '../args.mjs'
 import { t } from '../i18n.mjs'
 import { withLock } from '../lock.mjs'
 import { isMainName, readMain, writeMain } from '../main.mjs'
@@ -19,6 +19,9 @@ const previousName = (project) => {
     return null
   }
 }
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { set: OPTIONAL }, positional: 0 }
 
 export const run = async ({ flags }) => {
   const project = loadProject()

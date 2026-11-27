@@ -39,6 +39,10 @@ export default {
   'args.cardIdName': '카드 id',
   'args.cardId': ({ name, ref }) => `${name} 는 k<정수> 다: ${ref}`,
   'args.onePosition': ({ flags }) => `${flags.join(' · ')} 중 하나만 준다`,
+  'args.unknownFlag': ({ flag }) => `이 명령이 받지 않는 플래그다: ${flag}. 아무것도 바꾸지 않았다`,
+  'args.switchValue': ({ flag }) => `${flag} 는 값을 받지 않는다(--이름=값 형식 불가). 아무것도 바꾸지 않았다`,
+  'args.flagValue': ({ flag }) => `${flag} 에 값이 없다. 아무것도 바꾸지 않았다`,
+  'args.extraPositional': ({ values }) => `이 명령이 받지 않는 인자다: ${values.join(' ')}. 아무것도 바꾸지 않았다`,
   'args.readFile': ({ flag, path, message }) => `${flag} 의 ${path} 를 읽을 수 없다: ${message}`,
   // frontmatter.mjs
   'frontmatter.atLine': ({ line, message }) => `${line}번째 줄: ${message}`,
@@ -279,5 +283,6 @@ export default {
   message-log [--session <id>]   stdin 의 JSON 메시지 하나를 .uhd-kanban/message-log/ 에 적는다. 보드 모니터 mod 의 session.send 훅이 부른다
   migrate [--dry-run]   0.4.0 까지 만든 보드의 코멘트 kind 를 영어 id 로 바꾸고 config.json 에 locale 을 넣는다
   locale                이 디렉터리에서 쓸 출력 언어(ko · en)를 낸다
-  자리: --top · --bottom · --before <k id> · --after <k id> (기본 --bottom)`,
+  자리: --top · --bottom · --before <k id> · --after <k id> (기본 --bottom)
+  --help · -h           어느 명령에 붙여도 이 사용법만 내고 아무것도 바꾸지 않는다. 명령이 받지 않는 플래그 · 인자는 실행 전에 거절한다(종료 코드 2)`,
 }

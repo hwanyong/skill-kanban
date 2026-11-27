@@ -5,7 +5,7 @@
 import { rmSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { PRIORITIES } from '../board.mjs'
-import { UsageError, idsFrom, listFrom, positionFrom, readFlagFile, stringFlag } from '../args.mjs'
+import { POSITION_FLAGS, UsageError, VALUE, idsFrom, listFrom, positionFrom, readFlagFile, stringFlag } from '../args.mjs'
 import { assertRefs, assertTags, checkPosition, columnAccepting, entryFields, nextId, place, removeIfEmpty, writeCard } from '../cards.mjs'
 import { commentProblems } from '../comments.mjs'
 import { now } from '../time.mjs'
@@ -26,6 +26,9 @@ const placeNew = (project, board, card, status, position) => {
     throw error
   }
 }
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { type: VALUE, title: VALUE, status: VALUE, priority: VALUE, tags: VALUE, depends: VALUE, collection: VALUE, 'body-file': VALUE, ...POSITION_FLAGS }, positional: 0 }
 
 export const run = async ({ flags }) => {
   const type = stringFlag(flags, 'type')

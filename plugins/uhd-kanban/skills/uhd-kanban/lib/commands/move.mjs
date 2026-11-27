@@ -3,11 +3,14 @@
 // uhd-kanban move <k id> <status> [--top|--bottom|--before k|--after k] [--force]
 
 import { relative } from 'node:path'
-import { UsageError, cardId, positionFrom } from '../args.mjs'
+import { POSITION_FLAGS, SWITCH, UsageError, cardId, positionFrom } from '../args.mjs'
 import { dependentsOf, findCard, moveCard } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
 import { abandonedStatuses } from '../project.mjs'
 import { forceNote, renumberNote, startedNote, t } from '../i18n.mjs'
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { force: SWITCH, ...POSITION_FLAGS }, positional: 2 }
 
 export const run = async ({ positional, flags }) => {
   const [ref, status] = positional

@@ -220,7 +220,7 @@ In the skill documents, `uk` stands for `node <skill folder>/bin/uhd-kanban.mjs`
 | `uk migrate` | Converts a board made with 0.4.0 or earlier to English kind ids and adds `locale` |
 | `uk locale` | Prints the language used in the current directory (used by the pane) |
 
-Exit codes: `0` success, `1` rule violation or failure (details on stderr), `2` usage error, `3` no board above the current directory. Full options are in [`SKILL.md`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md#명령).
+Exit codes: `0` success, `1` rule violation or failure (details on stderr), `2` usage error, `3` no board above the current directory. Flags and arguments a command does not take are refused with `2` before it runs, and nothing is changed. `--help` and `-h` print the usage on any command. Full options are in [`SKILL.md`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md#명령).
 
 Example output of `uk board` for the demo board in [How the board is stored](#how-the-board-is-stored) (`locale` `en`):
 

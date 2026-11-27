@@ -22,6 +22,9 @@ const liveSessionIds = () => {
   }
 }
 
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: {}, positional: 0 }
+
 export const run = async () => {
   const project = loadProject()
   const board = await viewBoard(project)

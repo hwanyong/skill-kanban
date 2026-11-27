@@ -4,11 +4,14 @@
 // 종료 코드 0: 냈다. 2: session id 가 없거나 형식이 다르다. 3: 보드가 없다.
 
 import { callerSessionId } from '../agents.mjs'
-import { UsageError, stringFlag } from '../args.mjs'
+import { UsageError, VALUE, stringFlag } from '../args.mjs'
 import { t } from '../i18n.mjs'
 import { withLock } from '../lock.mjs'
 import { isSessionId, takeOutbox } from '../outbox.mjs'
 import { loadProject } from '../project.mjs'
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { session: VALUE }, positional: 0 }
 
 export const run = async ({ flags }) => {
   const sessionId = stringFlag(flags, 'session') ?? callerSessionId()

@@ -10,7 +10,7 @@
 import { relative } from 'node:path'
 import { t } from '../i18n.mjs'
 import { callerSessionId } from '../agents.mjs'
-import { UsageError, cardId, listFrom, readFlagFile, stringFlag } from '../args.mjs'
+import { UsageError, VALUE, cardId, listFrom, readFlagFile, stringFlag } from '../args.mjs'
 import { findCard, updateCard } from '../cards.mjs'
 import { now } from '../time.mjs'
 import { USER, appendComment, isName, textProblems } from '../comments.mjs'
@@ -42,6 +42,9 @@ const cardSessionId = (sessions) => {
   const id = callerSessionId()
   return sessions != null && isSessionId(id) && isCardSessionName(currentSessionName(sessions)) ? id : null
 }
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { kind: VALUE, to: VALUE, from: VALUE, text: VALUE, 'text-file': VALUE }, positional: 1 }
 
 export const run = async ({ positional, flags }) => {
   if (positional[0] == null) throw new UsageError(t('comment.usage'))

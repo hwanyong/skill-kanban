@@ -6,7 +6,7 @@
 // uhd-kanban run <k id> [--dry-run] [--force]   --force 는 의존성 검사를 건너뛴다.
 
 import { relative } from 'node:path'
-import { UsageError, cardId } from '../args.mjs'
+import { SWITCH, UsageError, cardId } from '../args.mjs'
 import { assignCard, launchCard } from '../assign.mjs'
 import { checkMove, findCard } from '../cards.mjs'
 import { USER } from '../comments.mjs'
@@ -19,6 +19,9 @@ import { UNLIMITED, maxParallel } from '../project.mjs'
 import { startPrompt } from '../prompt.mjs'
 import { saveSessionSettings, sessionSettings } from '../session-settings.mjs'
 import { RUNNING_VERDICTS, backgroundCommand, cardSession, hasRoom, runningCards, listSessions, sessionName } from '../sessions.mjs'
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { 'dry-run': SWITCH, force: SWITCH }, positional: 1 }
 
 export const run = async ({ positional, flags }, { skillRoot }) => {
   if (positional[0] == null) throw new UsageError(t('run.usage'))

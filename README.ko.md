@@ -217,7 +217,7 @@ frontmatter · 파일 이름 · 디렉터리는 명령으로만 바꾼다. 명�
 | `uk migrate` | 0.4.0 까지 만든 보드의 kind 를 영어 id 로 바꾸고 `locale` 을 넣는다 |
 | `uk locale` | 지금 디렉터리에서 쓸 언어를 출력한다(pane 이 쓴다) |
 
-종료 코드는 `0` 성공 · `1` 규칙 위반이나 실행 실패(내용은 stderr) · `2` 사용법 오류 · `3` 부른 디렉터리 위에 보드가 없음이다. 전체 옵션은 [`SKILL.md`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md#명령) 에 있다.
+종료 코드는 `0` 성공 · `1` 규칙 위반이나 실행 실패(내용은 stderr) · `2` 사용법 오류 · `3` 부른 디렉터리 위에 보드가 없음이다. 명령이 받지 않는 플래그 · 인자는 실행 전에 `2` 로 거절하고 아무것도 바꾸지 않는다. `--help` · `-h` 는 어느 명령에서나 사용법만 낸다. 전체 옵션은 [`SKILL.md`](plugins/uhd-kanban/skills/uhd-kanban/SKILL.md#명령) 에 있다.
 
 [보드 파일 배치](#보드-파일-배치) 그림의 데모 보드에서 `locale` 을 `ko` 로 바꿔 `uk board` 를 실행한 출력:
 

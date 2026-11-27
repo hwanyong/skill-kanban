@@ -6,6 +6,9 @@ import { renumberColumn, requireColumn } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
 import { t } from '../i18n.mjs'
 
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: {}, positional: 1 }
+
 export const run = async ({ positional }) => {
   const [status] = positional
   if (status == null) throw new UsageError(t('renumber.usage'))

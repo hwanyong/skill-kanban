@@ -5,7 +5,7 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { NoProjectError, ProjectError } from '../lib/errors.mjs'
-import { UsageError, parseArgs } from '../lib/args.mjs'
+import { UsageError, parseArgs, wantsHelp } from '../lib/args.mjs'
 import { stripOutputControl } from '../lib/control.mjs'
 import { t } from '../lib/i18n.mjs'
 import { UNLIMITED } from '../lib/project.mjs'
@@ -48,14 +48,25 @@ const file = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : null
 
 // process.exit 는 pipe 로 받는 stderr 에 아직 쓰이지 않은 바이트를 버리므로(macOS 에서 65536 바이트를 넘는 오류 문구가 잘렸다) 종료 코드를 반환해 process.exitCode 에 둔다.
 const main = async () => {
+  // `uk --help` · `uk -h` 는 사용법을 stdout 에 내고 0 으로 끝난다. 명령 없이 부르면 사용법 오류(2)다.
+  if (!file && wantsHelp([name])) {
+    console.log(USAGE)
+    return 0
+  }
   if (!file) {
     console.error(name ? `${t('bin.unknown', { name })}\n${USAGE}` : USAGE)
     return 2
   }
   const skillRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
-  const { run } = await import(join(skillRoot, 'lib', 'commands', file))
+  const { run, ARGS } = await import(join(skillRoot, 'lib', 'commands', file))
   try {
-    return await run(parseArgs(rest), { skillRoot })
+    // 인자를 run 보다 먼저 검사한다. 도움말 요청이면 명령을 실행하지 않는다.
+    const args = parseArgs(rest, ARGS)
+    if (args.help) {
+      console.log(USAGE)
+      return 0
+    }
+    return await run(args, { skillRoot })
   } catch (error) {
     if (error instanceof UsageError) {
       console.error(`${error.message}\n${USAGE}`)

@@ -1,5 +1,6 @@
-// 명령줄 인자를 { positional, flags } 로 나눈다. `--name value` · `--name=value` · 값 없는 `--name`(true) 을 받는다.
-// SWITCHES 의 플래그는 다음 토큰을 값으로 읽지 않는다. 그래서 `--force k1` 의 k1 은 위치 인자다.
+// 명령줄 인자를 { positional, flags, help } 로 나눈다. 명령마다 lib/commands/<명령>.mjs 의 ARGS 가 받는 플래그와 위치 인자 수를 정한다.
+// ARGS 에 없는 플래그 · 넘치는 위치 인자는 명령을 실행하기 전에 UsageError(종료 코드 2)로 멈춘다.
+// 2026-11-27 doghoodie-ios 에서 `uk archive --help` 가 모르는 플래그를 무시하고 카드 297장을 보관했다(doghoodie-main 보고).
 
 import { readFileSync } from 'node:fs'
 import { t } from './i18n.mjs'
@@ -40,29 +41,44 @@ export const readFlagFile = (flags, name) => {
   }
 }
 
-// 값을 받지 않는 불 값 플래그. parseArgs 가 다음 토큰을 값으로 먹지 않는다. 새 불 값 플래그를 더하면 이 집합에도 함께 적는다.
-const SWITCHES = new Set(['force', 'dry-run', 'all', 'json', 'top', 'bottom'])
+// ARGS.flags 의 값. SWITCH 는 값을 받지 않는다(`--force k1` 의 k1 은 위치 인자다). VALUE 는 값이 꼭 있어야 하고, OPTIONAL 은 값이 없으면 true 다.
+export const SWITCH = 'switch'
+export const VALUE = 'value'
+export const OPTIONAL = 'optional'
+
+// positionFrom 이 읽는 플래그. 자리를 받는 명령의 ARGS.flags 에 펼쳐 넣는다.
+export const POSITION_FLAGS = { top: SWITCH, bottom: SWITCH, before: VALUE, after: VALUE }
+
+// 이 토큰이 하나라도 있으면 명령을 실행하지 않고 사용법만 낸다. 값 자리의 `-h`(`--title -h`)도 도움말로 보는데, 그 쪽이 아무것도 바꾸지 않는 쪽이다.
+const HELP = new Set(['--help', '-h'])
+export const wantsHelp = (argv) => argv.some((arg) => HELP.has(arg))
 
 // `--name k1,k2` 를 정수 id 목록으로 바꾼다.
 export const idsFrom = (flags, name) => listFrom(flags[name]).map((ref) => cardId(ref, `--${name}`))
 
-export const parseArgs = (argv) => {
+// spec 은 명령의 ARGS = { flags: { <이름>: SWITCH | VALUE | OPTIONAL }, positional: <최대 개수> } 다.
+export const parseArgs = (argv, spec) => {
+  if (wantsHelp(argv)) return { positional: [], flags: {}, help: true }
   const positional = []
   const flags = {}
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
+    if (/^-[A-Za-z]/.test(arg)) throw new UsageError(t('args.unknownFlag', { flag: arg }))
     if (!arg.startsWith('--')) {
       positional.push(arg)
       continue
     }
     const [key, inline] = arg.slice(2).split(/=(.*)/s)
+    const kind = Object.hasOwn(spec.flags, key) ? spec.flags[key] : null
+    if (kind == null) throw new UsageError(t('args.unknownFlag', { flag: `--${key}` }))
+    // `--dry-run=false` 를 받으면 flags['dry-run'] 이 문자열이 되어 `== true` 검사를 지나지 못하고 실제로 실행된다. 그래서 거절한다.
+    if (kind == SWITCH && inline != null) throw new UsageError(t('args.switchValue', { flag: `--${key}` }))
     const next = argv[i + 1]
-    if (inline != null) flags[key] = inline
-    else if (SWITCHES.has(key)) flags[key] = true
-    else if (next != null && !next.startsWith('--')) {
-      flags[key] = next
-      i += 1
-    } else flags[key] = true
+    const takesNext = kind != SWITCH && inline == null && next != null && !next.startsWith('--')
+    if (kind == VALUE && inline == null && !takesNext) throw new UsageError(t('args.flagValue', { flag: `--${key}` }))
+    flags[key] = inline ?? (takesNext ? next : true)
+    if (takesNext) i += 1
   }
-  return { positional, flags }
+  if (positional.length > spec.positional) throw new UsageError(t('args.extraPositional', { values: positional.slice(spec.positional) }))
+  return { positional, flags, help: false }
 }

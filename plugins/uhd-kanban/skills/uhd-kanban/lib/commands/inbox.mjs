@@ -5,7 +5,7 @@
 // lock 안에서 읽는다. 남이 쓰는 중에 읽으면 renumber 의 임시 이름(.renumber-k<id>.md)과 반쯤 쓴 파일을 위반으로 보고 ENOENT 로 죽었다(2026-11-11 실측: renumber 반복 중 check 80번 중 66번 거짓 위반, board --json 100번 중 2번 ENOENT).
 // uhd-kanban inbox [<이름>] [--all] [--kind a,b]   이름을 주지 않으면 이 세션의 이름. --all 은 답한 코멘트와 아카이브한 카드까지 낸다. --kind 는 그 kind 의 코멘트만 낸다.
 
-import { UsageError, listFrom } from '../args.mjs'
+import { SWITCH, UsageError, VALUE, listFrom } from '../args.mjs'
 import { parseComments } from '../comments.mjs'
 import { viewBoard } from '../edit.mjs'
 import { kindText, t } from '../i18n.mjs'
@@ -14,6 +14,9 @@ import { assertKind, loadProject } from '../project.mjs'
 import { currentSessionName, listSessions } from '../sessions.mjs'
 
 const isReply = (later, comment, names) => names.includes(later.from) || (later.from != comment.from && later.to.includes(comment.from))
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { all: SWITCH, kind: VALUE }, positional: 1 }
 
 export const run = async ({ positional, flags }) => {
   const all = flags.all == true

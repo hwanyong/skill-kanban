@@ -2,10 +2,13 @@
 // uhd-kanban order <k id> (--top|--bottom|--before k|--after k)
 
 import { relative } from 'node:path'
-import { UsageError, cardId, positionFrom } from '../args.mjs'
+import { POSITION_FLAGS, UsageError, cardId, positionFrom } from '../args.mjs'
 import { assertActive, checkPosition, findCard, place } from '../cards.mjs'
 import { editBoard } from '../edit.mjs'
 import { renumberNote, t } from '../i18n.mjs'
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { ...POSITION_FLAGS }, positional: 1 }
 
 export const run = async ({ positional, flags }) => {
   if (positional[0] == null) throw new UsageError(t('order.usage'))

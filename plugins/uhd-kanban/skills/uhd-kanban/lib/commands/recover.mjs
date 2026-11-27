@@ -7,7 +7,7 @@
 // 재부팅으로 pid 없이 state failed 가 된 세션은 --force 없이 이어 간다(sessions.mjs 의 classify).
 
 import { relative } from 'node:path'
-import { cardId } from '../args.mjs'
+import { SWITCH, cardId } from '../args.mjs'
 import { assignCard, launchCard } from '../assign.mjs'
 import { checkMove, findCard } from '../cards.mjs'
 import { readBoard } from '../board.mjs'
@@ -47,6 +47,9 @@ const specOf = (project, card) => {
     return { problem: error.message }
   }
 }
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { 'dry-run': SWITCH, force: SWITCH }, positional: Infinity }
 
 export const run = async ({ positional, flags }, { skillRoot }) => {
   const ids = positional.map((ref) => cardId(ref))

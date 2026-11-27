@@ -3,7 +3,7 @@
 
 import { join, dirname, relative } from 'node:path'
 import { PRIORITIES } from '../board.mjs'
-import { UsageError, cardId, idsFrom, listFrom, stringFlag } from '../args.mjs'
+import { UsageError, VALUE, cardId, idsFrom, listFrom, stringFlag } from '../args.mjs'
 import { assertRefs, assertTags, findCard, moveFile, updateCard } from '../cards.mjs'
 import { hasControl } from '../control.mjs'
 import { editBoard } from '../edit.mjs'
@@ -13,6 +13,9 @@ import { COLLECTION_TYPE } from '../project.mjs'
 
 // 목록에서 remove 를 빼고 없는 add 를 뒤에 붙인다.
 const edited = (list, add, remove) => [...list.filter((item) => !remove.includes(item)), ...add.filter((item) => !list.includes(item))]
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { title: VALUE, priority: VALUE, 'add-tag': VALUE, 'remove-tag': VALUE, 'add-depends': VALUE, 'remove-depends': VALUE, 'add-collection': VALUE, 'remove-collection': VALUE }, positional: 1 }
 
 export const run = async ({ positional, flags }) => {
   if (positional[0] == null) throw new UsageError(t('set.usage'))

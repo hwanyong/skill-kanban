@@ -12,9 +12,13 @@ import { boardLanes, isWork } from '../lanes.mjs'
 import { boardMetrics, recentFinished } from '../metrics.mjs'
 import { COLLECTION_TYPE, loadProject, milestoneStatuses } from '../project.mjs'
 import { cardSession, listSessions } from '../sessions.mjs'
+import { SWITCH } from '../args.mjs'
 
 // --json 은 제어 문자를 \u001b 로 escape 해서 bin 의 write 를 지나고, pane 이 JSON.parse 로 되돌려 Text 에 넘긴다. 그래서 여기서 뺀다.
 const laneTitle = (title) => (typeof title == 'string' ? stripControl(title) : title ?? null)
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { json: SWITCH }, positional: 0 }
 
 export const run = async ({ flags }) => {
   const project = loadProject()

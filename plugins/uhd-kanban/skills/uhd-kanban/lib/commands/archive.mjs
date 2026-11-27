@@ -8,6 +8,10 @@ import { editBoard } from '../edit.mjs'
 import { archiveMonth, archivedName, localDate } from '../filename.mjs'
 import { t } from '../i18n.mjs'
 import { DAY_MS, timeOf } from '../time.mjs'
+import { SWITCH } from '../args.mjs'
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { 'dry-run': SWITCH }, positional: 0 }
 
 export const run = async ({ flags }) => {
   const dryRun = flags['dry-run'] == true

@@ -17,6 +17,7 @@ import { lastActivityAt } from '../metrics.mjs'
 import { COLLECTION_TYPE, loadProject, maxParallel, milestoneStatuses } from '../project.mjs'
 import { RUNNING_VERDICTS, cardSession, listSessions, sessionName, transcriptPath } from '../sessions.mjs'
 import { timeOf } from '../time.mjs'
+import { SWITCH } from '../args.mjs'
 
 const MESSAGES = 200
 // pane 은 메시지를 한두 줄 미리보기로, result · progress 를 노드 상세에 그린다. 전문은 카드 파일과 대화 기록(transcript)에 있다.
@@ -47,6 +48,9 @@ const earliest = (values) => {
   const times = values.map(timeOf).filter((ms) => ms != null)
   return times.length == 0 ? null : new Date(Math.min(...times)).toISOString()
 }
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { json: SWITCH }, positional: 0 }
 
 export const run = async ({ flags }) => {
   const project = loadProject()

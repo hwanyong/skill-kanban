@@ -41,6 +41,10 @@ export default {
   'args.cardIdName': 'card id',
   'args.cardId': ({ name, ref }) => `${name} must be k<integer>: ${ref}`,
   'args.onePosition': ({ flags }) => `Give only one of ${flags.join(', ')}`,
+  'args.unknownFlag': ({ flag }) => `This command does not take the flag ${flag}. Nothing was changed`,
+  'args.switchValue': ({ flag }) => `${flag} takes no value (--name=value is not accepted). Nothing was changed`,
+  'args.flagValue': ({ flag }) => `${flag} needs a value. Nothing was changed`,
+  'args.extraPositional': ({ values }) => `This command does not take these arguments: ${values.join(' ')}. Nothing was changed`,
   'args.readFile': ({ flag, path, message }) => `Cannot read ${path} given to ${flag}: ${message}`,
   // frontmatter.mjs
   'frontmatter.atLine': ({ line, message }) => `line ${line}: ${message}`,
@@ -281,5 +285,6 @@ Read the last [progress] comment and the comments after it from \`${cli} inbox $
   message-log [--session <id>]   writes one JSON message from stdin to .uhd-kanban/message-log/. The board monitor mod's session.send hook calls it
   migrate [--dry-run]   converts comment kinds of a board made with 0.4.0 or earlier to English ids and adds locale to config.json
   locale                prints the output language (ko · en) used in this directory
-  position: --top · --bottom · --before <k id> · --after <k id> (default --bottom)`,
+  position: --top · --bottom · --before <k id> · --after <k id> (default --bottom)
+  --help · -h           on any command, prints this usage and changes nothing. Flags and arguments a command does not take are refused before it runs (exit code 2)`,
 }

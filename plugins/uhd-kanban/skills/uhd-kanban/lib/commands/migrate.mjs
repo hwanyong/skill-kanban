@@ -15,9 +15,13 @@ import { withLock } from '../lock.mjs'
 import { ProjectError } from '../errors.mjs'
 import { findRoot, formatConfig, readJson, validateConfig } from '../project.mjs'
 import { BOARD_DIR, SETTINGS_DIR, configFile } from '../root.mjs'
+import { SWITCH } from '../args.mjs'
 
 // 0.4.0 까지의 프롬프트와 출력은 한국어였다.
 const LEGACY_LOCALE = 'ko'
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { 'dry-run': SWITCH }, positional: 0 }
 
 export const run = async ({ flags }) => {
   const dryRun = flags['dry-run'] == true

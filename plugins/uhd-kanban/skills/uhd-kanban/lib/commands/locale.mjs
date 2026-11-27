@@ -4,6 +4,9 @@
 
 import { LOCALE } from '../i18n.mjs'
 
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: {}, positional: 0 }
+
 export const run = async () => {
   console.log(LOCALE)
   return 0

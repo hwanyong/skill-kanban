@@ -10,7 +10,7 @@
 import { existsSync, realpathSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { callerSessionId, sessionById } from '../agents.mjs'
-import { UsageError, stringFlag } from '../args.mjs'
+import { UsageError, VALUE, stringFlag } from '../args.mjs'
 import { t } from '../i18n.mjs'
 import { ProjectError } from '../errors.mjs'
 import { findRoot } from '../project.mjs'
@@ -32,6 +32,9 @@ const physicalPath = (path) => {
   const dir = existingDir(path)
   return join(realpathSync(dir), relative(dir, path))
 }
+
+// 받는 플래그와 위치 인자 수(lib/args.mjs 의 parseArgs).
+export const ARGS = { flags: { session: VALUE }, positional: 1 }
 
 export const run = async ({ positional, flags }) => {
   if (positional[0] == null) throw new UsageError(t('guard.usage'))
