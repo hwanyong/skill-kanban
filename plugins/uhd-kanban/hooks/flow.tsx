@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface } from 'claude-code'
+import type { EngineInterface, RenderElement } from 'claude-code'
 
 import { ageOf, clipWidth, displayWidth } from './charts'
 import type { Age } from './charts'
@@ -7,17 +7,17 @@ import { layoutFlow } from './flow-layout'
 import type { Component, FlowLayout, PlacedNode } from './flow-layout'
 import { cellProps, columnColor, plainCell, sessionCell } from './frames'
 import type { Cell } from './frames'
-import type { Flow, FlowCard, FlowGroup, FlowSettings, FlowView, Locale } from '../types'
+import type { Flow, FlowCard, FlowGroup, FlowNotice, FlowSettings, FlowView, Locale } from '../types'
 
 // 세션 흐름 view(보드 모니터 mod 의 두 번째 pane). `uhd-kanban flow --json` 의 결과로 milestone 묶음 하나의 카드를 depends_on 의 층으로 그린다.
 // 배치는 flow-layout.ts 가 계산하고, 이 모듈은 머리 줄 · 선 · 노드 · 노드 상세 · 최근 메시지 · hover 툴팁을 그린다. 명령 실행과 타이머는 register.tsx 가 갖는다.
 // 설계: docs/session-flow-view.md 4.2 절. 노드를 누르면 그 카드의 상세가 보이고, 같은 노드를 다시 누르면 최근 메시지로 돌아간다.
 // 툴팁은 트리 맨 끝에 둔다. 2026-11-20 확인에서 툴팁 뒤에 그린 형제가 툴팁 위에 그려졌다. 노드와 툴팁은 hover.scope 로 묶는다.
+// 노드 상세(cardDetail)와 hover 툴팁(cardTooltip)은 보드 모니터 pane(register.tsx)도 막대 칸의 카드에 쓴다. 카드 값은 둘 다 flow 명령의 결과(readFlowCards)다.
 
 // pane-grid 의 member id 이자 자기 pane 의 이름에 쓰는 view 이름.
 export const FLOW_VIEW = 'flow'
 const RECENT_MESSAGES = 10
-const RESULT_LINES = 3
 const TOOLTIP_WIDTH = 44
 // 세션을 다시 띄울 수 있는 판정. docs/session-flow-view.md 7절(2026-11-20 사용자 승인).
 const RECOVERABLE = ['resume', 'restart']
@@ -43,6 +43,7 @@ const FLOW_TEXT = {
     progress: '진행',
     record: '기록',
     recover: (id: number) => `uk recover k${id}`,
+    details: '상세',
     messages: '최근 메시지',
     noMessages: '메시지가 없다',
     age: ({ value, unit }: Age) => `${value}${{ minute: '분', hour: '시간', day: '일' }[unit]}`,
@@ -67,6 +68,7 @@ const FLOW_TEXT = {
     progress: 'progress',
     record: 'record',
     recover: (id: number) => `uk recover k${id}`,
+    details: 'details',
     messages: 'recent messages',
     noMessages: 'No message',
     age: ({ value, unit }: Age) => `${value}${{ minute: 'm', hour: 'h', day: 'd' }[unit]}`,
@@ -83,19 +85,25 @@ const DEFAULT_SETTINGS: FlowSettings = { group: null, direction: 'down', size: '
 const flowView = atom({ plugin: 'uhd-kanban', key: 'flowView' } as const, { kind: 'reading' } as FlowView, { shape: 'flow-1' })
 // 값을 쓰면 엔진이 pane 을 다시 그린다. 보드 root 마다 $.store 에도 둔다.
 const flowSettings = atom({ plugin: 'uhd-kanban', key: 'flowSettings' } as const, DEFAULT_SETTINGS)
-// 노드 상세의 recover Button 을 누른 결과 한 줄. 다른 카드를 고르면 지운다.
-const flowNotice = atom({ plugin: 'uhd-kanban', key: 'flowNotice' } as const, null as string | null)
+// 노드 상세의 recover Button 을 누른 결과 한 줄과 그 카드 id. 그 카드의 상세에만 적고, 다른 카드를 고르면 지운다.
+const flowNotice = atom({ plugin: 'uhd-kanban', key: 'flowNotice' } as const, null as FlowNotice | null, { shape: 'notice-2' })
 
 export async function setFlowView($: EngineInterface, value: FlowView) {
   await update($, flowView, () => value)
 }
 
-export async function setFlowNotice($: EngineInterface, value: string | null) {
+export async function setFlowNotice($: EngineInterface, value: FlowNotice | null) {
   await update($, flowNotice, () => value)
 }
 
 export async function readFlowKind($: EngineInterface) {
   return (await read($, flowView)).kind
+}
+
+// flow 명령이 낸 카드(id → 카드). 아직 읽지 않았거나 실패했으면 null 이다. ui.render 안에서 부르면 그 그림이 flowView 를 구독한다.
+export async function readFlowCards($: EngineInterface) {
+  const current = await read($, flowView)
+  return current.kind == 'ok' ? new Map(current.flow.cards.map((card) => [card.id, card])) : null
 }
 
 async function settingsStoreKey($: EngineInterface) {
@@ -237,23 +245,37 @@ function listedRows($: EngineInterface, ui: Ui, members: number[], cards: Map<nu
 
 const firstLine = (value: string | null) => (value ?? '').split('\n').find((line) => line.trim() != '') ?? ''
 
-// 노드 상세: 제목, 상태 · 세션 판정 · 커밋 수, 시각, 앞 · 뒤 카드, 결과(없으면 진행) 앞 RESULT_LINES 줄, 대화 기록 경로, recover Button.
-// 줄마다 Text 하나(truncate)라 줄 수가 정해진다. 툴팁 위치를 정하는 데 그 줄 수를 쓴다.
-function detailRows($: EngineInterface, { Box, Button, Text }: Ui, card: FlowCard, notice: string | null, now: number, text: FlowText, recover: (id: number) => Promise<void>) {
+// 노드 상세: 제목, 상태 · 세션 판정 · 커밋 수, 시각, 앞 · 뒤 카드, 결과(없으면 진행)의 모든 줄, 대화 기록 경로, recover Button, 그 결과 한 줄.
+// 줄을 자르지 않고 columns 폭에서 줄을 바꾼다(2026-11-27 사용자 요청). 본문은 flow 명령이 CARD_TEXT_CHARS(1000자)에서 자른 값이다.
+// height 는 글자 폭(displayWidth)을 columns 로 나눠 센 줄 수다. 엔진은 낱말 경계에서 줄을 바꾸므로 실제 줄 수는 이 값 이상이다. 툴팁을 노드 아래에 둘지 정하는 데만 쓴다.
+export async function cardDetail($: EngineInterface, { Box, Button, Text }: Ui, card: FlowCard, columns: number, now: number, locale: Locale, recover: (id: number) => Promise<void>) {
+  const text = FLOW_TEXT[locale]
+  const notice = await read($, flowNotice)
+  const rowsOf = (line: string, width: number) => Math.max(1, Math.ceil(displayWidth(line) / Math.max(1, width)))
   const ids = (values: number[]) => (values.length == 0 ? text.none : values.map((id) => `k${id}`).join(' '))
   const body = card.result ?? card.progress
-  const bodyLines = (body ?? '').split('\n').filter((line) => line.trim() != '').slice(0, RESULT_LINES)
-  return [
-    <Text bold wrap="truncate-end">k{card.id} {card.title ?? ''}</Text>,
-    <Text dimColor wrap="truncate-end">{text.statusLine(card.status, card.verdict, card.commits)}</Text>,
-    <Text dimColor wrap="truncate-end">{text.times(ageText(text, now, card.started_at), ageText(text, now, card.last_activity_at))}</Text>,
-    <Text wrap="truncate-end"><Text dimColor>{text.before} </Text>{ids(card.depends_on)}<Text dimColor> · {text.after} </Text>{ids(card.dependents)}</Text>,
-    ...(bodyLines.length == 0 ? [] : [<Text dimColor>{card.result != null ? text.result : text.progress}</Text>, ...bodyLines.map((line) => <Text wrap="truncate-end">  {line}</Text>)]),
-    // 경로는 파일 이름이 보이도록 앞을 자른다. 이름표까지 잘리지 않도록 이름표는 따로 둔다. width 0 은 laneBlock 의 제목과 같은 이유다.
-    ...(card.transcript == null ? [] : [<Box flexDirection="row"><Text dimColor>{text.record} </Text><Box width={0} flexGrow={1}><Text wrap="truncate-start">{card.transcript}</Text></Box></Box>]),
-    ...(card.verdict != null && RECOVERABLE.includes(card.verdict) ? [<Box flexDirection="row"><Button key={`flow-recover:k${card.id}`} onPress={() => void recover(card.id)}>{text.recover(card.id)}</Button></Box>] : []),
-    ...(notice == null ? [] : [<Text dimColor wrap="truncate-end">{notice}</Text>]),
+  const bodyLines = (body ?? '').split('\n').filter((line) => line.trim() != '')
+  const title = `k${card.id} ${card.title ?? ''}`
+  const status = text.statusLine(card.status, card.verdict, card.commits)
+  const times = text.times(ageText(text, now, card.started_at), ageText(text, now, card.last_activity_at))
+  const links = `${text.before} ${ids(card.depends_on)} · ${text.after} ${ids(card.dependents)}`
+  const recordWidth = displayWidth(`${text.record} `)
+  const rows: { element: RenderElement; height: number }[] = [
+    { element: <Text bold wrap="wrap">{title}</Text>, height: rowsOf(title, columns) },
+    { element: <Text dimColor wrap="wrap">{status}</Text>, height: rowsOf(status, columns) },
+    { element: <Text dimColor wrap="wrap">{times}</Text>, height: rowsOf(times, columns) },
+    { element: <Text wrap="wrap"><Text dimColor>{text.before} </Text>{ids(card.depends_on)}<Text dimColor> · {text.after} </Text>{ids(card.dependents)}</Text>, height: rowsOf(links, columns) },
+    ...(bodyLines.length == 0 ? [] : [
+      { element: <Text dimColor>{card.result != null ? text.result : text.progress}</Text>, height: 1 },
+      // 들여쓰기를 Box 의 paddingLeft 로 두어 바뀐 줄도 같은 자리에서 시작한다.
+      ...bodyLines.map((line) => ({ element: <Box paddingLeft={2}><Text wrap="wrap">{line}</Text></Box>, height: rowsOf(line, columns - 2) })),
+    ]),
+    // 이름표를 따로 두고 경로는 남은 폭에서 줄을 바꾼다. width 0 은 laneBlock 의 제목과 같은 이유다.
+    ...(card.transcript == null ? [] : [{ element: <Box flexDirection="row"><Text dimColor>{text.record} </Text><Box width={0} flexGrow={1}><Text wrap="wrap">{card.transcript}</Text></Box></Box>, height: rowsOf(card.transcript, columns - recordWidth) }]),
+    ...(card.verdict != null && RECOVERABLE.includes(card.verdict) ? [{ element: <Box flexDirection="row"><Button key={`flow-recover:k${card.id}`} onPress={() => void recover(card.id)}>{text.recover(card.id)}</Button></Box>, height: 1 }] : []),
+    ...(notice == null || notice.id != card.id ? [] : [{ element: <Text dimColor wrap="wrap">{notice.text}</Text>, height: rowsOf(notice.text, columns) }]),
   ]
+  return { elements: rows.map((row) => row.element), height: rows.reduce((sum, row) => sum + row.height, 0) }
 }
 
 const messageRows = ({ Text }: Ui, flow: Flow, text: FlowText) => {
@@ -272,22 +294,33 @@ const messageRows = ({ Text }: Ui, flow: Flow, text: FlowText) => {
 }
 
 // hover 툴팁: 제목 전문, 마지막 progress 첫 줄, 시각. 노드 아래에 두고, 그려진 줄 밖으로 나가면 노드 위에 둔다. 가로는 pane 폭 안으로 자른다.
-// 테두리 안 빈칸에 밑의 글자가 비치지 않도록 줄마다 폭을 공백으로 채운다.
-const tooltipBox = ({ Box, Text }: Ui, card: FlowCard, top: number, left: number, nodeHeight: number, totalRows: number, columns: number, now: number, text: FlowText) => {
-  const width = Math.max(10, Math.min(TOOLTIP_WIDTH, columns))
+// 테두리 안 빈칸에 밑의 글자가 비치지 않도록 줄마다 폭을 공백으로 채운다. scope 는 노드 · 칸과 같은 hover 묶음이다.
+// action 이 있으면 마지막 줄에 그 Button 을 둔다. 툴팁도 scope 의 한 요소라 포인터를 툴팁으로 옮겨도 툴팁이 보인다.
+export type TooltipPlace = { scope: string; top: number; left: number; nodeHeight: number; totalRows: number; columns: number }
+export type TooltipAction = { key: string; onPress: () => void }
+
+export const cardTooltip = ({ Box, Button, Text }: Ui, card: FlowCard, place: TooltipPlace, now: number, locale: Locale, action: TooltipAction | null) => {
+  const text = FLOW_TEXT[locale]
+  const width = Math.max(10, Math.min(TOOLTIP_WIDTH, place.columns))
   const inner = width - 2
   const pad = (line: string) => {
     const clipped = clipWidth(line, inner)
     return `${clipped}${' '.repeat(Math.max(0, inner - displayWidth(clipped)))}`
   }
   const lines = [`k${card.id} ${card.title ?? ''}`, firstLine(card.progress), text.times(ageText(text, now, card.started_at), ageText(text, now, card.last_activity_at))].filter((line) => line != '')
-  const height = lines.length + 2
-  const below = top + nodeHeight
-  const y = below + height <= totalRows ? below : Math.max(0, top - height)
-  const x = Math.max(0, Math.min(left, columns - width))
+  const height = lines.length + (action == null ? 0 : 1) + 2
+  const below = place.top + place.nodeHeight
+  const y = below + height <= place.totalRows ? below : Math.max(0, place.top - height)
+  const x = Math.max(0, Math.min(place.left, place.columns - width))
   return (
-    <Box position="absolute" top={y} left={x} width={width} display="none" hover={{ display: 'flex', scope: scopeOf(card.id) }} borderStyle="single" flexDirection="column">
+    <Box position="absolute" top={y} left={x} width={width} display="none" hover={{ display: 'flex', scope: place.scope }} borderStyle="single" flexDirection="column">
       {lines.map((line) => <Text>{pad(line)}</Text>)}
+      {action == null ? null : (
+        <Box flexDirection="row">
+          <Button key={action.key} plain onPress={action.onPress}><Text inverse>{text.details}</Text></Button>
+          <Text>{' '.repeat(Math.max(0, inner - displayWidth(text.details)))}</Text>
+        </Box>
+      )}
     </Box>
   )
 }
@@ -310,7 +343,6 @@ export async function drawFlow($: EngineInterface, e: Parameters<EngineInterface
   }
   const { flow, refreshedAt } = current
   const settings = await read($, flowSettings)
-  const notice = await read($, flowNotice)
   const width = Math.max(1, columns)
   const header = <Text dimColor wrap="truncate-end">{text.header(clockText(refreshedAt), flow.main, flow.working, flow.max_parallel, flow.interval_seconds)}</Text>
   const group = currentGroup(flow, settings)
@@ -331,12 +363,14 @@ export async function drawFlow($: EngineInterface, e: Parameters<EngineInterface
   const diagram = layout.components.flatMap((component, index) => [componentBox($, ui, component, cards, selected), ...(index < layout.components.length - 1 ? [<Text> </Text>] : [])])
   const listed = layout.listed.flatMap((members) => [<Text dimColor>{text.listed}</Text>, ...listedRows($, ui, members, cards, selected)])
   const selectedCard = selected == null ? null : cards.get(selected)
-  const after = [<Text> </Text>, ...(selectedCard ? detailRows($, ui, selectedCard, notice, refreshedAt, text, recover) : messageRows(ui, flow, text))]
+  const detail = selectedCard ? await cardDetail($, ui, selectedCard, width, refreshedAt, locale, recover) : null
+  const recent = messageRows(ui, flow, text)
+  const after = [<Text> </Text>, ...(detail ? detail.elements : recent)]
   const diagramRows = layout.components.reduce((sum, component) => sum + component.height, 0) + Math.max(0, layout.components.length - 1)
-  const totalRows = top.length + diagramRows + listed.length + after.length
+  const totalRows = top.length + diagramRows + listed.length + 1 + (detail ? detail.height : recent.length)
   const tooltips = layout.components.flatMap((component, index) => component.nodes.flatMap((node) => {
     const card = cards.get(node.id)
-    return card ? [tooltipBox(ui, card, (offsets[index] ?? 0) + node.y, node.x, node.height, totalRows, width, refreshedAt, text)] : []
+    return card ? [cardTooltip(ui, card, { scope: scopeOf(card.id), top: (offsets[index] ?? 0) + node.y, left: node.x, nodeHeight: node.height, totalRows, columns: width }, refreshedAt, locale, null)] : []
   }))
   return (
     <Box flexDirection="column">

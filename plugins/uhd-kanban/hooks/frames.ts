@@ -4,7 +4,8 @@ import type { Board, BoardCard, BoardLane } from '../types'
 // 카드 한 장이 막대의 한 칸이고, 막대는 pane 폭에서 줄을 바꾼다.
 
 // color · background 는 0x00RRGGBB 이거나 DEFAULT_COLOR 다. RasterProps 의 cells 와 같은 값이다.
-export type Cell = { glyph: string; color: number; background: number }
+// id: 막대 칸이 그리는 카드. 보드 모니터가 그 칸에 hover 툴팁과 상세를 여는 Button 을 둔다. packCells · colorRuns 는 이 값을 쓰지 않는다.
+export type Cell = { glyph: string; color: number; background: number; id?: number }
 export type Verdict = NonNullable<BoardCard['session']>
 // at: 막대 안의 차례(0부터). faded: 사라지는 · 나타나는 중이면 그 프레임의 칸이다.
 type Slot = { at: number; card: BoardCard; faded?: Cell }
@@ -93,7 +94,7 @@ const laneRows = (board: Board, slots: Slot[], columns: number, reserve: number,
   const rows: Cell[][] = Array.from({ length: Math.ceil(longest / columns) }, () => Array.from({ length: columns }, () => BLANK))
   slots.forEach((slot) => {
     const row = rows[Math.floor(slot.at / columns)]
-    if (row) row[slot.at % columns] = slot.faded ?? cardCell(board, slot.card, frame, slot.at)
+    if (row) row[slot.at % columns] = { ...(slot.faded ?? cardCell(board, slot.card, frame, slot.at)), id: slot.card.id }
   })
   return rows
 }

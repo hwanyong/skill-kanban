@@ -27,7 +27,7 @@ member id 는 pane-grid 0.6.0(origin/main 036e392)이 받는다. 그 판의 `ski
 | worker 상태 | `cardSession` 의 verdict(live · resume · restart · pending · done · unknown · none) | 1단계 |
 | 머리 줄 `Running · 50m so far · 1/4 done` | milestone 의 진행 상태 · 첫 `session_started_at` 부터 지난 시간 · 끝낸 수/전체 수 · 도는 세션 수/`run.max_parallel` | 1단계 |
 | 노드 상세 Connections | 그 카드의 `depends_on`(앞) 과 그 카드를 `depends_on` 에 적은 카드(뒤, `lib/cards.mjs` 의 `dependentsOf`) | 1단계 |
-| 노드 상세 Result | 마지막 `result` 코멘트 본문 앞 3줄. 없으면 마지막 `progress` | 1단계 |
+| 노드 상세 Result | 마지막 `result` 코멘트 본문의 모든 줄(pane 폭에서 줄을 바꾼다, 2026-11-27 0.22.0). 없으면 마지막 `progress` | 1단계 |
 | 노드 상세 Record | 대화 기록 파일 경로(`cardSession` 의 `transcript`) | 1단계 |
 | 노드 상세 Resume | `uk recover k<id>` 실행 Button(7절) | 1단계 |
 | 노드 상세 Terminal | 대응 없음. pane 에서 다른 세션의 터미널을 열 수단이 엔진에 없다 | 하지 않는다 |

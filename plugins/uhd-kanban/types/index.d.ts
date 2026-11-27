@@ -71,9 +71,11 @@ export type FlowView =
   | { kind: 'error'; message: string; refreshedAt: number }
 // 세션 흐름 view 에서 고른 것. group: 묶음 key(null 이면 기본 묶음). selected: 상세를 보는 카드 id.
 export type FlowSettings = { group: string | null; direction: 'down' | 'right'; size: 'full' | 'compact'; selected: number | null }
+// 노드 상세의 recover Button 을 누른 결과 한 줄과 그 카드 id.
+export type FlowNotice = { id: number; text: string }
 
 declare module 'claude-code' {
   interface PluginState {
-    'uhd-kanban': { view: Shaped<BoardView>; collapsedLanes: string[]; flowView: Shaped<FlowView>; flowSettings: FlowSettings; flowNotice: string | null }
+    'uhd-kanban': { view: Shaped<BoardView>; collapsedLanes: string[]; flowView: Shaped<FlowView>; flowSettings: FlowSettings; flowNotice: Shaped<FlowNotice | null>; boardSelected: number | null }
   }
 }

@@ -6,7 +6,7 @@ import type { Age } from './charts'
 import { cellProps, colorRuns, columnColor, hasMovingCards, laneFrames, packCells, plainCell, planTransition, sessionCell, statusColor } from './frames'
 import type { Cell, LaneFrame, Transition, Verdict } from './frames'
 import type { Board, BoardView, FlowView, Locale } from '../types'
-import { FLOW_VIEW, drawFlow, loadFlowSettings, readFlowKind, setFlowNotice, setFlowView } from './flow'
+import { FLOW_VIEW, cardDetail, cardTooltip, drawFlow, loadFlowSettings, readFlowCards, readFlowKind, setFlowNotice, setFlowView } from './flow'
 import { fillSlot, hoversKey, offerChoice, offerKey, placementIn, readPlacement, readShownTab } from './pane-grid'
 
 // uhd-kanban 보드 모니터. 세션 디렉터리에서 `uhd-kanban board --json` 을 monitor.interval_seconds 마다 실행하고, milestone 마다 한 행(swimlane)을 그린다.
@@ -20,6 +20,10 @@ import { fillSlot, hoversKey, offerChoice, offerKey, placementIn, readPlacement,
 // pane-grid 의 배치에 이 mod 의 칸이 있으면 자기 pane 을 닫고 그 grid pane 의 칸에 같은 그림을 그린다(plugin-pane-grid 의 docs/grid-and-tabs.md §3.3 · §3.5).
 // 두 번째 pane 은 세션 흐름 view 다(flow.tsx, docs/session-flow-view.md). `/kanban-flow` 나 pane-grid 의 member id `uhd-kanban.flow` 로만 열고, 같은 갱신 타이머가 flow 명령을 실행한다.
 // session.send 훅이 이 세션의 모델이 SendMessage 도구로 보낸 메시지를 message-log 명령으로 적는다. 세션 흐름 view 의 최근 메시지가 그 기록을 읽는다.
+// 막대 칸에 포인터를 올리면 그 카드의 hover 툴팁이 보이고, 툴팁 안의 Button 을 누르면 pane 맨 아래에 그 카드의 상세가 보인다(2026-11-27 사용자 요청).
+// 툴팁 · 상세는 flow.tsx 의 것이고 값은 flow 명령의 결과다. 그래서 보드 모니터가 열려 있으면 flow 명령도 같은 주기로 실행한다.
+// 칸을 바로 누르게 하려면 막대를 칸마다 Button 으로 그려야 한다. 2026-11-27 시험에서 그 방식은 움직이는 카드가 있을 때 claude 프로세스 CPU 가
+// 툴팁 방식의 2.3 ~ 3.6배였다(250 ms 마다 pane 전체를 다시 그린다). 사용자가 툴팁 방식을 골랐다.
 
 const PANE = 'uhd-kanban-board'
 // pane-grid 의 layout 에서 이 mod 의 칸을 찾는 이름. plugin.json 의 name 이다.
@@ -141,6 +145,13 @@ const view = atom({ plugin: 'uhd-kanban', key: 'view' } as const, { kind: 'readi
 const collapsedLanes = atom({ plugin: 'uhd-kanban', key: 'collapsedLanes' } as const, [] as string[])
 
 const collapsedStoreKey = async ($: EngineInterface) => `collapsedLanes:${await $.session.root()}`
+
+// 상세를 보는 카드 id. 같은 카드를 다시 고르면 null 이다.
+const boardSelected = atom({ plugin: 'uhd-kanban', key: 'boardSelected' } as const, null as number | null)
+const selectBoardCard = async ($: EngineInterface, id: number) => {
+  await setFlowNotice($, null)
+  await update($, boardSelected, (selected) => (selected == id ? null : id))
+}
 
 const loadCollapsedLanes = async ($: EngineInterface) => {
   const stored = await $.store.get(await collapsedStoreKey($))
@@ -367,13 +378,15 @@ const refreshFlow = async ($: EngineInterface, polling: Polling): Promise<FlowRu
 }
 
 // 노드 상세의 recover Button. 판정이 resume · restart 인 카드에만 그린다(docs/session-flow-view.md 7절). 결과의 마지막 줄을 상세 아래에 적고 flow 를 다시 읽는다.
+// 상세는 보드 모니터에도 있으므로 보드 모니터가 열려 있으면 board 도 다시 읽는다.
 const recoverCard = async ($: EngineInterface, polling: Polling, id: number) => {
   const text = TEXT[polling.locale]
   const argv = skillArgv($, ['recover', `k${id}`])
   const ran = await runSkill($, argv, 120000).catch((error) => ({ exitCode: -1, stdout: '', stderr: text.notRun(argv.join(' '), String(error?.message ?? error)) }))
   const lastLine = `${ran.stdout}\n${ran.stderr}`.split('\n').map((line) => line.trim()).filter((line) => line != '').at(-1)
-  await setFlowNotice($, `${text.exitCode(ran.exitCode)}${lastLine == undefined ? '' : ` · ${lastLine}`}`)
+  await setFlowNotice($, { id, text: `${text.exitCode(ran.exitCode)}${lastLine == undefined ? '' : ` · ${lastLine}`}` })
   await refreshFlow($, polling)
+  if (await isOpenView($, PANE, PLUGIN)) await refresh($, polling)
 }
 
 // 주기는 board · flow 가 낸 interval_seconds 다(같은 config 값이다). 보드가 없으면 멈추고(다시 찾는 것은 turn.start 가 한다), 명령이 실패하면 마지막 주기를 그대로 둔다.
@@ -384,12 +397,14 @@ const schedule = ($: EngineInterface, polling: Polling, result: BoardRun | FlowR
 }
 
 // 자기 pane 이나 grid 칸이 열려 있는 view 의 명령만 실행한다. 가려져 있어도 실행하고, 다시 보일 때 view 를 읽은 그림이 다시 그려진다.
+// flow 는 보드 모니터의 툴팁 · 상세도 쓰므로 두 view 중 하나라도 열려 있으면 실행한다.
 const isOpenView = async ($: EngineInterface, pane: string, memberId: string) => (await $.ui.panes()).some((item) => item.id == pane) || (await readPlacement($, memberId)) != undefined
 
 const tick = async ($: EngineInterface, polling: Polling) => {
+  const isBoardOpen = await isOpenView($, PANE, PLUGIN)
   const results = [
-    ...((await isOpenView($, PANE, PLUGIN)) ? [await refresh($, polling)] : []),
-    ...((await isOpenView($, FLOW_PANE, FLOW_MEMBER)) ? [await refreshFlow($, polling)] : []),
+    ...(isBoardOpen ? [await refresh($, polling)] : []),
+    ...(isBoardOpen || (await isOpenView($, FLOW_PANE, FLOW_MEMBER)) ? [await refreshFlow($, polling)] : []),
   ]
   const first = results[0]
   if (first) schedule($, polling, first)
@@ -414,10 +429,12 @@ const syncSession = async ($: EngineInterface, polling: Polling, boardRoot: stri
 }
 
 // board 를 읽고 주기를 맞춘 뒤, 보드가 있고 grid 칸이 없으면 자기 pane 을 연다. 읽은 결과와 칸을 돌려주고 command.run 이 그 값으로 문구를 고른다.
+// 툴팁 · 상세에 쓰는 flow 는 기다리지 않는다. 큰 보드에서 몇 초가 걸리고(2026-11-27 poieve 4.9초), 읽으면 그 그림이 다시 그려진다.
 const start = async ($: EngineInterface, polling: Polling) => {
   const result = await refresh($, polling)
   schedule($, polling, result)
   if (result.kind == 'none') return { result, placement: undefined }
+  void refreshFlow($, polling)
   const placement = await readPlacement($, PLUGIN)
   if (!placement) await $.ui.open({ id: PANE, title: TITLE })
   return { result, placement }
@@ -535,6 +552,9 @@ const chartRows = ({ Text }: Ui, board: Board, text: PaneText, columns: number, 
   ]
 }
 
+// 막대 칸의 카드 hover 묶음. 세션 흐름 view 의 노드(flow-k<id>)와 다른 이름이라 두 pane 의 툴팁이 함께 켜지지 않는다. 묶음은 여러 site 에 걸쳐 켜진다(BoxHoverProps.scope).
+const boardScope = (id: number) => `board-k${id}`
+
 // swimlane 하나: 머리 줄(상태 기호 · 접기 기호와 id · 제목 · 끝낸 수/전체 수 · 예상 일수)과 막대. Raster 는 터미널에서만 있고, 없거나 stageMotion 이 layout 을 null 로 정했으면 Text 로 그린다.
 const laneBlock = ($: EngineInterface, { Box, Button, Text }: Ui, item: LaneFrame, motion: Motion, text: PaneText, windowDays: number, Raster: Elements['terminal']['Raster'] | null) => {
   const { lane, head, rows, isFlashing } = item
@@ -563,9 +583,20 @@ const laneBlock = ($: EngineInterface, { Box, Button, Text }: Ui, item: LaneFram
   )
 }
 
-// 자기 pane 과 grid 칸이 함께 쓰는 그리기 함수. requestId 는 그리는 pane 의 id, columns 는 그릴 너비다.
+// 막대 칸 중 카드가 있는 칸의 자리. 줄은 drawBoard 가 그리는 Box 의 맨 위에서 세고, laneTop 은 swimlane 머리 줄의 줄이다.
+type CardSpot = { id: number; top: number; left: number }
+
+const cardSpots = (lanes: LaneFrame[], laneTop: number) => lanes.reduce(({ spots, top }: { spots: CardSpot[]; top: number }, item) => ({
+  spots: [...spots, ...item.rows.flatMap((row, y) => row.flatMap((cell, x) => (cell.id == null ? [] : [{ id: cell.id, top: top + 1 + y, left: x }])))],
+  top: top + 1 + item.rows.length,
+}), { spots: [], top: laneTop })
+
+// 자기 pane 과 grid 칸이 함께 쓰는 그리기 함수. requestId 는 그리는 pane 의 id, columns 는 그릴 너비, recover 는 상세의 recover Button 이 부르는 함수다.
 // 그리는 pane 이 바뀌면 앞 pane 의 가려짐(isHidden)을 지운다. 새 pane 이 가려졌는지는 다음 advance 가 다시 정한다.
-const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], polling: Polling, requestId: string, columns: number) => {
+// 막대 칸의 hover 툴팁과 상세는 flow 명령의 카드 값(readFlowCards)으로 그린다. 그 값이 아직 없으면 툴팁도 상세도 없다.
+// Raster 위에 칸마다 빈 Box(1×1)를 겹쳐 hover 묶음에 넣고, 툴팁 안의 Button 으로 상세를 연다. 빈 Box 는 아무것도 그리지 않아 Raster 와 그 blit 이 그대로 보인다.
+// Raster 는 칸마다 누르는 것을 받지 않고, Button 은 글자를 그려 칸을 덮으므로 상세를 여는 Button 은 툴팁 안에 둔다.
+const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], polling: Polling, requestId: string, columns: number, recover: (id: number) => Promise<void>) => {
   const ui = $.ui.resolve(e)
   const { Box, Text } = ui
   const Raster = e.surface == 'terminal' ? $.ui.resolve(e).Raster : null
@@ -594,14 +625,34 @@ const drawBoard = async ($: EngineInterface, e: Parameters<EngineInterface['ui']
   const cards = sum(board.columns.map((column) => column.count))
   const milestones = board.lanes.filter((lane) => lane.id != null).length
   const runColorValue = statusColor(board, board.run_status)
+  const flowCards = await readFlowCards($)
+  const selectedId = await read($, boardSelected)
+  const selectedCard = selectedId == null ? undefined : flowCards?.get(selectedId)
+  const legend = legendRows(ui, board, text, motion.columns, runColorValue).flat()
+  const charts = chartRows(ui, board, text, motion.columns, current.refreshedAt, runColorValue).filter((row) => row != null)
+  const top = [
+    <Text dimColor wrap="truncate-end">{text.header(clockText(current.refreshedAt), cards, milestones, board.interval_seconds)}</Text>,
+    ...legend,
+    <Text> </Text>,
+    ...charts,
+    <Text> </Text>,
+  ]
+  const { spots, top: lanesEnd } = cardSpots(lanes, top.length)
+  const detail = selectedCard ? await cardDetail($, ui, selectedCard, motion.columns, current.refreshedAt, polling.locale, recover) : null
+  const totalRows = lanesEnd + (detail ? 1 + detail.height : 0)
+  const shown = flowCards == null ? [] : spots.flatMap((spot) => {
+    const card = flowCards.get(spot.id)
+    return card ? [{ spot, card }] : []
+  })
+  const triggers = shown.map(({ spot }) => <Box key={`board-hover:k${spot.id}`} position="absolute" top={spot.top} left={spot.left} width={1} height={1} hover={{ scope: boardScope(spot.id) }} />)
+  const tooltips = shown.map(({ spot, card }) => cardTooltip(ui, card, { scope: boardScope(spot.id), top: spot.top, left: spot.left, nodeHeight: 1, totalRows, columns: motion.columns }, current.refreshedAt, polling.locale, { key: `board-detail:k${spot.id}`, onPress: () => void selectBoardCard($, spot.id) }))
   return (
     <Box flexDirection="column">
-      <Text dimColor wrap="truncate-end">{text.header(clockText(current.refreshedAt), cards, milestones, board.interval_seconds)}</Text>
-      {legendRows(ui, board, text, motion.columns, runColorValue)}
-      <Text> </Text>
-      {chartRows(ui, board, text, motion.columns, current.refreshedAt, runColorValue)}
-      <Text> </Text>
+      {top}
       {lanes.map((item) => laneBlock($, ui, item, motion, text, board.metrics.window_days, Raster))}
+      {triggers}
+      {detail ? [<Text> </Text>, ...detail.elements] : null}
+      {tooltips}
     </Box>
   )
 }
@@ -673,7 +724,7 @@ export const register: Register = (on) => {
     return report == null ? result : { ...result, context: [...(result.context ?? []), report] }
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawBoard($, e, polling, PANE, e.props.bodyColumns))
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => drawBoard($, e, polling, PANE, e.props.bodyColumns, (id) => recoverCard($, polling, id)))
 
   on('ui.render', { component: 'Pane', requestId: FLOW_PANE }, async ($, e) => drawFlow($, e, polling.locale, e.props.bodyColumns, (id) => recoverCard($, polling, id)))
 
@@ -682,12 +733,12 @@ export const register: Register = (on) => {
   // Claude Code 2.1.325 부터 matcher 에 plugin 이 없으면 ui.render 의 plugin 을 이 hook 을 등록한 plugin 으로 채운다. 비교 값은 pane 을 연 plugin 이고
   // grid pane 은 pane-grid 가 열므로, plugin: 'pane-grid' 가 없으면 이 hook 은 grid pane 에서 불리지 않는다(docs/add-pane-grid-cell.md 「Why plugin: 'pane-grid'」).
   // member id 가 두 개(보드 모니터 `uhd-kanban`, 세션 흐름 `uhd-kanban.flow`)라 docs/add-pane-grid-cell.md 「A mod with two or more panes」 대로 member id 마다 앞 member id 가 돌려준 트리에 실행한다.
-  // 세션 흐름 칸에는 hover 툴팁이 있어 hoversKey Box 를 둔다. pane-grid 0.6.0 은 그 칸이 활성이 아닐 때 제목 줄만 덮는다.
+  // 두 칸 모두 hover 툴팁이 있어 hoversKey Box 를 둔다. pane-grid 0.6.0 은 그 칸이 활성이 아닐 때 제목 줄만 덮는다.
   on('ui.render', { component: 'Pane', requestId: /^grid-/, plugin: 'pane-grid' }, async ($, e, next) => {
     const below = await next(e)
     const { Box, Button } = $.ui.resolve(e)
     const draw = async (memberId: string, columns: number) => (memberId == PLUGIN
-      ? [await drawBoard($, e, polling, e.requestId, columns)]
+      ? [<Box key={hoversKey(PLUGIN)} />, await drawBoard($, e, polling, e.requestId, columns, (id) => recoverCard($, polling, id))]
       : [<Box key={hoversKey(FLOW_MEMBER)} />, await drawFlow($, e, polling.locale, columns, (id) => recoverCard($, polling, id))])
     const appended: RenderElement[] = []
     let tree = below
