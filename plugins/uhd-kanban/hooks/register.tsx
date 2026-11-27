@@ -396,6 +396,7 @@ const recoverCard = async ($: EngineInterface, polling: Polling, id: number) => 
 
 // 카드 파일을 운영체제의 기본 앱(open)이나 파일 관리자(reveal)로 여는 명령. 앞 명령이 실패하면 다음 명령을 실행한다.
 // isExitIgnored: explorer.exe 는 창을 열어도 종료 코드 1 로 끝나므로 종료 코드로 성공을 가르지 않는다.
+// 셸(cmd /c start)을 거치지 않는다. 카드 파일 이름은 제목에서 만들므로 & · % · ^ 같은 cmd.exe 의 메타 문자가 들어갈 수 있다(2026-11-27 보안 리뷰).
 // 2026-11-27 macOS(open · open -R)만 실행해 확인했다. Windows · WSL · Linux 명령은 각 운영체제의 명령 문서와 freedesktop FileManager1 규격에서 가져왔고 실행하지 않았다.
 // Linux 의 reveal 은 FileManager1.ShowItems 를 받는 파일 관리자(Nautilus · Dolphin 등)가 그 파일을 고른 채 열고, 받지 않으면 xdg-open 으로 폴더만 연다.
 type FileCommand = { argv: string[]; isExitIgnored?: true }
@@ -403,7 +404,7 @@ type FileCommand = { argv: string[]; isExitIgnored?: true }
 const fileCommands = (platform: string | undefined, path: string, action: FileAction): FileCommand[] => {
   const folder = path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')))
   if (platform == 'macos') return [{ argv: action == 'open' ? ['open', path] : ['open', '-R', path] }]
-  if (platform == 'windows') return [action == 'open' ? { argv: ['cmd', '/c', 'start', '', path] } : { argv: ['explorer', `/select,${path}`], isExitIgnored: true }]
+  if (platform == 'windows') return [{ argv: action == 'open' ? ['explorer.exe', path] : ['explorer.exe', `/select,${path}`], isExitIgnored: true }]
   if (action == 'open') return [{ argv: ['xdg-open', path] }]
   const uri = `file://${path.split('/').map(encodeURIComponent).join('/')}`
   return [
